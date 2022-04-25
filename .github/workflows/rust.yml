@@ -16,20 +16,24 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
+        include:
+        - os: ubuntu-latest
+          target_name: 'pfp-cli'
+        - os: windows-latest
+          target_name: 'pfp-cli.exe'
+        - os: macos-latest
+          target_name: 'pfp-cli'
 
     steps:
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --release --verbose
     - name: Strip symbols
-      run: strip target/release/pfp-cli
+      run: strip target/release/${{ matrix.target_name }}
     - name: Upload pfp-cli artifact
       uses: actions/upload-artifact@v2
       with:
-        name: pfp-cli ${{ matrix.os }}
-        path: |
-          target/release/pfp-cli
-          target/release/pfp-cli.exe
+        name: ${{ matrix.target_name }} ${{ matrix.os }}
+        path: target/release/${{ matrix.target_name }}
     - name: Run tests
       run: cargo test --verbose
