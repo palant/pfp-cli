@@ -1,0 +1,10 @@
+[package]
+name = "pfp-cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "3.1.12", features = ["derive"] }
+scrypt = { version = "0.10.0", default-features = false }
+enumset = "1.0.11"
+rpassword = "6.0.1"
