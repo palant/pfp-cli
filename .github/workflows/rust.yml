@@ -22,10 +22,14 @@ jobs:
     - uses: actions/checkout@v3
     - name: Build
       run: cargo build --release --verbose
+    - name: Strip symbols
+      run: strip target/release/pfp-cli
     - name: Upload pfp-cli artifact
       uses: actions/upload-artifact@v2
       with:
         name: pfp-cli ${{ matrix.os }}
-        path: target/release/pfp-cli
+        path: |
+          target/release/pfp-cli
+          target/release/pfp-cli.exe
     - name: Run tests
       run: cargo test --verbose
