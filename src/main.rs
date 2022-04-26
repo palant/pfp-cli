@@ -5,10 +5,14 @@
  */
 
 mod crypto;
+mod master_password;
+mod storage;
 
-use clap::Parser;
-use clap::Subcommand;
+use app_dirs2;
+use clap::{Parser, Subcommand};
+use question;
 use rpassword;
+use std::path;
 use std::process;
 
 /// PfP: Pain-free Passwords, command line edition
@@ -16,6 +20,9 @@ use std::process;
 #[clap(author, version, about, long_about = None)]
 struct Args
 {
+    /// Data storage file path
+    #[clap(parse(from_os_str), short = 'c', long)]
+    storage: Option<path::PathBuf>,
     #[clap(subcommand)]
     command: Commands,
 }
@@ -23,6 +30,13 @@ struct Args
 #[derive(Subcommand)]
 enum Commands
 {
+    /// Set a new master password
+    SetMaster
+    {
+        /// Do not prompt before overwriting data
+        #[clap(short = 'y', long)]
+        assume_yes: bool
+    },
     /// Generate a password
     Generate
     {
@@ -51,6 +65,14 @@ enum Commands
     }
 }
 
+fn get_default_storage_path() -> path::PathBuf
+{
+    let app_info = app_dirs2::AppInfo {name: "PfP", author: "Wladimir Palant"};
+    let mut path = app_dirs2::get_app_root(app_dirs2::AppDataType::UserConfig, &app_info).unwrap();
+    path.push("storage.json");
+    return path;
+}
+
 fn parse_length(arg: &str) -> Result<u8, String>
 {
     let length = match arg.parse::<u8>()
@@ -72,8 +94,41 @@ fn parse_length(arg: &str) -> Result<u8, String>
 fn main()
 {
     let args = Args::parse();
+    let storage_path = if args.storage.is_some() { args.storage.unwrap() } else { get_default_storage_path() };
+
     match &args.command
     {
+        Commands::SetMaster {assume_yes} =>
+        {
+            if !assume_yes && storage_path.exists()
+            {
+                let allow = question::Question::new("Changing master password will remove all existing data. Continue?")
+                        .default(question::Answer::NO)
+                        .confirm();
+                if allow == question::Answer::NO
+                {
+                    process::exit(0);
+                }
+            }
+
+            let master_password = rpassword::prompt_password("New master password: ").unwrap();
+            if master_password.len() < 6
+            {
+                eprintln!("Master password length should be at least 6 characters.");
+                process::exit(1);
+            }
+
+            let master_password2 = rpassword::prompt_password("Repeat master password: ").unwrap();
+            if master_password != master_password2
+            {
+                eprintln!("Master passwords don't match.");
+                process::exit(1);
+            }
+
+            master_password::change_password(&storage_path, &master_password);
+            eprintln!("New master password set for {}.", storage_path.to_string_lossy());
+        }
+
         Commands::Generate {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol} =>
         {
             let mut charset = crypto::new_charset();
@@ -100,7 +155,7 @@ fn main()
             }
 
             let master_password = rpassword::prompt_password("Your master password: ").unwrap();
-            let password = crypto::derive_password(&master_password, &domain, &name, &revision, *length, charset);
+            let password = crypto::derive_password(&master_password, &domain, &name, &revision, usize::from(*length), charset);
             println!("Password generated");
             println!("{}", password);
         }

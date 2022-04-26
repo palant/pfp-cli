@@ -4,10 +4,17 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+aes-gcm = "0.9.4"
+app_dirs2 = "2.4"
+base64 = "0.13"
 clap = { version = "3.1.12", features = ["derive"] }
-scrypt = { version = "0.10.0", default-features = false }
+directories = "4.0.1"
 enumset = "1.0.11"
+json = "0.12.4"
+question = "0.2.2"
+rand = "0.8.5"
 rpassword = "6.0.1"
+scrypt = { version = "0.10.0", default-features = false }
 
 [profile.release]
 lto = true

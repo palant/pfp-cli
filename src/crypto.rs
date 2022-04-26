@@ -4,8 +4,13 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+use aes_gcm::aead::{Aead, NewAead};
 use enumset;
+use rand::Rng;
 use scrypt::scrypt;
+
+const AES_KEY_SIZE: usize = 256;
+const AES_NONCE_SIZE: usize = 96;
 
 // I, l, O, 0, 1 excluded because of potential confusion. ", ', \ excluded
 // because of common bugs in web interfaces (magic quotes).
@@ -35,7 +40,17 @@ pub fn new_charset() -> enumset::EnumSet<CharacterType>
     return enumset::EnumSet::empty();
 }
 
-pub fn derive_password(master_password: &String, domain: &String, name: &String, revision: &String, length: u8, charset: enumset::EnumSet<CharacterType>) -> String
+pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
+{
+    let params = scrypt::Params::new(15, 8, 1).unwrap();
+    let mut bytes: Vec<u8> = Vec::new();
+    bytes.resize(size, 0);
+    println!("{:?} {:?} {:?}", password, salt, size);
+    scrypt(password, salt, &params, bytes.as_mut_slice()).unwrap();
+    return bytes;
+}
+
+pub fn derive_password(master_password: &String, domain: &String, name: &String, revision: &String, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
 {
     let mut salt = domain.to_owned();
     salt.push_str("\0");
@@ -46,10 +61,7 @@ pub fn derive_password(master_password: &String, domain: &String, name: &String,
         salt.push_str(&revision);
     }
 
-    let params = scrypt::Params::new(15, 8, 1).unwrap();
-    let mut bytes: Vec<u8> = Vec::new();
-    bytes.resize(usize::from(length), 0);
-    scrypt(master_password.as_bytes(), salt.as_bytes(), &params, bytes.as_mut_slice()).unwrap();
+    let mut bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
     return to_password(bytes.as_mut_slice(), charset);
 }
 
@@ -89,4 +101,21 @@ fn to_password(bytes: &mut [u8], charset: enumset::EnumSet<CharacterType>) -> St
         }
     }
     return String::from_utf8_lossy(bytes).into_owned();
+}
+
+pub fn derive_key(master_password: &String, salt: &[u8]) -> Vec<u8>
+{
+    return derive_bits(master_password.as_bytes(), salt, AES_KEY_SIZE / 8);
+}
+
+pub fn encrypt_data(value: &[u8], encryption_key: &[u8]) -> String
+{
+    let key = aes_gcm::Key::from_slice(encryption_key);
+    let cipher = aes_gcm::Aes256Gcm::new(key);
+    let nonce_data = rand::thread_rng().gen::<[u8; AES_NONCE_SIZE / 8]>();
+    let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
+    let mut result = base64::encode(nonce_data);
+    result.push_str("_");
+    result.push_str(&base64::encode(cipher.encrypt(nonce, value).unwrap()));
+    return result;
 }
