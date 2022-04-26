@@ -7,11 +7,12 @@
 mod crypto;
 
 use clap::Parser;
+use clap::Subcommand;
 use rpassword;
 use std::process;
 
 /// PfP: Pain-free Passwords, command line edition
-#[derive(clap::Parser)]
+#[derive(Parser)]
 #[clap(author, version, about, long_about = None)]
 struct Args
 {
@@ -19,7 +20,7 @@ struct Args
     command: Commands,
 }
 
-#[derive(clap::Subcommand)]
+#[derive(Subcommand)]
 enum Commands
 {
     /// Generate a password
