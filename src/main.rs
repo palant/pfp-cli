@@ -5,8 +5,8 @@
  */
 
 mod crypto;
-mod master_password;
 mod storage;
+mod passwords;
 
 use app_dirs2;
 use clap::{Parser, Subcommand};
@@ -37,6 +37,42 @@ enum Commands
         #[clap(short = 'y', long)]
         assume_yes: bool
     },
+    /// Adds a generated password to the storage
+    AddGenerated
+    {
+        /// Website name to generate password for
+        domain: String,
+        /// User name associated with the account
+        name: String,
+        /// Password revision
+        #[clap(short = 'r', long, default_value = "1")]
+        revision: String,
+        /// Password length
+        #[clap(short = 'l', long, default_value_t = 16, parse(try_from_str = parse_length))]
+        length: usize,
+        /// Do not include lower-case letters
+        #[clap(short = 'w', long)]
+        no_lower: bool,
+        /// Do not include upper-case letters
+        #[clap(short = 'u', long)]
+        no_upper: bool,
+        /// Do not include digits
+        #[clap(short = 'd', long)]
+        no_digit: bool,
+        /// Do not include symbols
+        #[clap(short = 's', long)]
+        no_symbol: bool,
+    },
+    /// Stores a verbatim password in the storage
+    AddStored {
+        /// Website name to generate password for
+        domain: String,
+        /// User name associated with the account
+        name: String,
+        /// Password revision
+        #[clap(short = 'r', long, default_value = "1")]
+        revision: String,
+    },
     /// Generate a password
     Generate
     {
@@ -49,7 +85,7 @@ enum Commands
         revision: String,
         /// Password length
         #[clap(short = 'l', long, default_value_t = 16, parse(try_from_str = parse_length))]
-        length: u8,
+        length: usize,
         /// Do not include lower-case letters
         #[clap(short = 'w', long)]
         no_lower: bool,
@@ -73,9 +109,31 @@ fn get_default_storage_path() -> path::PathBuf
     return path;
 }
 
-fn parse_length(arg: &str) -> Result<u8, String>
+fn ensure_unlocked_passwords(passwords: &mut passwords::Passwords)
 {
-    let length = match arg.parse::<u8>()
+    if passwords.initialized().is_none()
+    {
+        eprintln!("Failed reading storage data from {}. Maybe use set-master subcommand first?", passwords.get_storage_path().to_string_lossy());
+        process::exit(1);
+    }
+
+    while passwords.unlocked().is_none()
+    {
+        let master_password = rpassword::prompt_password("Your master password: ").unwrap();
+        if master_password.len() < 6
+        {
+            eprintln!("Master password length should be at least 6 characters.");
+        }
+        else if passwords.unlock(&master_password).is_none()
+        {
+            eprintln!("This does not seem to be the correct master password.");
+        }
+    }
+}
+
+fn parse_length(arg: &str) -> Result<usize, String>
+{
+    let length = match arg.parse::<usize>()
     {
         Ok(length) => length,
         Err(error) => match error.kind() {
@@ -84,7 +142,7 @@ fn parse_length(arg: &str) -> Result<u8, String>
             _other_error => return Err(format!("Could not parse: {:?}", error)),
         }
     };
-    if length >= 4u8 && length <= 24u8
+    if length >= 4 && length <= 24
     {
         return Ok(length);
     }
@@ -95,12 +153,13 @@ fn main()
 {
     let args = Args::parse();
     let storage_path = if args.storage.is_some() { args.storage.unwrap() } else { get_default_storage_path() };
+    let mut passwords = passwords::Passwords::new(storage::Storage::new(&storage_path));
 
     match &args.command
     {
         Commands::SetMaster {assume_yes} =>
         {
-            if !assume_yes && storage_path.exists()
+            if !assume_yes && passwords.initialized().is_some()
             {
                 let allow = question::Question::new("Changing master password will remove all existing data. Continue?")
                         .default(question::Answer::NO)
@@ -125,8 +184,43 @@ fn main()
                 process::exit(1);
             }
 
-            master_password::change_password(&storage_path, &master_password);
+            passwords.reset(&master_password);
             eprintln!("New master password set for {}.", storage_path.to_string_lossy());
+        }
+
+        Commands::AddGenerated {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol} =>
+        {
+            ensure_unlocked_passwords(&mut passwords);
+
+            let mut charset = crypto::new_charset();
+            if !no_lower
+            {
+                charset.insert(crypto::CharacterType::LOWER);
+            }
+            if !no_upper
+            {
+                charset.insert(crypto::CharacterType::UPPER);
+            }
+            if !no_digit
+            {
+                charset.insert(crypto::CharacterType::DIGIT);
+            }
+            if !no_symbol
+            {
+                charset.insert(crypto::CharacterType::SYMBOL);
+            }
+            if charset.len() == 0
+            {
+                eprintln!("You need to allow at least one character set.");
+                process::exit(1);
+            }
+
+            passwords.add_generated(domain, name, revision, *length, charset);
+        }
+
+        Commands::AddStored {domain, name, revision} =>
+        {
+
         }
 
         Commands::Generate {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol} =>

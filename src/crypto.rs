@@ -6,6 +6,7 @@
 
 use aes_gcm::aead::{Aead, NewAead};
 use enumset;
+use hmac::Mac;
 use rand::Rng;
 use scrypt::scrypt;
 
@@ -45,7 +46,6 @@ pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
     let params = scrypt::Params::new(15, 8, 1).unwrap();
     let mut bytes: Vec<u8> = Vec::new();
     bytes.resize(size, 0);
-    println!("{:?} {:?} {:?}", password, salt, size);
     scrypt(password, salt, &params, bytes.as_mut_slice()).unwrap();
     return bytes;
 }
@@ -118,4 +118,30 @@ pub fn encrypt_data(value: &[u8], encryption_key: &[u8]) -> String
     result.push_str("_");
     result.push_str(&base64::encode(cipher.encrypt(nonce, value).unwrap()));
     return result;
+}
+
+pub fn decrypt_data(value: &String, encryption_key: &[u8]) -> Option<String>
+{
+    let key = aes_gcm::Key::from_slice(encryption_key);
+    let cipher = aes_gcm::Aes256Gcm::new(key);
+
+    let parts: Vec<&str> = value.split('_').collect();
+    if parts.len() != 2
+    {
+        return None;
+    }
+
+    let nonce_data = base64::decode(&parts[0]).ok()?;
+    let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
+    let ciphertext = base64::decode(&parts[1]).ok()?;
+    let decrypted = cipher.decrypt(&nonce, ciphertext.as_slice()).ok()?;
+    return String::from_utf8(decrypted).ok();
+}
+
+pub fn get_digest(hmac_secret: &[u8], data: &String) -> String
+{
+    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(hmac_secret).unwrap();
+    mac.update(data.as_bytes());
+    let result = mac.finalize().into_bytes();
+    return base64::encode(result);
 }

@@ -484,11 +484,13 @@ dependencies = [
  "clap",
  "directories",
  "enumset",
+ "hmac",
  "json",
  "question",
  "rand",
  "rpassword",
  "scrypt",
+ "sha2",
 ]
 
 [[package]]
