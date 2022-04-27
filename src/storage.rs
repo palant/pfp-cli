@@ -133,6 +133,34 @@ impl GeneratedPassword
     }
 }
 
+pub struct StoredPassword
+{
+    id: PasswordId,
+    password: String,
+}
+
+impl StoredPassword
+{
+    pub fn new(site: String, name: String, revision: String, password: String) -> StoredPassword
+    {
+        return StoredPassword
+        {
+            id: PasswordId::new(site, name, revision),
+            password: password,
+        };
+    }
+
+    pub fn id(&self) -> &PasswordId
+    {
+        return &self.id;
+    }
+
+    pub fn password(&self) -> &str
+    {
+        return &self.password;
+    }
+}
+
 pub struct Storage
 {
     path: path::PathBuf,
@@ -285,6 +313,19 @@ impl Storage
             upper: password.charset().contains(crypto::CharacterType::UPPER),
             number: password.charset().contains(crypto::CharacterType::DIGIT),
             symbol: password.charset().contains(crypto::CharacterType::SYMBOL),
+        };
+        return insert_encrypted(self.data.as_mut()?, &key, &value, encryption_key);
+    }
+
+    pub fn set_stored(&mut self, password: &StoredPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<()>
+    {
+        let key = self.get_password_key(password.id(), hmac_secret);
+        let value = object!{
+            type: "stored",
+            site: password.id().site(),
+            name: password.id().name(),
+            revision: password.id().revision(),
+            password: password.password(),
         };
         return insert_encrypted(self.data.as_mut()?, &key, &value, encryption_key);
     }

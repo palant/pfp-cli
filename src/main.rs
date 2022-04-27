@@ -75,6 +75,9 @@ enum Commands
         /// Password revision
         #[clap(short = 'r', long, default_value = "1")]
         revision: String,
+        /// Overwrite existing passwords if present
+        #[clap(short = 'f', long)]
+        force: bool,
     },
     /// Generate a password
     Generate
@@ -227,9 +230,18 @@ fn main()
             passwords.add_generated(domain, name, revision, *length, charset);
         }
 
-        Commands::AddStored {domain, name, revision} =>
+        Commands::AddStored {domain, name, revision, force} =>
         {
+            ensure_unlocked_passwords(&mut passwords);
 
+            if !force && passwords.has(domain, name, revision).unwrap_or(false)
+            {
+                eprintln!("A password with this domain/name/revision combination already exists. Specify a different revision or use --force flag to overwrite.");
+                process::exit(1);
+            }
+
+            let password = rpassword::prompt_password("Password to be stored: ").unwrap();
+            passwords.add_stored(domain, name, revision, &password);
         }
 
         Commands::Generate {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol} =>

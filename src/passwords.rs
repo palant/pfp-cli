@@ -99,13 +99,27 @@ impl Passwords
         return self.storage.flush();
     }
 
+    pub fn add_stored(&mut self, site: &String, name: &String, revision: &String, password: &String) -> Option<()>
+    {
+        self.unlocked()?;
+
+        let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
+        self.storage.ensure_site_data(&site_resolved, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
+
+        self.storage.set_stored(
+            &storage::StoredPassword::new(site_resolved, name.clone(), revision.clone(), password.clone()),
+            self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
+        );
+        return self.storage.flush();
+    }
+
     pub fn has(&self, site: &String, name: &String, revision: &String) -> Option<bool>
     {
         self.unlocked()?;
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
         return self.storage.has_password(
-            &storage::PasswordId::new(site.clone(), name.clone(), revision.clone()),
+            &storage::PasswordId::new(site_resolved, name.clone(), revision.clone()),
             self.hmac_secret.as_ref()?.as_slice()
         );
     }
