@@ -431,8 +431,21 @@ impl Storage
         let data = self.data.as_ref().unwrap();
         let prefix = self.get_site_prefix(site, hmac_secret);
         let encryption_key_vec = encryption_key.to_owned();
-        return data.entries().filter_map(move |(key, value)| if key.starts_with(&prefix) {
+        return data.entries().filter_map(move |(key, value)| if key.starts_with(&prefix)
+        {
             to_password(&decrypt(value, encryption_key_vec.as_slice()).unwrap())
         } else { None });
+    }
+
+    pub fn list_sites(&self, encryption_key: &[u8]) -> impl Iterator<Item = String> + '_
+    {
+        assert!(self.initialized().is_some());
+
+        let data = self.data.as_ref().unwrap();
+        let encryption_key_vec = encryption_key.to_owned();
+        return data.entries().filter_map(move |(key, value)| if key.strip_prefix(STORAGE_PREFIX).unwrap_or(":").find(":").is_none()
+        {
+            Some(decrypt(value, encryption_key_vec.as_slice()).unwrap()["site"].as_str().unwrap().to_string())
+        } else { None })
     }
 }

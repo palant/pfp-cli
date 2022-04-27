@@ -167,4 +167,12 @@ impl Passwords
             return matcher.matches(name);
         });
     }
+
+    pub fn list_sites(&self, site: &String) -> impl Iterator<Item = String> + '_
+    {
+        assert!(self.unlocked().is_some());
+
+        let matcher = wildmatch::WildMatch::new(site);
+        return self.storage.list_sites(self.key.as_ref().unwrap().as_slice()).filter(move |site| matcher.matches(&site));
+    }
 }

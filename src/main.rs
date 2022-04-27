@@ -91,15 +91,21 @@ enum Commands
         #[clap(short = 'r', long, default_value = "1")]
         revision: String,
     },
-    /// Lists passwords for a site
+    /// Lists passwords for a website
     List
     {
         /// Website name to list passwords for
         domain: String,
-        /// User name wildcard
+        /// User name wildcard pattern
         #[clap(default_value = "*")]
         name: String,
     },
+    /// Lists websites that have data associated with them
+    ListSites{
+        /// Website name wildcard pattern
+        #[clap(default_value = "*")]
+        domain: String,
+    }
 }
 
 fn get_default_storage_path() -> path::PathBuf
@@ -259,6 +265,7 @@ fn main()
         {
             ensure_unlocked_passwords(&mut passwords);
 
+            let mut found = false;
             for password in passwords.list(domain, name)
             {
                 let name;
@@ -287,6 +294,27 @@ fn main()
                 {
                     println!("{} ({})", name, password_type);
                 }
+                found = true;
+            }
+            if !found
+            {
+                println!("No matching passwords found");
+            }
+        }
+
+        Commands::ListSites {domain} =>
+        {
+            ensure_unlocked_passwords(&mut passwords);
+
+            let mut found = false;
+            for site in passwords.list_sites(domain)
+            {
+                println!("{}", site);
+                found = true;
+            }
+            if !found
+            {
+                println!("No matching websites found");
             }
         }
     }
