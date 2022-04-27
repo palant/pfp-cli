@@ -63,18 +63,44 @@ fn parse_storage(path: &path::PathBuf) -> Result<json::JsonValue, io::Error>
     return Ok(data)
 }
 
-trait Password
-{
-    fn site(&self) -> &str;
-    fn name(&self) -> &str;
-    fn revision(&self) -> &str;
-}
-
-pub struct GeneratedPassword
+pub struct PasswordId
 {
     site: String,
     name: String,
     revision: String,
+}
+
+impl PasswordId
+{
+    pub fn new(site: String, name: String, revision: String) -> PasswordId
+    {
+        return PasswordId
+        {
+            site: site,
+            name: name,
+            revision: if revision != "1" { revision } else { "".to_string() },
+        };
+    }
+
+    fn site(&self) -> &str
+    {
+        return &self.site;
+    }
+
+    fn name(&self) -> &str
+    {
+        return &self.name;
+    }
+
+    fn revision(&self) -> &str
+    {
+        return &self.revision;
+    }
+}
+
+pub struct GeneratedPassword
+{
+    id: PasswordId,
     length: usize,
     charset: enumset::EnumSet<crypto::CharacterType>
 }
@@ -85,37 +111,22 @@ impl GeneratedPassword
     {
         return GeneratedPassword
         {
-            site: site,
-            name: name,
-            revision: if revision != "1" { revision } else { "".to_string() },
+            id: PasswordId::new(site, name, revision),
             length: length,
             charset: charset,
         };
     }
-}
 
-impl Password for GeneratedPassword
-{
-    fn site(&self) -> &str
+    pub fn id(&self) -> &PasswordId
     {
-        return &self.site;
+        return &self.id;
     }
-    fn name(&self) -> &str
-    {
-        return &self.name;
-    }
-    fn revision(&self) -> &str
-    {
-        return &self.revision;
-    }
-}
 
-impl GeneratedPassword
-{
     pub fn length(&self) -> usize
     {
         return self.length;
     }
+
     pub fn charset(&self) -> enumset::EnumSet<crypto::CharacterType>
     {
         return self.charset;
@@ -213,16 +224,16 @@ impl Storage
         return result;
     }
 
-    fn get_password_key(&self, password: &impl Password, hmac_secret: &[u8]) -> String
+    fn get_password_key(&self, id: &PasswordId, hmac_secret: &[u8]) -> String
     {
         let mut input = String::new();
-        input.push_str(password.site());
+        input.push_str(id.site());
         input.push_str("\0");
-        input.push_str(password.name());
+        input.push_str(id.name());
         input.push_str("\0");
-        input.push_str(password.revision());
+        input.push_str(id.revision());
 
-        let mut result = self.get_site_key(&password.site().to_string(), hmac_secret);
+        let mut result = self.get_site_key(&id.site().to_string(), hmac_secret);
         result.push_str(":");
         result.push_str(&crypto::get_digest(hmac_secret, &input));
         return result;
@@ -255,14 +266,20 @@ impl Storage
         }
     }
 
+    pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> Option<bool>
+    {
+        let key = self.get_password_key(id, hmac_secret);
+        return Some(self.data.as_ref()?.has_key(&key));
+    }
+
     pub fn set_generated(&mut self, password: &GeneratedPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<()>
     {
-        let key = self.get_password_key(password, hmac_secret);
+        let key = self.get_password_key(password.id(), hmac_secret);
         let value = object!{
             type: "generated2",
-            site: password.site(),
-            name: password.name(),
-            revision: password.revision(),
+            site: password.id().site(),
+            name: password.id().name(),
+            revision: password.id().revision(),
             length: password.length(),
             lower: password.charset().contains(crypto::CharacterType::LOWER),
             upper: password.charset().contains(crypto::CharacterType::UPPER),

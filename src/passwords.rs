@@ -98,4 +98,15 @@ impl Passwords
         );
         return self.storage.flush();
     }
+
+    pub fn has(&self, site: &String, name: &String, revision: &String) -> Option<bool>
+    {
+        self.unlocked()?;
+
+        let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
+        return self.storage.has_password(
+            &storage::PasswordId::new(site.clone(), name.clone(), revision.clone()),
+            self.hmac_secret.as_ref()?.as_slice()
+        );
+    }
 }

@@ -62,6 +62,9 @@ enum Commands
         /// Do not include symbols
         #[clap(short = 's', long)]
         no_symbol: bool,
+        /// Overwrite existing passwords if present
+        #[clap(short = 'f', long)]
+        force: bool,
     },
     /// Stores a verbatim password in the storage
     AddStored {
@@ -188,7 +191,7 @@ fn main()
             eprintln!("New master password set for {}.", storage_path.to_string_lossy());
         }
 
-        Commands::AddGenerated {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol} =>
+        Commands::AddGenerated {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol, force} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
@@ -212,6 +215,12 @@ fn main()
             if charset.len() == 0
             {
                 eprintln!("You need to allow at least one character set.");
+                process::exit(1);
+            }
+
+            if !force && passwords.has(domain, name, revision).unwrap_or(false)
+            {
+                eprintln!("A password with this domain/name/revision combination already exists. Specify a different revision or use --force flag to overwrite.");
                 process::exit(1);
             }
 
