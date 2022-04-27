@@ -24,11 +24,16 @@ fn insert_encrypted(obj: &mut json::JsonValue, key: &String, value: &json::JsonV
     return obj.insert(key, crypto::encrypt_data(value.dump().as_bytes(), encryption_key)).ok();
 }
 
-fn get_decrypted(obj: &json::JsonValue, key: &String, encryption_key: &[u8]) -> Option<json::JsonValue>
+fn decrypt(value: &json::JsonValue, encryption_key: &[u8]) -> Option<json::JsonValue>
 {
-    let value = obj[key].as_str()?;
+    let value = value.as_str()?;
     let decrypted = crypto::decrypt_data(&value.to_string(), encryption_key)?;
     return json::parse(&decrypted).ok();
+}
+
+fn get_decrypted(obj: &json::JsonValue, key: &String, encryption_key: &[u8]) -> Option<json::JsonValue>
+{
+    return decrypt(&obj[key], encryption_key);
 }
 
 fn parse_storage(path: &path::PathBuf) -> Result<json::JsonValue, io::Error>
@@ -61,6 +66,57 @@ fn parse_storage(path: &path::PathBuf) -> Result<json::JsonValue, io::Error>
     }
 
     return Ok(data)
+}
+
+fn to_password(value: &json::JsonValue) -> Option<Password>
+{
+    if !value.is_object()
+    {
+        return None;
+    }
+
+    let password_type = value["type"].as_str()?;
+    if password_type == "generated2"
+    {
+        let mut charset = crypto::new_charset();
+        if value["lower"].as_bool()?
+        {
+            charset.insert(crypto::CharacterType::LOWER);
+        }
+        if value["upper"].as_bool()?
+        {
+            charset.insert(crypto::CharacterType::UPPER);
+        }
+        if value["number"].as_bool()?
+        {
+            charset.insert(crypto::CharacterType::DIGIT);
+        }
+        if value["symbol"].as_bool()?
+        {
+            charset.insert(crypto::CharacterType::SYMBOL);
+        }
+        return Some(Password::Generated {
+            password: GeneratedPassword::new(
+                value["site"].as_str()?.to_string(),
+                value["name"].as_str()?.to_string(),
+                value["revision"].as_str()?.to_string(),
+                value["length"].as_usize()?,
+                charset
+            )
+        });
+    }
+    else if password_type == "stored"
+    {
+        return Some(Password::Stored {
+            password: StoredPassword::new(
+                value["site"].as_str()?.to_string(),
+                value["name"].as_str()?.to_string(),
+                value["revision"].as_str()?.to_string(),
+                value["password"].as_str()?.to_string(),
+            )
+        });
+    }
+    return None;
 }
 
 pub struct PasswordId
@@ -277,6 +333,13 @@ impl Storage
         return result;
     }
 
+    fn get_site_prefix(&self, site: &String, hmac_secret: &[u8]) -> String
+    {
+        let mut result = self.get_site_key(site, hmac_secret);
+        result.push_str(":");
+        return result;
+    }
+
     fn get_password_key(&self, id: &PasswordId, hmac_secret: &[u8]) -> String
     {
         let mut input = String::new();
@@ -286,8 +349,7 @@ impl Storage
         input.push_str("\0");
         input.push_str(id.revision());
 
-        let mut result = self.get_site_key(&id.site().to_string(), hmac_secret);
-        result.push_str(":");
+        let mut result = self.get_site_prefix(&id.site().to_string(), hmac_secret);
         result.push_str(&crypto::get_digest(hmac_secret, &input));
         return result;
     }
@@ -359,52 +421,18 @@ impl Storage
     {
         let key = self.get_password_key(id, hmac_secret);
         let value = get_decrypted(self.data.as_ref()?, &key, encryption_key)?;
-        if !value.is_object()
-        {
-            return None;
-        }
+        return to_password(&value);
+    }
 
-        let password_type = value["type"].as_str()?;
-        if password_type == "generated2"
-        {
-            let mut charset = crypto::new_charset();
-            if value["lower"].as_bool()?
-            {
-                charset.insert(crypto::CharacterType::LOWER);
-            }
-            if value["upper"].as_bool()?
-            {
-                charset.insert(crypto::CharacterType::UPPER);
-            }
-            if value["number"].as_bool()?
-            {
-                charset.insert(crypto::CharacterType::DIGIT);
-            }
-            if value["symbol"].as_bool()?
-            {
-                charset.insert(crypto::CharacterType::SYMBOL);
-            }
-            return Some(Password::Generated {
-                password: GeneratedPassword::new(
-                    value["site"].as_str()?.to_string(),
-                    value["name"].as_str()?.to_string(),
-                    value["revision"].as_str()?.to_string(),
-                    value["length"].as_usize()?,
-                    charset
-                )
-            });
-        }
-        else if password_type == "stored"
-        {
-            return Some(Password::Stored {
-                password: StoredPassword::new(
-                    value["site"].as_str()?.to_string(),
-                    value["name"].as_str()?.to_string(),
-                    value["revision"].as_str()?.to_string(),
-                    value["password"].as_str()?.to_string(),
-                )
-            });
-        }
-        return None;
+    pub fn list_passwords(&self, site: &String, hmac_secret: &[u8], encryption_key: &[u8]) -> impl Iterator<Item = Password> + '_
+    {
+        assert!(self.initialized().is_some());
+
+        let data = self.data.as_ref().unwrap();
+        let prefix = self.get_site_prefix(site, hmac_secret);
+        let encryption_key_vec = encryption_key.to_owned();
+        return data.entries().filter_map(move |(key, value)| if key.starts_with(&prefix) {
+            to_password(&decrypt(value, encryption_key_vec.as_slice()).unwrap())
+        } else { None });
     }
 }

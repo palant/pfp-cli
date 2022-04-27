@@ -150,4 +150,20 @@ impl Passwords
             }
         }
     }
+
+    pub fn list(&self, site: &String, name: &String) -> impl Iterator<Item = storage::Password> + '_
+    {
+        assert!(self.unlocked().is_some());
+
+        let matcher = wildmatch::WildMatch::new(name);
+        return self.storage.list_passwords(site, self.hmac_secret.as_ref().unwrap().as_slice(), self.key.as_ref().unwrap().as_slice()).filter(move |password|
+        {
+            let name =  match password
+            {
+                storage::Password::Generated {password} => password.id().name(),
+                storage::Password::Stored {password} => password.id().name(),
+            };
+            return matcher.matches(name);
+        });
+    }
 }

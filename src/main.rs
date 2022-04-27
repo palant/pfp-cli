@@ -91,6 +91,15 @@ enum Commands
         #[clap(short = 'r', long, default_value = "1")]
         revision: String,
     },
+    /// Lists passwords for a site
+    List
+    {
+        /// Website name to list passwords for
+        domain: String,
+        /// User name wildcard
+        #[clap(default_value = "*")]
+        name: String,
+    }
 }
 
 fn get_default_storage_path() -> path::PathBuf
@@ -244,6 +253,41 @@ fn main()
             }
             println!("Password retrieved");
             println!("{}", password.unwrap());
+        }
+
+        Commands::List {domain, name} =>
+        {
+            ensure_unlocked_passwords(&mut passwords);
+
+            for password in passwords.list(domain, name)
+            {
+                let name;
+                let revision;
+                let password_type;
+                match password
+                {
+                    storage::Password::Generated { password } =>
+                    {
+                        name = password.id().name().to_owned();
+                        revision = password.id().revision().to_owned();
+                        password_type = "generated";
+                    }
+                    storage::Password::Stored { password } =>
+                    {
+                        name = password.id().name().to_owned();
+                        revision = password.id().revision().to_owned();
+                        password_type = "stored";
+                    }
+                }
+                if revision != ""
+                {
+                    println!("{} #{} ({})", name, revision, password_type);
+                }
+                else
+                {
+                    println!("{} ({})", name, password_type);
+                }
+            }
         }
     }
 }
