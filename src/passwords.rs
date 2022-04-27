@@ -155,8 +155,9 @@ impl Passwords
     {
         assert!(self.unlocked().is_some());
 
+        let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref().unwrap().as_slice(), self.key.as_ref().unwrap().as_slice());
         let matcher = wildmatch::WildMatch::new(name);
-        return self.storage.list_passwords(site, self.hmac_secret.as_ref().unwrap().as_slice(), self.key.as_ref().unwrap().as_slice()).filter(move |password|
+        return self.storage.list_passwords(&site_resolved, self.hmac_secret.as_ref().unwrap().as_slice(), self.key.as_ref().unwrap().as_slice()).filter(move |password|
         {
             let name =  match password
             {

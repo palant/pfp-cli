@@ -99,7 +99,7 @@ enum Commands
         /// User name wildcard
         #[clap(default_value = "*")]
         name: String,
-    }
+    },
 }
 
 fn get_default_storage_path() -> path::PathBuf
