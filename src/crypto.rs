@@ -91,7 +91,7 @@ fn to_password(bytes: &mut [u8], charset: enumset::EnumSet<CharacterType>) -> St
             }
         }
     }
-    return String::from_utf8_lossy(bytes).into_owned();
+    return std::str::from_utf8(bytes).unwrap().to_owned();
 }
 
 pub fn derive_key(master_password: &str, salt: &[u8]) -> Vec<u8>
