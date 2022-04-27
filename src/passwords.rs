@@ -26,6 +26,7 @@ pub struct Passwords
     storage: storage::Storage,
     key: Option<Vec<u8>>,
     hmac_secret: Option<Vec<u8>>,
+    master_password: Option<String>,
 }
 
 impl Passwords
@@ -37,6 +38,7 @@ impl Passwords
             storage: storage,
             key: None,
             hmac_secret: None,
+            master_password: None,
         }
     }
 
@@ -82,10 +84,11 @@ impl Passwords
         let hmac_secret = self.storage.get_hmac_secret(&key)?;
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret);
+        self.master_password = Some(master_password.clone());
         return Some(());
     }
 
-    pub fn add_generated(&mut self, site: &String, name: &String, revision: &String, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Option<()>
+    pub fn set_generated(&mut self, site: &String, name: &String, revision: &String, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Option<()>
     {
         self.unlocked()?;
 
@@ -99,7 +102,7 @@ impl Passwords
         return self.storage.flush();
     }
 
-    pub fn add_stored(&mut self, site: &String, name: &String, revision: &String, password: &String) -> Option<()>
+    pub fn set_stored(&mut self, site: &String, name: &String, revision: &String, password: &String) -> Option<()>
     {
         self.unlocked()?;
 
@@ -122,5 +125,29 @@ impl Passwords
             &storage::PasswordId::new(site_resolved, name.clone(), revision.clone()),
             self.hmac_secret.as_ref()?.as_slice()
         );
+    }
+
+    pub fn get(&self, site: &String, name: &String, revision: &String) -> Option<String>
+    {
+        self.unlocked()?;
+
+        let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
+        let password = self.storage.get_password(
+            &storage::PasswordId::new(site_resolved, name.clone(), revision.clone()),
+            self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
+        )?;
+
+        match password
+        {
+            storage::Password::Generated {password} =>
+            {
+                let master_password = self.master_password.as_ref()?;
+                return Some(crypto::derive_password(master_password, &password.salt(), password.length(), password.charset()));
+            }
+            storage::Password::Stored {password} =>
+            {
+                return Some(password.password().to_string());
+            }
+        }
     }
 }

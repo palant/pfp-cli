@@ -67,7 +67,8 @@ enum Commands
         force: bool,
     },
     /// Stores a verbatim password in the storage
-    AddStored {
+    AddStored
+    {
         /// Website name to generate password for
         domain: String,
         /// User name associated with the account
@@ -79,8 +80,8 @@ enum Commands
         #[clap(short = 'f', long)]
         force: bool,
     },
-    /// Generate a password
-    Generate
+    /// Retrieves a password
+    Password
     {
         /// Website name to generate password for
         domain: String,
@@ -89,22 +90,7 @@ enum Commands
         /// Password revision
         #[clap(short = 'r', long, default_value = "1")]
         revision: String,
-        /// Password length
-        #[clap(short = 'l', long, default_value_t = 16, parse(try_from_str = parse_length))]
-        length: usize,
-        /// Do not include lower-case letters
-        #[clap(short = 'w', long)]
-        no_lower: bool,
-        /// Do not include upper-case letters
-        #[clap(short = 'u', long)]
-        no_upper: bool,
-        /// Do not include digits
-        #[clap(short = 'd', long)]
-        no_digit: bool,
-        /// Do not include symbols
-        #[clap(short = 's', long)]
-        no_symbol: bool,
-    }
+    },
 }
 
 fn get_default_storage_path() -> path::PathBuf
@@ -227,7 +213,8 @@ fn main()
                 process::exit(1);
             }
 
-            passwords.add_generated(domain, name, revision, *length, charset);
+            passwords.set_generated(domain, name, revision, *length, charset);
+            println!("Password added");
         }
 
         Commands::AddStored {domain, name, revision, force} =>
@@ -241,38 +228,22 @@ fn main()
             }
 
             let password = rpassword::prompt_password("Password to be stored: ").unwrap();
-            passwords.add_stored(domain, name, revision, &password);
+            passwords.set_stored(domain, name, revision, &password);
+            println!("Password added");
         }
 
-        Commands::Generate {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol} =>
+        Commands::Password {domain, name, revision} =>
         {
-            let mut charset = crypto::new_charset();
-            if !no_lower
+            ensure_unlocked_passwords(&mut passwords);
+
+            let password = passwords.get(domain, name, revision);
+            if password.is_none()
             {
-                charset.insert(crypto::CharacterType::LOWER);
-            }
-            if !no_upper
-            {
-                charset.insert(crypto::CharacterType::UPPER);
-            }
-            if !no_digit
-            {
-                charset.insert(crypto::CharacterType::DIGIT);
-            }
-            if !no_symbol
-            {
-                charset.insert(crypto::CharacterType::SYMBOL);
-            }
-            if charset.len() == 0
-            {
-                eprintln!("You need to allow at least one character set.");
+                eprintln!("No password with the given domain/name/revision combination.");
                 process::exit(1);
             }
-
-            let master_password = rpassword::prompt_password("Your master password: ").unwrap();
-            let password = crypto::derive_password(&master_password, &domain, &name, &revision, usize::from(*length), charset);
-            println!("Password generated");
-            println!("{}", password);
+            println!("Password retrieved");
+            println!("{}", password.unwrap());
         }
     }
 }

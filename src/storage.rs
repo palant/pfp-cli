@@ -82,17 +82,17 @@ impl PasswordId
         };
     }
 
-    fn site(&self) -> &str
+    pub fn site(&self) -> &str
     {
         return &self.site;
     }
 
-    fn name(&self) -> &str
+    pub fn name(&self) -> &str
     {
         return &self.name;
     }
 
-    fn revision(&self) -> &str
+    pub fn revision(&self) -> &str
     {
         return &self.revision;
     }
@@ -131,6 +131,19 @@ impl GeneratedPassword
     {
         return self.charset;
     }
+
+    pub fn salt(&self) -> String
+    {
+        let mut salt = self.id.site().to_string();
+        salt.push_str("\0");
+        salt.push_str(&self.id.name());
+        if self.id.revision() != ""
+        {
+            salt.push_str("\0");
+            salt.push_str(&self.id.revision());
+        }
+        return salt;
+    }
 }
 
 pub struct StoredPassword
@@ -159,6 +172,18 @@ impl StoredPassword
     {
         return &self.password;
     }
+}
+
+pub enum Password
+{
+    Generated
+    {
+        password: GeneratedPassword,
+    },
+    Stored
+    {
+        password: StoredPassword,
+    },
 }
 
 pub struct Storage
@@ -328,5 +353,58 @@ impl Storage
             password: password.password(),
         };
         return insert_encrypted(self.data.as_mut()?, &key, &value, encryption_key);
+    }
+
+    pub fn get_password(&self, id: &PasswordId, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<Password>
+    {
+        let key = self.get_password_key(id, hmac_secret);
+        let value = get_decrypted(self.data.as_ref()?, &key, encryption_key)?;
+        if !value.is_object()
+        {
+            return None;
+        }
+
+        let password_type = value["type"].as_str()?;
+        if password_type == "generated2"
+        {
+            let mut charset = crypto::new_charset();
+            if value["lower"].as_bool()?
+            {
+                charset.insert(crypto::CharacterType::LOWER);
+            }
+            if value["upper"].as_bool()?
+            {
+                charset.insert(crypto::CharacterType::UPPER);
+            }
+            if value["number"].as_bool()?
+            {
+                charset.insert(crypto::CharacterType::DIGIT);
+            }
+            if value["symbol"].as_bool()?
+            {
+                charset.insert(crypto::CharacterType::SYMBOL);
+            }
+            return Some(Password::Generated {
+                password: GeneratedPassword::new(
+                    value["site"].as_str()?.to_string(),
+                    value["name"].as_str()?.to_string(),
+                    value["revision"].as_str()?.to_string(),
+                    value["length"].as_usize()?,
+                    charset
+                )
+            });
+        }
+        else if password_type == "stored"
+        {
+            return Some(Password::Stored {
+                password: StoredPassword::new(
+                    value["site"].as_str()?.to_string(),
+                    value["name"].as_str()?.to_string(),
+                    value["revision"].as_str()?.to_string(),
+                    value["password"].as_str()?.to_string(),
+                )
+            });
+        }
+        return None;
     }
 }

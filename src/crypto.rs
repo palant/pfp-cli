@@ -50,17 +50,8 @@ pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
     return bytes;
 }
 
-pub fn derive_password(master_password: &String, domain: &String, name: &String, revision: &String, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
+pub fn derive_password(master_password: &String, salt: &String, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
 {
-    let mut salt = domain.to_owned();
-    salt.push_str("\0");
-    salt.push_str(&name);
-    if revision != "" && revision != "1"
-    {
-        salt.push_str("\0");
-        salt.push_str(&revision);
-    }
-
     let mut bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
     return to_password(bytes.as_mut_slice(), charset);
 }
