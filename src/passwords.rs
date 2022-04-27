@@ -96,7 +96,7 @@ impl Passwords
         self.storage.ensure_site_data(&site_resolved, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
 
         self.storage.set_generated(
-            &storage::GeneratedPassword::new(site_resolved, name.to_string(), revision.to_string(), length, charset),
+            &storage::GeneratedPassword::new(&site_resolved, name, revision, length, charset),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         );
         return self.storage.flush();
@@ -110,7 +110,7 @@ impl Passwords
         self.storage.ensure_site_data(&site_resolved, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
 
         self.storage.set_stored(
-            &storage::StoredPassword::new(site_resolved, name.to_string(), revision.to_string(), password.to_string()),
+            &storage::StoredPassword::new(&site_resolved, name, revision, password),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         );
         return self.storage.flush();
@@ -122,7 +122,7 @@ impl Passwords
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
         return self.storage.has_password(
-            &storage::PasswordId::new(site_resolved, name.to_string(), revision.to_string()),
+            &storage::PasswordId::new(&site_resolved, name, revision),
             self.hmac_secret.as_ref()?.as_slice()
         );
     }
@@ -133,7 +133,7 @@ impl Passwords
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
         let password = self.storage.get_password(
-            &storage::PasswordId::new(site_resolved, name.to_string(), revision.to_string()),
+            &storage::PasswordId::new(&site_resolved, name, revision),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         )?;
 

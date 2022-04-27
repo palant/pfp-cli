@@ -97,9 +97,9 @@ fn to_password(value: &json::JsonValue) -> Option<Password>
         }
         return Some(Password::Generated {
             password: GeneratedPassword::new(
-                value["site"].as_str()?.to_string(),
-                value["name"].as_str()?.to_string(),
-                value["revision"].as_str()?.to_string(),
+                value["site"].as_str()?,
+                value["name"].as_str()?,
+                value["revision"].as_str()?,
                 value["length"].as_usize()?,
                 charset
             )
@@ -109,10 +109,10 @@ fn to_password(value: &json::JsonValue) -> Option<Password>
     {
         return Some(Password::Stored {
             password: StoredPassword::new(
-                value["site"].as_str()?.to_string(),
-                value["name"].as_str()?.to_string(),
-                value["revision"].as_str()?.to_string(),
-                value["password"].as_str()?.to_string(),
+                value["site"].as_str()?,
+                value["name"].as_str()?,
+                value["revision"].as_str()?,
+                value["password"].as_str()?,
             )
         });
     }
@@ -128,13 +128,13 @@ pub struct PasswordId
 
 impl PasswordId
 {
-    pub fn new(site: String, name: String, revision: String) -> PasswordId
+    pub fn new(site: &str, name: &str, revision: &str) -> PasswordId
     {
         return PasswordId
         {
-            site: site,
-            name: name,
-            revision: if revision != "1" { revision } else { "".to_string() },
+            site: site.to_string(),
+            name: name.to_string(),
+            revision: if revision != "1" { revision.to_string() } else { "".to_string() },
         };
     }
 
@@ -163,7 +163,7 @@ pub struct GeneratedPassword
 
 impl GeneratedPassword
 {
-    pub fn new(site: String, name: String, revision: String, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> GeneratedPassword
+    pub fn new(site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> GeneratedPassword
     {
         return GeneratedPassword
         {
@@ -210,12 +210,12 @@ pub struct StoredPassword
 
 impl StoredPassword
 {
-    pub fn new(site: String, name: String, revision: String, password: String) -> StoredPassword
+    pub fn new(site: &str, name: &str, revision: &str, password: &str) -> StoredPassword
     {
         return StoredPassword
         {
             id: PasswordId::new(site, name, revision),
-            password: password,
+            password: password.to_string(),
         };
     }
 
