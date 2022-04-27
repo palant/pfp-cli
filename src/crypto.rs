@@ -50,7 +50,7 @@ pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
     return bytes;
 }
 
-pub fn derive_password(master_password: &String, salt: &String, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
+pub fn derive_password(master_password: &str, salt: &str, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
 {
     let mut bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
     return to_password(bytes.as_mut_slice(), charset);
@@ -94,7 +94,7 @@ fn to_password(bytes: &mut [u8], charset: enumset::EnumSet<CharacterType>) -> St
     return String::from_utf8_lossy(bytes).into_owned();
 }
 
-pub fn derive_key(master_password: &String, salt: &[u8]) -> Vec<u8>
+pub fn derive_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
     return derive_bits(master_password.as_bytes(), salt, AES_KEY_SIZE / 8);
 }
@@ -111,7 +111,7 @@ pub fn encrypt_data(value: &[u8], encryption_key: &[u8]) -> String
     return result;
 }
 
-pub fn decrypt_data(value: &String, encryption_key: &[u8]) -> Option<String>
+pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Option<String>
 {
     let key = aes_gcm::Key::from_slice(encryption_key);
     let cipher = aes_gcm::Aes256Gcm::new(key);
@@ -129,7 +129,7 @@ pub fn decrypt_data(value: &String, encryption_key: &[u8]) -> Option<String>
     return String::from_utf8(decrypted).ok();
 }
 
-pub fn get_digest(hmac_secret: &[u8], data: &String) -> String
+pub fn get_digest(hmac_secret: &[u8], data: &str) -> String
 {
     let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(hmac_secret).unwrap();
     mac.update(data.as_bytes());

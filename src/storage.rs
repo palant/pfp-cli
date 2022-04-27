@@ -19,7 +19,7 @@ const SALT_KEY: &str = "salt";
 const HMAC_SECRET_KEY: &str = "hmac-secret";
 const STORAGE_PREFIX: &str = "site:";
 
-fn insert_encrypted(obj: &mut json::JsonValue, key: &String, value: &json::JsonValue, encryption_key: &[u8]) -> Option<()>
+fn insert_encrypted(obj: &mut json::JsonValue, key: &str, value: &json::JsonValue, encryption_key: &[u8]) -> Option<()>
 {
     return obj.insert(key, crypto::encrypt_data(value.dump().as_bytes(), encryption_key)).ok();
 }
@@ -31,7 +31,7 @@ fn decrypt(value: &json::JsonValue, encryption_key: &[u8]) -> Option<json::JsonV
     return json::parse(&decrypted).ok();
 }
 
-fn get_decrypted(obj: &json::JsonValue, key: &String, encryption_key: &[u8]) -> Option<json::JsonValue>
+fn get_decrypted(obj: &json::JsonValue, key: &str, encryption_key: &[u8]) -> Option<json::JsonValue>
 {
     return decrypt(&obj[key], encryption_key);
 }
@@ -325,7 +325,7 @@ impl Storage
         return insert_encrypted(self.data.as_mut()?, &HMAC_SECRET_KEY.to_string(), &base64::encode(hmac_secret).into(), encryption_key);
     }
 
-    fn get_site_key(&self, site: &String, hmac_secret: &[u8]) -> String
+    fn get_site_key(&self, site: &str, hmac_secret: &[u8]) -> String
     {
         let mut result = String::new();
         result.push_str(STORAGE_PREFIX);
@@ -333,7 +333,7 @@ impl Storage
         return result;
     }
 
-    fn get_site_prefix(&self, site: &String, hmac_secret: &[u8]) -> String
+    fn get_site_prefix(&self, site: &str, hmac_secret: &[u8]) -> String
     {
         let mut result = self.get_site_key(site, hmac_secret);
         result.push_str(":");
@@ -354,20 +354,20 @@ impl Storage
         return result;
     }
 
-    pub fn get_alias(&self, site: &String, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<String>
+    pub fn get_alias(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<String>
     {
         let key = self.get_site_key(site, hmac_secret);
         let data = get_decrypted(self.data.as_ref()?, &key, encryption_key)?;
         return if data.is_object() { Some(data["alias"].as_str()?.to_string()) } else { None };
     }
 
-    pub fn resolve_site(&self, site: &String, hmac_secret: &[u8], encryption_key: &[u8]) -> String
+    pub fn resolve_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> String
     {
         let stripped = site.strip_prefix("www.").unwrap_or(site).to_string();
         return self.get_alias(&stripped, hmac_secret, encryption_key).unwrap_or(stripped);
     }
 
-    pub fn ensure_site_data(&mut self, site: &String, hmac_secret: &[u8], encryption_key: &[u8])
+    pub fn ensure_site_data(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8])
     {
         assert!(self.initialized().is_some());
 
@@ -376,7 +376,7 @@ impl Storage
         if !data.is_some() || !data.unwrap().is_object()
         {
             insert_encrypted(self.data.as_mut().unwrap(), &key, &object!{
-                site: site.as_str()
+                site: site
             }, encryption_key);
         }
     }
@@ -424,7 +424,7 @@ impl Storage
         return to_password(&value);
     }
 
-    pub fn list_passwords(&self, site: &String, hmac_secret: &[u8], encryption_key: &[u8]) -> impl Iterator<Item = Password> + '_
+    pub fn list_passwords(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> impl Iterator<Item = Password> + '_
     {
         assert!(self.initialized().is_some());
 

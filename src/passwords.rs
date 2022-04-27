@@ -9,7 +9,7 @@ use crate::storage;
 use rand::Rng;
 use std::path;
 
-fn get_encryption_key(master_password: &String, salt: &[u8]) -> Vec<u8>
+fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
     // Replicate salt being converted to UTF-8 as done by JS code
     let mut salt_str = String::new();
@@ -58,7 +58,7 @@ impl Passwords
         return self.storage.get_path();
     }
 
-    pub fn reset(&mut self, master_password: &String) -> Option<()>
+    pub fn reset(&mut self, master_password: &str) -> Option<()>
     {
         let salt = rand::thread_rng().gen::<[u8; 16]>();
         let key = get_encryption_key(master_password, &salt);
@@ -74,7 +74,7 @@ impl Passwords
         return Some(());
     }
 
-    pub fn unlock(&mut self, master_password: &String) -> Option<()>
+    pub fn unlock(&mut self, master_password: &str) -> Option<()>
     {
         self.initialized()?;
 
@@ -84,11 +84,11 @@ impl Passwords
         let hmac_secret = self.storage.get_hmac_secret(&key)?;
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret);
-        self.master_password = Some(master_password.clone());
+        self.master_password = Some(master_password.to_string());
         return Some(());
     }
 
-    pub fn set_generated(&mut self, site: &String, name: &String, revision: &String, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Option<()>
+    pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Option<()>
     {
         self.unlocked()?;
 
@@ -96,13 +96,13 @@ impl Passwords
         self.storage.ensure_site_data(&site_resolved, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
 
         self.storage.set_generated(
-            &storage::GeneratedPassword::new(site_resolved, name.clone(), revision.clone(), length, charset),
+            &storage::GeneratedPassword::new(site_resolved, name.to_string(), revision.to_string(), length, charset),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         );
         return self.storage.flush();
     }
 
-    pub fn set_stored(&mut self, site: &String, name: &String, revision: &String, password: &String) -> Option<()>
+    pub fn set_stored(&mut self, site: &str, name: &str, revision: &str, password: &str) -> Option<()>
     {
         self.unlocked()?;
 
@@ -110,30 +110,30 @@ impl Passwords
         self.storage.ensure_site_data(&site_resolved, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
 
         self.storage.set_stored(
-            &storage::StoredPassword::new(site_resolved, name.clone(), revision.clone(), password.clone()),
+            &storage::StoredPassword::new(site_resolved, name.to_string(), revision.to_string(), password.to_string()),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         );
         return self.storage.flush();
     }
 
-    pub fn has(&self, site: &String, name: &String, revision: &String) -> Option<bool>
+    pub fn has(&self, site: &str, name: &str, revision: &str) -> Option<bool>
     {
         self.unlocked()?;
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
         return self.storage.has_password(
-            &storage::PasswordId::new(site_resolved, name.clone(), revision.clone()),
+            &storage::PasswordId::new(site_resolved, name.to_string(), revision.to_string()),
             self.hmac_secret.as_ref()?.as_slice()
         );
     }
 
-    pub fn get(&self, site: &String, name: &String, revision: &String) -> Option<String>
+    pub fn get(&self, site: &str, name: &str, revision: &str) -> Option<String>
     {
         self.unlocked()?;
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
         let password = self.storage.get_password(
-            &storage::PasswordId::new(site_resolved, name.clone(), revision.clone()),
+            &storage::PasswordId::new(site_resolved, name.to_string(), revision.to_string()),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         )?;
 
@@ -151,7 +151,7 @@ impl Passwords
         }
     }
 
-    pub fn list(&self, site: &String, name: &String) -> impl Iterator<Item = storage::Password> + '_
+    pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = storage::Password> + '_
     {
         assert!(self.unlocked().is_some());
 
@@ -168,7 +168,7 @@ impl Passwords
         });
     }
 
-    pub fn list_sites(&self, site: &String) -> impl Iterator<Item = String> + '_
+    pub fn list_sites(&self, site: &str) -> impl Iterator<Item = String> + '_
     {
         assert!(self.unlocked().is_some());
 
