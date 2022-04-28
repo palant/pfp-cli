@@ -13,11 +13,7 @@ use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Passwo
 fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
     // Replicate salt being converted to UTF-8 as done by JS code
-    let mut salt_str = String::new();
-    for byte in salt
-    {
-        salt_str.push(*byte as char);
-    }
+    let salt_str = String::from_iter(salt.iter().map(|byte| *byte as char));
     return crypto::derive_key(master_password, salt_str.as_bytes());
 }
 
