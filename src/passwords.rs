@@ -5,7 +5,6 @@
  */
 
 use rand::Rng;
-use std::path;
 use super::crypto;
 use super::error::Error;
 use super::storage;
@@ -55,11 +54,6 @@ impl Passwords
             Some(_) => Ok(()),
             None => Err(Error::PasswordsLocked),
         };
-    }
-
-    pub fn get_storage_path(&self) -> &path::PathBuf
-    {
-        return self.storage.get_path();
     }
 
     pub fn reset(&mut self, master_password: &str) -> Result<(), Error>

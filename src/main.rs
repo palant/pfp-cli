@@ -17,6 +17,7 @@ use rpassword;
 use std::path;
 use std::process;
 use storage_types::{Password};
+use error::Error;
 
 /// PfP: Pain-free Passwords, command line edition
 #[derive(Parser)]
@@ -111,6 +112,48 @@ enum Commands
     }
 }
 
+trait HandleError<T>
+{
+    fn handle_error(self) -> T;
+}
+
+impl<T> HandleError<T> for Result<T, Error>
+{
+    fn handle_error(self) -> T
+    {
+        match self
+        {
+            Ok(value) => return value,
+            Err(error) =>
+            {
+                eprintln!("{}", match error
+                {
+                    Error::CreateDirFailure => "Failed creating directory for storage.",
+                    Error::FileWriteFailure => "Failed writing storage file.",
+                    Error::StorageNotInitialized => "Failed reading storage data. Maybe use set-master subcommand first?",
+                    Error::PasswordsLocked => "Passwords are locked.",
+                    Error::KeyMissing => "No such value in storage.",
+                    Error::InvalidCiphertext => "Corrupt ciphertext data in storage.",
+                    Error::InvalidBase64 => "Corrupt Base64 data in storage.",
+                    Error::InvalidJson => "Corrupt JSON data in storage.",
+                    Error::InvalidUtf8 => "Corrupt UTF-8 data in storage.",
+                    Error::DecryptionFailure => "Decryption failure, wrong master password?",
+                    Error::PasswordMissingType => "Corrupt data, missing password type.",
+                    Error::PasswordUnknownType => "Unknown password type.",
+                    Error::PasswordMissingSite => "Corrupt data, missing password site.",
+                    Error::PasswordMissingName => "Corrupt data, missing password name.",
+                    Error::PasswordMissingRevision => "Corrupt data, missing password revision.",
+                    Error::PasswordMissingLength => "Corrupt data, missing password length.",
+                    Error::PasswordMissingValue => "Corrupt data, missing password value.",
+                    Error::SiteMissingName => "Corrupt data, missing site name.",
+                    Error::NoSuchAlias => "Site isn't aliased.",
+                });
+                process::exit(1);
+            }
+        };
+    }
+}
+
 fn get_default_storage_path() -> path::PathBuf
 {
     let app_info = app_dirs2::AppInfo {name: "PfP", author: "Wladimir Palant"};
@@ -121,11 +164,7 @@ fn get_default_storage_path() -> path::PathBuf
 
 fn ensure_unlocked_passwords(passwords: &mut passwords::Passwords)
 {
-    if passwords.initialized().is_err()
-    {
-        eprintln!("Failed reading storage data from {}. Maybe use set-master subcommand first?", passwords.get_storage_path().to_string_lossy());
-        process::exit(1);
-    }
+    passwords.initialized().handle_error();
 
     while passwords.unlocked().is_err()
     {
@@ -162,7 +201,10 @@ fn parse_length(arg: &str) -> Result<usize, String>
 fn main()
 {
     let args = Args::parse();
-    let storage_path = if args.storage.is_some() { args.storage.unwrap() } else { get_default_storage_path() };
+    let storage_path = match args.storage {
+        Some(value) => value,
+        None => get_default_storage_path(),
+    };
     let mut passwords = passwords::Passwords::new(storage::Storage::new(&storage_path));
 
     match &args.command
@@ -194,7 +236,7 @@ fn main()
                 process::exit(1);
             }
 
-            passwords.reset(&master_password).unwrap();
+            passwords.reset(&master_password).handle_error();
             eprintln!("New master password set for {}.", storage_path.to_string_lossy());
         }
 
@@ -231,7 +273,7 @@ fn main()
                 process::exit(1);
             }
 
-            passwords.set_generated(domain, name, revision, *length, charset).unwrap();
+            passwords.set_generated(domain, name, revision, *length, charset).handle_error();
             println!("Password added");
         }
 
@@ -246,7 +288,7 @@ fn main()
             }
 
             let password = rpassword::prompt_password("Password to be stored: ").unwrap();
-            passwords.set_stored(domain, name, revision, &password).unwrap();
+            passwords.set_stored(domain, name, revision, &password).handle_error();
             println!("Password added");
         }
 
@@ -254,14 +296,9 @@ fn main()
         {
             ensure_unlocked_passwords(&mut passwords);
 
-            let password = passwords.get(domain, name, revision);
-            if password.is_err()
-            {
-                eprintln!("No password with the given domain/name/revision combination.");
-                process::exit(1);
-            }
+            let password = passwords.get(domain, name, revision).handle_error();
             println!("Password retrieved");
-            println!("{}", password.unwrap());
+            println!("{}", password);
         }
 
         Commands::List {domain, name} =>

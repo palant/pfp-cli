@@ -147,11 +147,6 @@ impl Storage
         };
     }
 
-    pub fn get_path(&self) -> &path::PathBuf
-    {
-        return &self.path;
-    }
-
     pub fn contains(&self, key: &str) -> Result<bool, Error>
     {
         let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
