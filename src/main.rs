@@ -5,8 +5,10 @@
  */
 
 mod crypto;
-mod storage;
+mod error;
 mod passwords;
+mod storage;
+mod storage_types;
 
 use app_dirs2;
 use clap::{Parser, Subcommand};
@@ -14,6 +16,7 @@ use question;
 use rpassword;
 use std::path;
 use std::process;
+use storage_types::{Password};
 
 /// PfP: Pain-free Passwords, command line edition
 #[derive(Parser)]
@@ -273,13 +276,13 @@ fn main()
                 let password_type;
                 match password
                 {
-                    storage::Password::Generated { password } =>
+                    Password::Generated { password } =>
                     {
                         name = password.id().name().to_owned();
                         revision = password.id().revision().to_owned();
                         password_type = "generated";
                     }
-                    storage::Password::Stored { password } =>
+                    Password::Stored { password } =>
                     {
                         name = password.id().name().to_owned();
                         revision = password.id().revision().to_owned();

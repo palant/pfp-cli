@@ -4,8 +4,10 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::crypto;
+use super::crypto;
+use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
 use json::object;
+use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path;
@@ -19,24 +21,7 @@ const SALT_KEY: &str = "salt";
 const HMAC_SECRET_KEY: &str = "hmac-secret";
 const STORAGE_PREFIX: &str = "site:";
 
-fn insert_encrypted(obj: &mut json::JsonValue, key: &str, value: &json::JsonValue, encryption_key: &[u8]) -> Option<()>
-{
-    return obj.insert(key, crypto::encrypt_data(value.dump().as_bytes(), encryption_key)).ok();
-}
-
-fn decrypt(value: &json::JsonValue, encryption_key: &[u8]) -> Option<json::JsonValue>
-{
-    let value = value.as_str()?;
-    let decrypted = crypto::decrypt_data(&value.to_string(), encryption_key)?;
-    return json::parse(&decrypted).ok();
-}
-
-fn get_decrypted(obj: &json::JsonValue, key: &str, encryption_key: &[u8]) -> Option<json::JsonValue>
-{
-    return decrypt(&obj[key], encryption_key);
-}
-
-fn parse_storage(path: &path::PathBuf) -> Result<json::JsonValue, io::Error>
+fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String, String>), io::Error>
 {
     let contents = fs::read_to_string(path)?;
     let mut root = match json::parse(&contents)
@@ -54,225 +39,90 @@ fn parse_storage(path: &path::PathBuf) -> Result<json::JsonValue, io::Error>
         return Err(io::Error::new(io::ErrorKind::InvalidData, "unknown format"));
     }
 
-    let data = root.remove(DATA_KEY);
-    if !data.is_object()
+    let data_obj = root.remove(DATA_KEY);
+    if !data_obj.is_object()
     {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "storage data isn't an object"));
     }
 
-    if !data[SALT_KEY].is_string() || !data[HMAC_SECRET_KEY].is_string()
+    if !data_obj[SALT_KEY].is_string() || !data_obj[HMAC_SECRET_KEY].is_string()
     {
         return Err(io::Error::new(io::ErrorKind::InvalidData, "missing password salt or HMAC secret"));
     }
 
-    return Ok(data)
-}
+    let salt = data_obj[SALT_KEY].as_str().unwrap().to_string();
+    let hmac = data_obj[HMAC_SECRET_KEY].as_str().unwrap().to_string();
 
-fn to_password(value: &json::JsonValue) -> Option<Password>
-{
-    if !value.is_object()
+    let mut data = HashMap::new();
+    for (key, value) in data_obj.entries()
     {
-        return None;
-    }
-
-    let password_type = value["type"].as_str()?;
-    if password_type == "generated2"
-    {
-        let mut charset = crypto::new_charset();
-        if value["lower"].as_bool()?
+        if key.starts_with(STORAGE_PREFIX) && value.is_string()
         {
-            charset.insert(crypto::CharacterType::LOWER);
+            data.insert(key.to_string(), value.as_str().unwrap().to_string());
         }
-        if value["upper"].as_bool()?
-        {
-            charset.insert(crypto::CharacterType::UPPER);
-        }
-        if value["number"].as_bool()?
-        {
-            charset.insert(crypto::CharacterType::DIGIT);
-        }
-        if value["symbol"].as_bool()?
-        {
-            charset.insert(crypto::CharacterType::SYMBOL);
-        }
-        return Some(Password::Generated {
-            password: GeneratedPassword::new(
-                value["site"].as_str()?,
-                value["name"].as_str()?,
-                value["revision"].as_str()?,
-                value["length"].as_usize()?,
-                charset
-            )
-        });
-    }
-    else if password_type == "stored"
-    {
-        return Some(Password::Stored {
-            password: StoredPassword::new(
-                value["site"].as_str()?,
-                value["name"].as_str()?,
-                value["revision"].as_str()?,
-                value["password"].as_str()?,
-            )
-        });
-    }
-    return None;
-}
-
-pub struct PasswordId
-{
-    site: String,
-    name: String,
-    revision: String,
-}
-
-impl PasswordId
-{
-    pub fn new(site: &str, name: &str, revision: &str) -> PasswordId
-    {
-        return PasswordId
-        {
-            site: site.to_string(),
-            name: name.to_string(),
-            revision: if revision != "1" { revision.to_string() } else { "".to_string() },
-        };
     }
 
-    pub fn site(&self) -> &str
-    {
-        return &self.site;
-    }
-
-    pub fn name(&self) -> &str
-    {
-        return &self.name;
-    }
-
-    pub fn revision(&self) -> &str
-    {
-        return &self.revision;
-    }
-}
-
-pub struct GeneratedPassword
-{
-    id: PasswordId,
-    length: usize,
-    charset: enumset::EnumSet<crypto::CharacterType>
-}
-
-impl GeneratedPassword
-{
-    pub fn new(site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> GeneratedPassword
-    {
-        return GeneratedPassword
-        {
-            id: PasswordId::new(site, name, revision),
-            length: length,
-            charset: charset,
-        };
-    }
-
-    pub fn id(&self) -> &PasswordId
-    {
-        return &self.id;
-    }
-
-    pub fn length(&self) -> usize
-    {
-        return self.length;
-    }
-
-    pub fn charset(&self) -> enumset::EnumSet<crypto::CharacterType>
-    {
-        return self.charset;
-    }
-
-    pub fn salt(&self) -> String
-    {
-        let mut salt = self.id.site().to_string();
-        salt.push_str("\0");
-        salt.push_str(&self.id.name());
-        if self.id.revision() != ""
-        {
-            salt.push_str("\0");
-            salt.push_str(&self.id.revision());
-        }
-        return salt;
-    }
-}
-
-pub struct StoredPassword
-{
-    id: PasswordId,
-    password: String,
-}
-
-impl StoredPassword
-{
-    pub fn new(site: &str, name: &str, revision: &str, password: &str) -> StoredPassword
-    {
-        return StoredPassword
-        {
-            id: PasswordId::new(site, name, revision),
-            password: password.to_string(),
-        };
-    }
-
-    pub fn id(&self) -> &PasswordId
-    {
-        return &self.id;
-    }
-
-    pub fn password(&self) -> &str
-    {
-        return &self.password;
-    }
-}
-
-pub enum Password
-{
-    Generated
-    {
-        password: GeneratedPassword,
-    },
-    Stored
-    {
-        password: StoredPassword,
-    },
+    return Ok((salt, hmac, data));
 }
 
 pub struct Storage
 {
     path: path::PathBuf,
-    data: Option<json::JsonValue>,
+    salt: Option<String>,
+    hmac_secret: Option<String>,
+    data: Option<HashMap<String, String>>,
 }
 
 impl Storage
 {
     pub fn new(path: &path::PathBuf) -> Storage
     {
-        return Storage {
-            path: path.clone(),
-            data: match parse_storage(path)
+        return match parse_storage(path)
+        {
+            Ok((salt, hmac_secret, data)) => Storage
             {
-                Ok(data) => Some(data),
-                Err(_error) => None,
-            }
+                path: path.clone(),
+                salt: Some(salt),
+                hmac_secret: Some(hmac_secret),
+                data: Some(data),
+            },
+            Err(_error) => Storage
+            {
+                path: path.clone(),
+                salt: None,
+                hmac_secret: None,
+                data: None,
+            },
         };
     }
 
-    pub fn clear(&mut self)
+    pub fn clear(&mut self, salt: &[u8], hmac_secret: &[u8], encryption_key: &Vec<u8>)
     {
-        self.data = Some(object!{});
+        self.data = Some(HashMap::new());
+        self.set_salt(salt);
+        self.set_hmac_secret(hmac_secret, encryption_key);
     }
 
     pub fn flush(&self) -> Option<()>
     {
-        let mut root = object!{};
-        root.insert(APPLICATION_KEY, APPLICATION_VALUE).ok()?;
-        root.insert(FORMAT_KEY, CURRENT_FORMAT).ok()?;
-        root.insert(DATA_KEY, self.data.clone()).ok()?;
+        self.initialized()?;
+
+        let mut root = object!{
+            [APPLICATION_KEY]: APPLICATION_VALUE,
+            [FORMAT_KEY]: CURRENT_FORMAT,
+        };
+
+        let mut data = object!{
+            [SALT_KEY]: self.salt.as_ref()?.clone(),
+            [HMAC_SECRET_KEY]: self.hmac_secret.as_ref()?.clone(),
+        };
+        for (key, val) in self.data.as_ref()?.iter()
+        {
+            let mut storage_key = String::from(STORAGE_PREFIX);
+            storage_key.push_str(key);
+            data.insert(&storage_key, val.clone()).ok()?;
+        }
+        root.insert(DATA_KEY, data).ok()?;
 
         let parent = self.path.parent();
         if parent.is_some()
@@ -294,43 +144,67 @@ impl Storage
         return &self.path;
     }
 
+    pub fn contains(&self, key: &str) -> Option<bool>
+    {
+        self.initialized()?;
+
+        let data = self.data.as_ref()?;
+        return Some(data.contains_key(key));
+    }
+
+    pub fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Option<T>
+        where T: TryFrom<json::JsonValue>
+    {
+        self.initialized()?;
+
+        let data = self.data.as_ref()?;
+        let decrypted = crypto::decrypt_data(data.get(key)?, encryption_key)?;
+        return T::try_from(json::parse(&decrypted).ok()?).ok();
+    }
+
+    pub fn set<'a, T>(&'a mut self, key: &'a str, value: &'a T, encryption_key: &'a [u8]) -> Option<()>
+        where json::JsonValue: From<&'a T>
+    {
+        self.initialized()?;
+
+        let data = self.data.as_mut()?;
+        let value = json::JsonValue::from(value);
+        data.insert(key.to_string(), crypto::encrypt_data(value.dump().as_bytes(), encryption_key))?;
+        return Some(());
+    }
+
     pub fn get_salt(&self) -> Option<Vec<u8>>
     {
         self.initialized()?;
 
-        let salt = self.data.as_ref()?[SALT_KEY].as_str()?;
-        return base64::decode(salt).ok();
+        return base64::decode(self.salt.as_ref()?.as_bytes()).ok();
     }
 
-    pub fn set_salt(&mut self, salt: &[u8]) -> Option<()>
+    fn set_salt(&mut self, salt: &[u8])
     {
-        self.initialized()?;
-
-        return self.data.as_mut()?.insert(SALT_KEY, base64::encode(salt)).ok();
+        self.salt = Some(base64::encode(salt));
     }
 
     pub fn get_hmac_secret(&self, encryption_key: &Vec<u8>) -> Option<Vec<u8>>
     {
         self.initialized()?;
 
-        let hmac_secret_value = get_decrypted(self.data.as_ref()?, &HMAC_SECRET_KEY.to_string(), encryption_key)?;
-        let hmac_secret = hmac_secret_value.as_str()?;
+        let decrypted = crypto::decrypt_data(self.hmac_secret.as_ref()?, encryption_key)?;
+        let parsed = json::parse(&decrypted).ok()?;
+        let hmac_secret = parsed.as_str()?;
         return base64::decode(hmac_secret).ok();
     }
 
-    pub fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &Vec<u8>) -> Option<()>
+    fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &Vec<u8>)
     {
-        self.initialized()?;
-
-        return insert_encrypted(self.data.as_mut()?, &HMAC_SECRET_KEY.to_string(), &base64::encode(hmac_secret).into(), encryption_key);
+        let stringified = json::JsonValue::from(base64::encode(hmac_secret)).dump();
+        let encrypted = crypto::encrypt_data(stringified.as_bytes(), encryption_key);
+        self.hmac_secret = Some(encrypted);
     }
 
     fn get_site_key(&self, site: &str, hmac_secret: &[u8]) -> String
     {
-        let mut result = String::new();
-        result.push_str(STORAGE_PREFIX);
-        result.push_str(&crypto::get_digest(hmac_secret, site));
-        return result;
+        return crypto::get_digest(hmac_secret, site);
     }
 
     fn get_site_prefix(&self, site: &str, hmac_secret: &[u8]) -> String
@@ -357,8 +231,12 @@ impl Storage
     pub fn get_alias(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<String>
     {
         let key = self.get_site_key(site, hmac_secret);
-        let data = get_decrypted(self.data.as_ref()?, &key, encryption_key)?;
-        return if data.is_object() { Some(data["alias"].as_str()?.to_string()) } else { None };
+        let site: Site = self.get(&key, encryption_key)?;
+        return match site.alias()
+        {
+            Some(value) => Some(value.to_string()),
+            None => None,
+        };
     }
 
     pub fn resolve_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> String
@@ -372,80 +250,58 @@ impl Storage
         assert!(self.initialized().is_some());
 
         let key = self.get_site_key(site, hmac_secret);
-        let data = get_decrypted(self.data.as_ref().unwrap(), &key, encryption_key);
-        if !data.is_some() || !data.unwrap().is_object()
+        let existing: Option<Site> = self.get(&key, encryption_key);
+        if existing.is_none()
         {
-            insert_encrypted(self.data.as_mut().unwrap(), &key, &object!{
-                site: site
-            }, encryption_key);
+            self.set(&key, &Site::new(site, None), encryption_key);
         }
     }
 
     pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> Option<bool>
     {
         let key = self.get_password_key(id, hmac_secret);
-        return Some(self.data.as_ref()?.has_key(&key));
+        return self.contains(&key);
     }
 
-    pub fn set_generated(&mut self, password: &GeneratedPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<()>
+    pub fn set_generated(&mut self, password: GeneratedPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<()>
     {
         let key = self.get_password_key(password.id(), hmac_secret);
-        let value = object!{
-            type: "generated2",
-            site: password.id().site(),
-            name: password.id().name(),
-            revision: password.id().revision(),
-            length: password.length(),
-            lower: password.charset().contains(crypto::CharacterType::LOWER),
-            upper: password.charset().contains(crypto::CharacterType::UPPER),
-            number: password.charset().contains(crypto::CharacterType::DIGIT),
-            symbol: password.charset().contains(crypto::CharacterType::SYMBOL),
-        };
-        return insert_encrypted(self.data.as_mut()?, &key, &value, encryption_key);
+        return self.set(&key, &Password::Generated { password }, encryption_key);
     }
 
-    pub fn set_stored(&mut self, password: &StoredPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<()>
+    pub fn set_stored(&mut self, password: StoredPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<()>
     {
         let key = self.get_password_key(password.id(), hmac_secret);
-        let value = object!{
-            type: "stored",
-            site: password.id().site(),
-            name: password.id().name(),
-            revision: password.id().revision(),
-            password: password.password(),
-        };
-        return insert_encrypted(self.data.as_mut()?, &key, &value, encryption_key);
+        return self.set(&key, &Password::Stored { password }, encryption_key);
     }
 
     pub fn get_password(&self, id: &PasswordId, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<Password>
     {
         let key = self.get_password_key(id, hmac_secret);
-        let value = get_decrypted(self.data.as_ref()?, &key, encryption_key)?;
-        return to_password(&value);
+        return self.get(&key, encryption_key);
     }
 
-    pub fn list_passwords(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> impl Iterator<Item = Password> + '_
+    pub fn list_passwords<'a>(&'a self, site: &str, hmac_secret: &[u8], encryption_key: &'a [u8]) -> impl Iterator<Item = Password> + 'a
     {
         assert!(self.initialized().is_some());
 
         let data = self.data.as_ref().unwrap();
         let prefix = self.get_site_prefix(site, hmac_secret);
-        let encryption_key_vec = encryption_key.to_owned();
-        return data.entries().filter_map(move |(key, value)| if key.starts_with(&prefix)
+        return data.keys().filter_map(move |key| if key.starts_with(&prefix)
         {
-            to_password(&decrypt(value, encryption_key_vec.as_slice()).unwrap())
+            self.get(key, encryption_key)
         } else { None });
     }
 
-    pub fn list_sites(&self, encryption_key: &[u8]) -> impl Iterator<Item = String> + '_
+    pub fn list_sites<'a>(&'a self, encryption_key: &'a [u8]) -> impl Iterator<Item = String> + 'a
     {
         assert!(self.initialized().is_some());
 
         let data = self.data.as_ref().unwrap();
-        let encryption_key_vec = encryption_key.to_owned();
-        return data.entries().filter_map(move |(key, value)| if key.strip_prefix(STORAGE_PREFIX).unwrap_or(":").find(":").is_none()
+        return data.keys().filter_map(move |key| if key.find(":").is_none()
         {
-            Some(decrypt(value, encryption_key_vec.as_slice()).unwrap()["site"].as_str().unwrap().to_string())
+            let site: Site = self.get(key, encryption_key)?;
+            Some(site.name().to_string())
         } else { None })
     }
 }

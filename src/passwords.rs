@@ -4,8 +4,9 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::crypto;
-use crate::storage;
+use super::crypto;
+use super::storage;
+use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password};
 use rand::Rng;
 use std::path;
 
@@ -17,7 +18,6 @@ fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
     {
         salt_str.push(*byte as char);
     }
-
     return crypto::derive_key(master_password, salt_str.as_bytes());
 }
 
@@ -64,9 +64,7 @@ impl Passwords
         let key = get_encryption_key(master_password, &salt);
         let hmac_secret = rand::thread_rng().gen::<[u8; 32]>();
 
-        self.storage.clear();
-        self.storage.set_salt(&salt)?;
-        self.storage.set_hmac_secret(&hmac_secret, &key)?;
+        self.storage.clear(&salt, &hmac_secret, &key);
         self.storage.flush()?;
 
         self.key = Some(key);
@@ -96,7 +94,7 @@ impl Passwords
         self.storage.ensure_site_data(&site_resolved, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
 
         self.storage.set_generated(
-            &storage::GeneratedPassword::new(&site_resolved, name, revision, length, charset),
+            GeneratedPassword::new(&site_resolved, name, revision, length, charset),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         );
         return self.storage.flush();
@@ -110,7 +108,7 @@ impl Passwords
         self.storage.ensure_site_data(&site_resolved, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
 
         self.storage.set_stored(
-            &storage::StoredPassword::new(&site_resolved, name, revision, password),
+            StoredPassword::new(&site_resolved, name, revision, password),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         );
         return self.storage.flush();
@@ -122,7 +120,7 @@ impl Passwords
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
         return self.storage.has_password(
-            &storage::PasswordId::new(&site_resolved, name, revision),
+            &PasswordId::new(&site_resolved, name, revision),
             self.hmac_secret.as_ref()?.as_slice()
         );
     }
@@ -133,25 +131,25 @@ impl Passwords
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice());
         let password = self.storage.get_password(
-            &storage::PasswordId::new(&site_resolved, name, revision),
+            &PasswordId::new(&site_resolved, name, revision),
             self.hmac_secret.as_ref()?.as_slice(), self.key.as_ref()?.as_slice()
         )?;
 
         match password
         {
-            storage::Password::Generated {password} =>
+            Password::Generated {password} =>
             {
                 let master_password = self.master_password.as_ref()?;
                 return Some(crypto::derive_password(master_password, &password.salt(), password.length(), password.charset()));
             }
-            storage::Password::Stored {password} =>
+            Password::Stored {password} =>
             {
                 return Some(password.password().to_string());
             }
         }
     }
 
-    pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = storage::Password> + '_
+    pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = Password> + '_
     {
         assert!(self.unlocked().is_some());
 
@@ -161,8 +159,8 @@ impl Passwords
         {
             let name =  match password
             {
-                storage::Password::Generated {password} => password.id().name(),
-                storage::Password::Stored {password} => password.id().name(),
+                Password::Generated {password} => password.id().name(),
+                Password::Stored {password} => password.id().name(),
             };
             return matcher.matches(name);
         });
