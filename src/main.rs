@@ -237,7 +237,7 @@ fn main()
             }
 
             passwords.reset(&master_password).handle_error();
-            eprintln!("New master password set for {}.", storage_path.to_string_lossy());
+            println!("New master password set for {}.", storage_path.to_string_lossy());
         }
 
         Commands::AddGenerated {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol, force} =>
@@ -274,7 +274,7 @@ fn main()
             }
 
             passwords.set_generated(domain, name, revision, *length, charset).handle_error();
-            println!("Password added");
+            println!("Password added.");
         }
 
         Commands::AddStored {domain, name, revision, force} =>
@@ -289,7 +289,7 @@ fn main()
 
             let password = rpassword::prompt_password("Password to be stored: ").unwrap();
             passwords.set_stored(domain, name, revision, &password).handle_error();
-            println!("Password added");
+            println!("Password added.");
         }
 
         Commands::Password {domain, name, revision} =>
@@ -297,7 +297,7 @@ fn main()
             ensure_unlocked_passwords(&mut passwords);
 
             let password = passwords.get(domain, name, revision).handle_error();
-            println!("Password retrieved");
+            println!("Password retrieved.");
             println!("{}", password);
         }
 
@@ -338,7 +338,7 @@ fn main()
             }
             if !found
             {
-                println!("No matching passwords found");
+                println!("No matching passwords found.");
             }
         }
 
@@ -354,7 +354,7 @@ fn main()
             }
             if !found
             {
-                println!("No matching websites found");
+                println!("No matching websites found.");
             }
         }
     }
