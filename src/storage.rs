@@ -4,13 +4,14 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use super::crypto;
-use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
 use json::object;
 use std::collections::HashMap;
 use std::fs;
 use std::io;
 use std::path;
+use super::crypto;
+use super::error::Error;
+use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
 
 const APPLICATION_KEY: &str = "application";
 const APPLICATION_VALUE: &str = "pfp";
@@ -56,9 +57,14 @@ fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String
     let mut data = HashMap::new();
     for (key, value) in data_obj.entries()
     {
-        if key.starts_with(STORAGE_PREFIX) && value.is_string()
+        if !value.is_string()
         {
-            data.insert(key.to_string(), value.as_str().unwrap().to_string());
+            continue;
+        }
+        match key.strip_prefix(STORAGE_PREFIX)
+        {
+            Some(key) => { data.insert(key.to_string(), value.as_str().unwrap().to_string()); },
+            None => {},
         }
     }
 
@@ -103,40 +109,42 @@ impl Storage
         self.set_hmac_secret(hmac_secret, encryption_key);
     }
 
-    pub fn flush(&self) -> Option<()>
+    pub fn flush(&self) -> Result<(), Error>
     {
-        self.initialized()?;
-
         let mut root = object!{
             [APPLICATION_KEY]: APPLICATION_VALUE,
             [FORMAT_KEY]: CURRENT_FORMAT,
         };
 
         let mut data = object!{
-            [SALT_KEY]: self.salt.as_ref()?.clone(),
-            [HMAC_SECRET_KEY]: self.hmac_secret.as_ref()?.clone(),
+            [SALT_KEY]: self.salt.as_ref().ok_or(Error::StorageNotInitialized)?.clone(),
+            [HMAC_SECRET_KEY]: self.hmac_secret.as_ref().ok_or(Error::StorageNotInitialized)?.clone(),
         };
-        for (key, val) in self.data.as_ref()?.iter()
+        for (key, val) in self.data.as_ref().ok_or(Error::StorageNotInitialized)?.iter()
         {
             let mut storage_key = String::from(STORAGE_PREFIX);
             storage_key.push_str(key);
-            data.insert(&storage_key, val.clone()).ok()?;
+            data.insert(&storage_key, val.clone()).unwrap();
         }
-        root.insert(DATA_KEY, data).ok()?;
+        root.insert(DATA_KEY, data).unwrap();
 
         let parent = self.path.parent();
-        if parent.is_some()
+        match parent
         {
-            fs::create_dir_all(parent?).ok()?;
+            Some(parent) => fs::create_dir_all(parent).or(Err(Error::CreateDirFailure))?,
+            None => {},
         }
-        fs::write(&self.path, json::stringify(root)).ok()?;
-        return Some(());
+        fs::write(&self.path, json::stringify(root)).or(Err(Error::FileWriteFailure))?;
+        return Ok(());
     }
 
-    pub fn initialized(&self) -> Option<()>
+    pub fn initialized(&self) -> Result<(), Error>
     {
-        self.data.as_ref()?;
-        return Some(());
+        return match self.data.as_ref()
+        {
+            Some(_) => Ok(()),
+            None => Err(Error::StorageNotInitialized),
+        };
     }
 
     pub fn get_path(&self) -> &path::PathBuf
@@ -144,40 +152,37 @@ impl Storage
         return &self.path;
     }
 
-    pub fn contains(&self, key: &str) -> Option<bool>
+    pub fn contains(&self, key: &str) -> Result<bool, Error>
     {
-        self.initialized()?;
-
-        let data = self.data.as_ref()?;
-        return Some(data.contains_key(key));
+        let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
+        return Ok(data.contains_key(key));
     }
 
-    pub fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Option<T>
-        where T: TryFrom<json::JsonValue>
+    pub fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
+        where T: TryFrom<json::JsonValue, Error = Error>
     {
-        self.initialized()?;
-
-        let data = self.data.as_ref()?;
-        let decrypted = crypto::decrypt_data(data.get(key)?, encryption_key)?;
-        return T::try_from(json::parse(&decrypted).ok()?).ok();
+        let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
+        let value = data.get(key).ok_or(Error::KeyMissing)?;
+        let decrypted = crypto::decrypt_data(value, encryption_key)?;
+        let parsed = json::parse(&decrypted).or(Err(Error::InvalidJson))?;
+        return T::try_from(parsed);
     }
 
-    pub fn set<'a, T>(&'a mut self, key: &'a str, value: &'a T, encryption_key: &'a [u8]) -> Option<()>
+    pub fn set<'a, T>(&'a mut self, key: &'a str, value: &'a T, encryption_key: &'a [u8]) -> Result<(), Error>
         where json::JsonValue: From<&'a T>
     {
         self.initialized()?;
 
-        let data = self.data.as_mut()?;
+        let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
         let value = json::JsonValue::from(value);
-        data.insert(key.to_string(), crypto::encrypt_data(value.dump().as_bytes(), encryption_key))?;
-        return Some(());
+        data.insert(key.to_string(), crypto::encrypt_data(value.dump().as_bytes(), encryption_key));
+        return Ok(());
     }
 
-    pub fn get_salt(&self) -> Option<Vec<u8>>
+    pub fn get_salt(&self) -> Result<Vec<u8>, Error>
     {
-        self.initialized()?;
-
-        return base64::decode(self.salt.as_ref()?.as_bytes()).ok();
+        let encoded = self.salt.as_ref().ok_or(Error::StorageNotInitialized)?;
+        return base64::decode(encoded.as_bytes()).or(Err(Error::InvalidBase64));
     }
 
     fn set_salt(&mut self, salt: &[u8])
@@ -185,14 +190,13 @@ impl Storage
         self.salt = Some(base64::encode(salt));
     }
 
-    pub fn get_hmac_secret(&self, encryption_key: &Vec<u8>) -> Option<Vec<u8>>
+    pub fn get_hmac_secret(&self, encryption_key: &Vec<u8>) -> Result<Vec<u8>, Error>
     {
-        self.initialized()?;
-
-        let decrypted = crypto::decrypt_data(self.hmac_secret.as_ref()?, encryption_key)?;
-        let parsed = json::parse(&decrypted).ok()?;
-        let hmac_secret = parsed.as_str()?;
-        return base64::decode(hmac_secret).ok();
+        let ciphertext = self.hmac_secret.as_ref().ok_or(Error::StorageNotInitialized)?;
+        let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
+        let parsed = json::parse(&decrypted).or(Err(Error::InvalidJson))?;
+        let hmac_secret = parsed.as_str().ok_or(Error::InvalidJson)?;
+        return base64::decode(hmac_secret).or(Err(Error::InvalidBase64));
     }
 
     fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &Vec<u8>)
@@ -228,14 +232,14 @@ impl Storage
         return result;
     }
 
-    pub fn get_alias(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<String>
+    pub fn get_alias(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<String, Error>
     {
         let key = self.get_site_key(site, hmac_secret);
         let site: Site = self.get(&key, encryption_key)?;
         return match site.alias()
         {
-            Some(value) => Some(value.to_string()),
-            None => None,
+            Some(value) => Ok(value.to_string()),
+            None => Err(Error::NoSuchAlias),
         };
     }
 
@@ -245,37 +249,38 @@ impl Storage
         return self.get_alias(&stripped, hmac_secret, encryption_key).unwrap_or(stripped);
     }
 
-    pub fn ensure_site_data(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8])
+    pub fn ensure_site_data(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
-        assert!(self.initialized().is_some());
+        assert!(self.initialized().is_ok());
 
         let key = self.get_site_key(site, hmac_secret);
-        let existing: Option<Site> = self.get(&key, encryption_key);
-        if existing.is_none()
+        let existing: Result<Site, Error> = self.get(&key, encryption_key);
+        if existing.is_err()
         {
-            self.set(&key, &Site::new(site, None), encryption_key);
+            return self.set(&key, &Site::new(site, None), encryption_key);
         }
+        return Ok(());
     }
 
-    pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> Option<bool>
+    pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> Result<bool, Error>
     {
         let key = self.get_password_key(id, hmac_secret);
         return self.contains(&key);
     }
 
-    pub fn set_generated(&mut self, password: GeneratedPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<()>
+    pub fn set_generated(&mut self, password: GeneratedPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
         let key = self.get_password_key(password.id(), hmac_secret);
         return self.set(&key, &Password::Generated { password }, encryption_key);
     }
 
-    pub fn set_stored(&mut self, password: StoredPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<()>
+    pub fn set_stored(&mut self, password: StoredPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
         let key = self.get_password_key(password.id(), hmac_secret);
         return self.set(&key, &Password::Stored { password }, encryption_key);
     }
 
-    pub fn get_password(&self, id: &PasswordId, hmac_secret: &[u8], encryption_key: &[u8]) -> Option<Password>
+    pub fn get_password(&self, id: &PasswordId, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<Password, Error>
     {
         let key = self.get_password_key(id, hmac_secret);
         return self.get(&key, encryption_key);
@@ -283,24 +288,20 @@ impl Storage
 
     pub fn list_passwords<'a>(&'a self, site: &str, hmac_secret: &[u8], encryption_key: &'a [u8]) -> impl Iterator<Item = Password> + 'a
     {
-        assert!(self.initialized().is_some());
-
         let data = self.data.as_ref().unwrap();
         let prefix = self.get_site_prefix(site, hmac_secret);
         return data.keys().filter_map(move |key| if key.starts_with(&prefix)
         {
-            self.get(key, encryption_key)
+            self.get(key, encryption_key).ok()
         } else { None });
     }
 
     pub fn list_sites<'a>(&'a self, encryption_key: &'a [u8]) -> impl Iterator<Item = String> + 'a
     {
-        assert!(self.initialized().is_some());
-
         let data = self.data.as_ref().unwrap();
         return data.keys().filter_map(move |key| if key.find(":").is_none()
         {
-            let site: Site = self.get(key, encryption_key)?;
+            let site: Site = self.get(key, encryption_key).ok()?;
             Some(site.name().to_string())
         } else { None })
     }

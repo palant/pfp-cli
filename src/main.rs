@@ -121,20 +121,20 @@ fn get_default_storage_path() -> path::PathBuf
 
 fn ensure_unlocked_passwords(passwords: &mut passwords::Passwords)
 {
-    if passwords.initialized().is_none()
+    if passwords.initialized().is_err()
     {
         eprintln!("Failed reading storage data from {}. Maybe use set-master subcommand first?", passwords.get_storage_path().to_string_lossy());
         process::exit(1);
     }
 
-    while passwords.unlocked().is_none()
+    while passwords.unlocked().is_err()
     {
         let master_password = rpassword::prompt_password("Your master password: ").unwrap();
         if master_password.len() < 6
         {
             eprintln!("Master password length should be at least 6 characters.");
         }
-        else if passwords.unlock(&master_password).is_none()
+        else if passwords.unlock(&master_password).is_err()
         {
             eprintln!("This does not seem to be the correct master password.");
         }
@@ -169,7 +169,7 @@ fn main()
     {
         Commands::SetMaster {assume_yes} =>
         {
-            if !assume_yes && passwords.initialized().is_some()
+            if !assume_yes && passwords.initialized().is_ok()
             {
                 let allow = question::Question::new("Changing master password will remove all existing data. Continue?")
                         .default(question::Answer::NO)
@@ -194,7 +194,7 @@ fn main()
                 process::exit(1);
             }
 
-            passwords.reset(&master_password);
+            passwords.reset(&master_password).unwrap();
             eprintln!("New master password set for {}.", storage_path.to_string_lossy());
         }
 
@@ -231,7 +231,7 @@ fn main()
                 process::exit(1);
             }
 
-            passwords.set_generated(domain, name, revision, *length, charset);
+            passwords.set_generated(domain, name, revision, *length, charset).unwrap();
             println!("Password added");
         }
 
@@ -246,7 +246,7 @@ fn main()
             }
 
             let password = rpassword::prompt_password("Password to be stored: ").unwrap();
-            passwords.set_stored(domain, name, revision, &password);
+            passwords.set_stored(domain, name, revision, &password).unwrap();
             println!("Password added");
         }
 
@@ -255,7 +255,7 @@ fn main()
             ensure_unlocked_passwords(&mut passwords);
 
             let password = passwords.get(domain, name, revision);
-            if password.is_none()
+            if password.is_err()
             {
                 eprintln!("No password with the given domain/name/revision combination.");
                 process::exit(1);

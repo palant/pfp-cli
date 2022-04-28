@@ -4,8 +4,19 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+#[derive(Debug)]
 pub enum Error
 {
+    CreateDirFailure,
+    FileWriteFailure,
+    StorageNotInitialized,
+    PasswordsLocked,
+    KeyMissing,
+    InvalidCiphertext,
+    InvalidBase64,
+    InvalidJson,
+    InvalidUtf8,
+    DecryptionFailure,
     PasswordMissingType,
     PasswordUnknownType,
     PasswordMissingSite,
@@ -14,4 +25,5 @@ pub enum Error
     PasswordMissingLength,
     PasswordMissingValue,
     SiteMissingName,
+    NoSuchAlias,
 }

@@ -9,6 +9,7 @@ use enumset;
 use hmac::Mac;
 use rand::Rng;
 use scrypt::scrypt;
+use super::error::Error;
 
 const AES_KEY_SIZE: usize = 256;
 const AES_NONCE_SIZE: usize = 96;
@@ -111,7 +112,7 @@ pub fn encrypt_data(value: &[u8], encryption_key: &[u8]) -> String
     return result;
 }
 
-pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Option<String>
+pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Result<String, Error>
 {
     let key = aes_gcm::Key::from_slice(encryption_key);
     let cipher = aes_gcm::Aes256Gcm::new(key);
@@ -119,14 +120,14 @@ pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Option<String>
     let parts: Vec<&str> = value.split('_').collect();
     if parts.len() != 2
     {
-        return None;
+        return Err(Error::InvalidCiphertext);
     }
 
-    let nonce_data = base64::decode(&parts[0]).ok()?;
+    let nonce_data = base64::decode(&parts[0]).or(Err(Error::InvalidBase64))?;
     let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
-    let ciphertext = base64::decode(&parts[1]).ok()?;
-    let decrypted = cipher.decrypt(&nonce, ciphertext.as_slice()).ok()?;
-    return String::from_utf8(decrypted).ok();
+    let ciphertext = base64::decode(&parts[1]).or(Err(Error::InvalidBase64))?;
+    let decrypted = cipher.decrypt(&nonce, ciphertext.as_slice()).or(Err(Error::DecryptionFailure))?;
+    return String::from_utf8(decrypted).or(Err(Error::InvalidUtf8));
 }
 
 pub fn get_digest(hmac_secret: &[u8], data: &str) -> String
