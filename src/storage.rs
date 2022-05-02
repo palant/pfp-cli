@@ -4,7 +4,6 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use json::object;
 use std::collections::HashMap;
 use std::fs;
 use std::path;
@@ -67,13 +66,16 @@ fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String
     let mut data = HashMap::new();
     for (key, value) in data_obj.iter()
     {
-        if !value.is_string()
+        match value.as_str()
         {
-            continue;
-        }
-        match key.strip_prefix(STORAGE_PREFIX)
-        {
-            Some(key) => { data.insert(key.to_string(), value.as_str().unwrap().to_string()); },
+            Some(str) =>
+            {
+                match key.strip_prefix(STORAGE_PREFIX)
+                {
+                    Some(key) => { data.insert(key.to_string(), str.to_string()); },
+                    None => {},
+                }
+            },
             None => {},
         }
     }
@@ -121,22 +123,20 @@ impl Storage
 
     pub fn flush(&self) -> Result<(), Error>
     {
-        let mut root = object!{
-            [APPLICATION_KEY]: APPLICATION_VALUE,
-            [FORMAT_KEY]: CURRENT_FORMAT,
-        };
+        let mut root = json::object::Object::new();
+        root.insert(APPLICATION_KEY, APPLICATION_VALUE.into());
+        root.insert(FORMAT_KEY, CURRENT_FORMAT.into());
 
-        let mut data = object!{
-            [SALT_KEY]: self.salt.as_ref().ok_or(Error::StorageNotInitialized)?.clone(),
-            [HMAC_SECRET_KEY]: self.hmac_secret.as_ref().ok_or(Error::StorageNotInitialized)?.clone(),
-        };
+        let mut data = json::object::Object::new();
+        data.insert(SALT_KEY, self.salt.as_ref().ok_or(Error::StorageNotInitialized)?.clone().into());
+        data.insert(HMAC_SECRET_KEY,  self.hmac_secret.as_ref().ok_or(Error::StorageNotInitialized)?.clone().into());
         for (key, val) in self.data.as_ref().ok_or(Error::StorageNotInitialized)?.iter()
         {
             let mut storage_key = String::from(STORAGE_PREFIX);
             storage_key.push_str(key);
-            data.insert(&storage_key, val.clone()).unwrap();
+            data.insert(&storage_key, val.clone().into());
         }
-        root.insert(DATA_KEY, data).unwrap();
+        root.insert(DATA_KEY, data.into());
 
         let parent = self.path.parent();
         match parent
