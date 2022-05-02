@@ -181,8 +181,8 @@ impl Storage
         where T: ToJson
     {
         let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
-        let value = value.to_json();
-        data.insert(key.to_string(), crypto::encrypt_data(value.dump().as_bytes(), encryption_key));
+        let obj = value.to_json();
+        data.insert(key.to_string(), crypto::encrypt_data(obj.dump().as_bytes(), encryption_key));
         return Ok(());
     }
 
