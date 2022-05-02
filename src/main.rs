@@ -14,6 +14,7 @@ use app_dirs2;
 use clap::{Parser, Subcommand};
 use question;
 use rpassword;
+use std::fmt;
 use std::path;
 use std::process;
 use storage_types::{Password};
@@ -112,6 +113,38 @@ enum Commands
     }
 }
 
+impl fmt::Display for Error
+{
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    {
+        match self
+        {
+            Error::CreateDirFailure { error } => write!(f, "Failed creating directory for storage ({}).", std::io::Error::from(*error)),
+            Error::FileReadFailure { error } => write!(f, "Failed reading storage file ({}). Maybe use set-master subcommand first?", std::io::Error::from(*error)),
+            Error::FileWriteFailure { error } => write!(f, "Failed writing storage file ({}).", std::io::Error::from(*error)),
+            Error::StorageNotInitialized => write!(f, "Unexpected: Storage is being accessed before initialization."),
+            Error::UnexpectedStorageFormat => write!(f, "Unexpected storage file format."),
+            Error::PasswordsLocked => write!(f, "Passwords are locked."),
+            Error::KeyMissing => write!(f, "No such value in storage."),
+            Error::UnexpectedData => write!(f, "Unexpected JSON data in storage."),
+            Error::InvalidCiphertext => write!(f, "Corrupt ciphertext data in storage."),
+            Error::InvalidBase64 => write!(f, "Corrupt Base64 data in storage."),
+            Error::InvalidJson => write!(f, "Corrupt JSON data in storage."),
+            Error::InvalidUtf8 => write!(f, "Corrupt UTF-8 data in storage."),
+            Error::DecryptionFailure => write!(f, "Decryption failure, wrong master password?"),
+            Error::PasswordMissingType => write!(f, "Corrupt data, missing password type."),
+            Error::PasswordUnknownType => write!(f, "Unknown password type."),
+            Error::PasswordMissingSite => write!(f, "Corrupt data, missing password site."),
+            Error::PasswordMissingName => write!(f, "Corrupt data, missing password name."),
+            Error::PasswordMissingRevision => write!(f, "Corrupt data, missing password revision."),
+            Error::PasswordMissingLength => write!(f, "Corrupt data, missing password length."),
+            Error::PasswordMissingValue => write!(f, "Corrupt data, missing password value."),
+            Error::SiteMissingName => write!(f, "Corrupt data, missing site name."),
+            Error::NoSuchAlias => write!(f, "Site isn't aliased."),
+        }
+    }
+}
+
 trait HandleError<T>
 {
     fn handle_error(self) -> T;
@@ -121,49 +154,12 @@ impl<T> HandleError<T> for Result<T, Error>
 {
     fn handle_error(self) -> T
     {
-        let message;
         match self
         {
             Ok(value) => return value,
             Err(error) =>
             {
-                eprintln!("{}", match error
-                {
-                    Error::StorageNotInitialized => "Unexpected: Storage is being accessed before initialization.",
-                    Error::CreateDirFailure { error } =>
-                    {
-                        message = format!("Failed creating directory for storage ({}).", std::io::Error::from(error));
-                        &message
-                    },
-                    Error::FileReadFailure { error } =>
-                    {
-                        message = format!("Failed reading storage file ({}). Maybe use set-master subcommand first?", std::io::Error::from(error));
-                        &message
-                    },
-                    Error::FileWriteFailure { error } =>
-                    {
-                        message = format!("Failed writing storage file ({}).", std::io::Error::from(error));
-                        &message
-                    },
-                    Error::UnexpectedStorageFormat => "Unexpected storage file format.",
-                    Error::PasswordsLocked => "Passwords are locked.",
-                    Error::KeyMissing => "No such value in storage.",
-                    Error::UnexpectedData => "Unexpected JSON data in storage.",
-                    Error::InvalidCiphertext => "Corrupt ciphertext data in storage.",
-                    Error::InvalidBase64 => "Corrupt Base64 data in storage.",
-                    Error::InvalidJson => "Corrupt JSON data in storage.",
-                    Error::InvalidUtf8 => "Corrupt UTF-8 data in storage.",
-                    Error::DecryptionFailure => "Decryption failure, wrong master password?",
-                    Error::PasswordMissingType => "Corrupt data, missing password type.",
-                    Error::PasswordUnknownType => "Unknown password type.",
-                    Error::PasswordMissingSite => "Corrupt data, missing password site.",
-                    Error::PasswordMissingName => "Corrupt data, missing password name.",
-                    Error::PasswordMissingRevision => "Corrupt data, missing password revision.",
-                    Error::PasswordMissingLength => "Corrupt data, missing password length.",
-                    Error::PasswordMissingValue => "Corrupt data, missing password value.",
-                    Error::SiteMissingName => "Corrupt data, missing site name.",
-                    Error::NoSuchAlias => "Site isn't aliased.",
-                });
+                eprintln!("{}", error);
                 process::exit(1);
             }
         };
