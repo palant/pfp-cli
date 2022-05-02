@@ -46,7 +46,7 @@ impl PasswordId
 impl TryFrom<&json::JsonValue> for PasswordId
 {
     type Error = Error;
-    fn try_from(value: &json::JsonValue) -> Result<PasswordId, Self::Error>
+    fn try_from(value: &json::JsonValue) -> Result<Self, Self::Error>
     {
         return Ok(PasswordId::new(
             value["site"].as_str().ok_or(Error::PasswordMissingSite)?,
@@ -56,15 +56,15 @@ impl TryFrom<&json::JsonValue> for PasswordId
     }
 }
 
-impl From<&PasswordId> for json::JsonValue
+impl From<&PasswordId> for json::object::Object
 {
-    fn from(value: &PasswordId) -> json::JsonValue
+    fn from(value: &PasswordId) -> Self
     {
-        return object!{
-            site: value.site(),
-            name: value.name(),
-            revision: value.revision(),
-        };
+        let mut obj = json::object::Object::new();
+        obj.insert("site", value.site().into());
+        obj.insert("name", value.name().into());
+        obj.insert("revision", value.revision().into());
+        return obj;
     }
 }
 
@@ -119,7 +119,7 @@ impl GeneratedPassword
 impl TryFrom<&json::JsonValue> for GeneratedPassword
 {
     type Error = Error;
-    fn try_from(value: &json::JsonValue) -> Result<GeneratedPassword, Self::Error>
+    fn try_from(value: &json::JsonValue) -> Result<Self, Self::Error>
     {
         let id = PasswordId::try_from(value)?;
 
@@ -149,16 +149,16 @@ impl TryFrom<&json::JsonValue> for GeneratedPassword
     }
 }
 
-impl From<&GeneratedPassword> for json::JsonValue
+impl From<&GeneratedPassword> for json::object::Object
 {
-    fn from(value: &GeneratedPassword) -> json::JsonValue
+    fn from(value: &GeneratedPassword) -> Self
     {
-        let mut obj = json::JsonValue::from(&value.id);
-        obj.insert("length", value.length()).unwrap();
-        obj.insert("lower", value.charset().contains(crypto::CharacterType::LOWER)).unwrap();
-        obj.insert("upper", value.charset().contains(crypto::CharacterType::UPPER)).unwrap();
-        obj.insert("number", value.charset().contains(crypto::CharacterType::DIGIT)).unwrap();
-        obj.insert("symbol", value.charset().contains(crypto::CharacterType::SYMBOL)).unwrap();
+        let mut obj = Self::from(&value.id);
+        obj.insert("length", value.length().into());
+        obj.insert("lower", value.charset().contains(crypto::CharacterType::LOWER).into());
+        obj.insert("upper", value.charset().contains(crypto::CharacterType::UPPER).into());
+        obj.insert("number", value.charset().contains(crypto::CharacterType::DIGIT).into());
+        obj.insert("symbol", value.charset().contains(crypto::CharacterType::SYMBOL).into());
         return obj;
     }
 }
@@ -205,12 +205,12 @@ impl TryFrom<&json::JsonValue> for StoredPassword
     }
 }
 
-impl From<&StoredPassword> for json::JsonValue
+impl From<&StoredPassword> for json::object::Object
 {
-    fn from(value: &StoredPassword) -> json::JsonValue
+    fn from(value: &StoredPassword) -> Self
     {
-        let mut obj = json::JsonValue::from(&value.id);
-        obj.insert("password", value.password()).unwrap();
+        let mut obj = Self::from(&value.id);
+        obj.insert("password", value.password().into());
         return obj;
     }
 }
@@ -230,7 +230,7 @@ pub enum Password
 impl TryFrom<json::JsonValue> for Password
 {
     type Error = Error;
-    fn try_from(value: json::JsonValue) -> Result<Password, Self::Error>
+    fn try_from(value: json::JsonValue) -> Result<Self, Self::Error>
     {
         let password_type = value["type"].as_str().ok_or(Error::PasswordMissingType)?;
         if password_type == "generated2"
@@ -253,15 +253,15 @@ impl From<&Password> for json::JsonValue
         {
             Password::Generated {password} =>
             {
-                let mut value = json::JsonValue::from(password);
-                value.insert("type", "generated2").unwrap();
-                return value;
+                let mut value = json::object::Object::from(password);
+                value.insert("type", "generated2".into());
+                return json::JsonValue::Object(value);
             },
             Password::Stored {password} =>
             {
-                let mut value = json::JsonValue::from(password);
-                value.insert("type", "stored").unwrap();
-                return value;
+                let mut value = json::object::Object::from(password);
+                value.insert("type", "stored".into());
+                return json::JsonValue::Object(value);
             }
         };
     }
