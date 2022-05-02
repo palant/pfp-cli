@@ -16,10 +16,10 @@ const AES_NONCE_SIZE: usize = 96;
 
 // I, l, O, 0, 1 excluded because of potential confusion. ", ', \ excluded
 // because of common bugs in web interfaces (magic quotes).
-const CHARS_LOWER: &str = "abcdefghjkmnpqrstuvwxyz";
-const CHARS_UPPER: &str = "ABCDEFGHJKMNPQRSTUVWXYZ";
-const CHARS_DIGIT: &str = "23456789";
-const CHARS_SYMBOL: &str = "!#$%&()*+,-./:;<=>?@[]^_{|}~";
+const CHARS_LOWER: &[u8] = b"abcdefghjkmnpqrstuvwxyz";
+const CHARS_UPPER: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ";
+const CHARS_DIGIT: &[u8] = b"23456789";
+const CHARS_SYMBOL: &[u8] = b"!#$%&()*+,-./:;<=>?@[]^_{|}~";
 
 #[derive(enumset::EnumSetType)]
 pub enum CharacterType
@@ -30,7 +30,7 @@ pub enum CharacterType
     SYMBOL
 }
 
-const CHARS_MAPPING: [(CharacterType, &str); 4] = [
+const CHARS_MAPPING: [(CharacterType, &[u8]); 4] = [
     (CharacterType::LOWER, CHARS_LOWER),
     (CharacterType::UPPER, CHARS_UPPER),
     (CharacterType::DIGIT, CHARS_DIGIT),
@@ -53,12 +53,13 @@ pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
 
 pub fn derive_password(master_password: &str, salt: &str, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
 {
-    let mut bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
-    return to_password(bytes.as_mut_slice(), charset);
+    let bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
+    return to_password(bytes.as_slice(), charset);
 }
 
-fn to_password(bytes: &mut [u8], charset: enumset::EnumSet<CharacterType>) -> String
+fn to_password(bytes: &[u8], charset: enumset::EnumSet<CharacterType>) -> String
 {
+    let mut result = String::with_capacity(bytes.len());
     let mut seen : enumset::EnumSet<CharacterType> = new_charset();
     for i in 0 .. bytes.len()
     {
@@ -84,7 +85,7 @@ fn to_password(bytes: &mut [u8], charset: enumset::EnumSet<CharacterType>) -> St
                 let chars = j.1;
                 if index < chars.len()
                 {
-                    bytes[i] = chars.as_bytes()[index];
+                    result.push(chars[index] as char);
                     seen.insert(chartype);
                     break;
                 }
@@ -92,7 +93,7 @@ fn to_password(bytes: &mut [u8], charset: enumset::EnumSet<CharacterType>) -> St
             }
         }
     }
-    return std::str::from_utf8(bytes).unwrap().to_owned();
+    return result;
 }
 
 pub fn derive_key(master_password: &str, salt: &[u8]) -> Vec<u8>
