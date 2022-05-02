@@ -167,7 +167,7 @@ impl Storage
         return Ok(data.contains_key(key));
     }
 
-    pub fn get<'a, T>(&'a self, key: &'a str, encryption_key: &'a [u8]) -> Result<T, Error>
+    pub fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
         where T: FromJson
     {
         let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
@@ -177,7 +177,7 @@ impl Storage
         return T::from_json(&parsed);
     }
 
-    pub fn set<'a, T>(&'a mut self, key: &'a str, value: &'a T, encryption_key: &'a [u8]) -> Result<(), Error>
+    pub fn set<T>(&mut self, key: &str, value: &T, encryption_key: &[u8]) -> Result<(), Error>
         where T: ToJson
     {
         let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
