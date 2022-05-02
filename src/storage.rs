@@ -164,12 +164,12 @@ impl Storage
     }
 
     pub fn set<'a, T>(&'a mut self, key: &'a str, value: &'a T, encryption_key: &'a [u8]) -> Result<(), Error>
-        where json::JsonValue: From<&'a T>
+        where json::object::Object: From<&'a T>
     {
         self.initialized()?;
 
         let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
-        let value = json::JsonValue::from(value);
+        let value = json::object::Object::from(value);
         data.insert(key.to_string(), crypto::encrypt_data(value.dump().as_bytes(), encryption_key));
         return Ok(());
     }

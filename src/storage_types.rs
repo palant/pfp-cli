@@ -4,7 +4,6 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use json::object;
 use super::crypto;
 use super::error::Error;
 
@@ -245,9 +244,9 @@ impl TryFrom<json::JsonValue> for Password
     }
 }
 
-impl From<&Password> for json::JsonValue
+impl From<&Password> for json::object::Object
 {
-    fn from(value: &Password) -> json::JsonValue
+    fn from(value: &Password) -> Self
     {
         match value
         {
@@ -255,13 +254,13 @@ impl From<&Password> for json::JsonValue
             {
                 let mut value = json::object::Object::from(password);
                 value.insert("type", "generated2".into());
-                return json::JsonValue::Object(value);
+                return value;
             },
             Password::Stored {password} =>
             {
                 let mut value = json::object::Object::from(password);
                 value.insert("type", "stored".into());
-                return json::JsonValue::Object(value);
+                return value;
             }
         };
     }
@@ -315,16 +314,15 @@ impl TryFrom<json::JsonValue> for Site
     }
 }
 
-impl From<&Site> for json::JsonValue
+impl From<&Site> for json::object::Object
 {
-    fn from(value: &Site) -> json::JsonValue
+    fn from(value: &Site) -> json::object::Object
     {
-        let mut obj = object!{
-            site: value.name(),
-        };
+        let mut obj = json::object::Object::new();
+        obj.insert("site", value.name().into());
         match value.alias()
         {
-            Some(value) => obj.insert("alias", value).unwrap(),
+            Some(value) => obj.insert("alias", value.into()),
             None => {},
         }
         return obj;
