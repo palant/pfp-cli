@@ -19,7 +19,7 @@ pub enum Error
     InvalidBase64 { error: base64::DecodeError },
     InvalidJson { error: json::Error },
     InvalidUtf8 { error: std::string::FromUtf8Error },
-    DecryptionFailure { error: aes_gcm::Error },
+    DecryptionFailure,
     PasswordMissingType,
     PasswordUnknownType,
     PasswordMissingSite,

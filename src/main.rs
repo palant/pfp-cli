@@ -131,7 +131,7 @@ impl fmt::Display for Error
             Error::InvalidBase64 { error } => write!(f, "Corrupt Base64 data in storage ({}).", error),
             Error::InvalidJson { error } => write!(f, "Corrupt JSON data in storage ({}).", error),
             Error::InvalidUtf8 { error } => write!(f, "Corrupt UTF-8 data in storage ({}).", error),
-            Error::DecryptionFailure { error } => write!(f, "Decryption failure ({}), wrong master password?", error),
+            Error::DecryptionFailure => write!(f, "Decryption failure, wrong master password?"),
             Error::PasswordMissingType => write!(f, "Corrupt data, missing password type."),
             Error::PasswordUnknownType => write!(f, "Unknown password type."),
             Error::PasswordMissingSite => write!(f, "Corrupt data, missing password site."),
