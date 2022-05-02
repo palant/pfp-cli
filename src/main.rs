@@ -129,10 +129,13 @@ impl<T> HandleError<T> for Result<T, Error>
                 eprintln!("{}", match error
                 {
                     Error::CreateDirFailure => "Failed creating directory for storage.",
+                    Error::FileReadFailure => "Failed reading storage file.",
                     Error::FileWriteFailure => "Failed writing storage file.",
                     Error::StorageNotInitialized => "Failed reading storage data. Maybe use set-master subcommand first?",
+                    Error::UnexpectedStorageFormat => "Unexpected storage file format.",
                     Error::PasswordsLocked => "Passwords are locked.",
                     Error::KeyMissing => "No such value in storage.",
+                    Error::UnexpectedData => "Unexpected JSON data in storage.",
                     Error::InvalidCiphertext => "Corrupt ciphertext data in storage.",
                     Error::InvalidBase64 => "Corrupt Base64 data in storage.",
                     Error::InvalidJson => "Corrupt JSON data in storage.",

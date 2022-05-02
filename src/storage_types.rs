@@ -42,10 +42,10 @@ impl PasswordId
     }
 }
 
-impl TryFrom<&json::JsonValue> for PasswordId
+impl TryFrom<&json::object::Object> for PasswordId
 {
     type Error = Error;
-    fn try_from(value: &json::JsonValue) -> Result<Self, Self::Error>
+    fn try_from(value: &json::object::Object) -> Result<Self, Self::Error>
     {
         return Ok(PasswordId::new(
             value["site"].as_str().ok_or(Error::PasswordMissingSite)?,
@@ -115,10 +115,10 @@ impl GeneratedPassword
     }
 }
 
-impl TryFrom<&json::JsonValue> for GeneratedPassword
+impl TryFrom<&json::object::Object> for GeneratedPassword
 {
     type Error = Error;
-    fn try_from(value: &json::JsonValue) -> Result<Self, Self::Error>
+    fn try_from(value: &json::object::Object) -> Result<Self, Self::Error>
     {
         let id = PasswordId::try_from(value)?;
 
@@ -190,10 +190,10 @@ impl StoredPassword
     }
 }
 
-impl TryFrom<&json::JsonValue> for StoredPassword
+impl TryFrom<&json::object::Object> for StoredPassword
 {
     type Error = Error;
-    fn try_from(value: &json::JsonValue) -> Result<StoredPassword, Self::Error>
+    fn try_from(value: &json::object::Object) -> Result<StoredPassword, Self::Error>
     {
         let id = PasswordId::try_from(value)?;
         let password = value["password"].as_str().ok_or(Error::PasswordMissingValue)?;
@@ -226,10 +226,10 @@ pub enum Password
     },
 }
 
-impl TryFrom<json::JsonValue> for Password
+impl TryFrom<json::object::Object> for Password
 {
     type Error = Error;
-    fn try_from(value: json::JsonValue) -> Result<Self, Self::Error>
+    fn try_from(value: json::object::Object) -> Result<Self, Self::Error>
     {
         let password_type = value["type"].as_str().ok_or(Error::PasswordMissingType)?;
         if password_type == "generated2"
@@ -302,10 +302,10 @@ impl Site
     }
 }
 
-impl TryFrom<json::JsonValue> for Site
+impl TryFrom<json::object::Object> for Site
 {
     type Error = Error;
-    fn try_from(value: json::JsonValue) -> Result<Site, Self::Error>
+    fn try_from(value: json::object::Object) -> Result<Site, Self::Error>
     {
         return Ok(Site::new(
             value["site"].as_str().ok_or(Error::SiteMissingName)?,

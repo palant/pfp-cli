@@ -8,10 +8,13 @@
 pub enum Error
 {
     CreateDirFailure,
+    FileReadFailure,
     FileWriteFailure,
     StorageNotInitialized,
+    UnexpectedStorageFormat,
     PasswordsLocked,
     KeyMissing,
+    UnexpectedData,
     InvalidCiphertext,
     InvalidBase64,
     InvalidJson,

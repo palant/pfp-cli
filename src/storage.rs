@@ -7,7 +7,6 @@
 use json::object;
 use std::collections::HashMap;
 use std::fs;
-use std::io;
 use std::path;
 use super::crypto;
 use super::error::Error;
@@ -22,40 +21,51 @@ const SALT_KEY: &str = "salt";
 const HMAC_SECRET_KEY: &str = "hmac-secret";
 const STORAGE_PREFIX: &str = "site:";
 
-fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String, String>), io::Error>
+fn parse_json_object(input: &str) -> Result<json::object::Object, Error>
 {
-    let contents = fs::read_to_string(path)?;
-    let mut root = match json::parse(&contents)
+    let parsed = json::parse(input).or(Err(Error::InvalidJson))?;
+    return match parsed
     {
-        Ok(node) => node,
-        Err(error) => return Err(io::Error::new(io::ErrorKind::InvalidData, error)),
+        json::JsonValue::Object(object) => Ok(object),
+        _unexpected => Err(Error::InvalidJson),
     };
-    if !root.is_object()
+}
+
+fn get_json_object(obj: &mut json::object::Object, key: &str) -> Result<json::object::Object, Error>
+{
+    return match obj.remove(key).ok_or(Error::KeyMissing)?
     {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "storage root is not an object"));
+        json::JsonValue::Object(obj) => Ok(obj),
+        _unexpected => Err(Error::UnexpectedData),
+    }
+}
+
+fn get_json_string(obj: &json::object::Object, key: &str) -> Result<String, Error>
+{
+    return Ok(obj[key].as_str().ok_or(Error::UnexpectedData)?.to_string());
+}
+
+fn get_json_u32(obj: &json::object::Object, key: &str) -> Result<u32, Error>
+{
+    return obj[key].as_u32().ok_or(Error::UnexpectedData);
+}
+
+fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String, String>), Error>
+{
+    let contents = fs::read_to_string(path).or(Err(Error::FileReadFailure))?;
+    let mut root = parse_json_object(&contents)?;
+
+    if get_json_string(&root, APPLICATION_KEY)? != APPLICATION_VALUE || get_json_u32(&root, FORMAT_KEY)? != CURRENT_FORMAT
+    {
+        return Err(Error::UnexpectedStorageFormat);
     }
 
-    if root[APPLICATION_KEY] != APPLICATION_VALUE || root[FORMAT_KEY] != CURRENT_FORMAT
-    {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "unknown format"));
-    }
-
-    let data_obj = root.remove(DATA_KEY);
-    if !data_obj.is_object()
-    {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "storage data isn't an object"));
-    }
-
-    if !data_obj[SALT_KEY].is_string() || !data_obj[HMAC_SECRET_KEY].is_string()
-    {
-        return Err(io::Error::new(io::ErrorKind::InvalidData, "missing password salt or HMAC secret"));
-    }
-
-    let salt = data_obj[SALT_KEY].as_str().unwrap().to_string();
-    let hmac = data_obj[HMAC_SECRET_KEY].as_str().unwrap().to_string();
+    let data_obj = get_json_object(&mut root, DATA_KEY)?;
+    let salt = get_json_string(&data_obj, SALT_KEY)?;
+    let hmac = get_json_string(&data_obj, HMAC_SECRET_KEY)?;
 
     let mut data = HashMap::new();
-    for (key, value) in data_obj.entries()
+    for (key, value) in data_obj.iter()
     {
         if !value.is_string()
         {
@@ -154,12 +164,12 @@ impl Storage
     }
 
     pub fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
-        where T: TryFrom<json::JsonValue, Error = Error>
+        where T: TryFrom<json::object::Object, Error = Error>
     {
         let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
         let value = data.get(key).ok_or(Error::KeyMissing)?;
         let decrypted = crypto::decrypt_data(value, encryption_key)?;
-        let parsed = json::parse(&decrypted).or(Err(Error::InvalidJson))?;
+        let parsed = parse_json_object(&decrypted)?;
         return T::try_from(parsed);
     }
 
@@ -190,7 +200,7 @@ impl Storage
         let ciphertext = self.hmac_secret.as_ref().ok_or(Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
         let parsed = json::parse(&decrypted).or(Err(Error::InvalidJson))?;
-        let hmac_secret = parsed.as_str().ok_or(Error::InvalidJson)?;
+        let hmac_secret = parsed.as_str().ok_or(Error::UnexpectedData)?;
         return base64::decode(hmac_secret).or(Err(Error::InvalidBase64));
     }
 
