@@ -4,22 +4,22 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum Error
 {
-    CreateDirFailure  { error: std::io::ErrorKind },
-    FileReadFailure { error: std::io::ErrorKind },
-    FileWriteFailure  { error: std::io::ErrorKind },
+    CreateDirFailure  { error: std::io::Error },
+    FileReadFailure { error: std::io::Error },
+    FileWriteFailure  { error: std::io::Error },
     StorageNotInitialized,
     UnexpectedStorageFormat,
     PasswordsLocked,
     KeyMissing,
     UnexpectedData,
     InvalidCiphertext,
-    InvalidBase64,
-    InvalidJson,
-    InvalidUtf8,
-    DecryptionFailure,
+    InvalidBase64 { error: base64::DecodeError },
+    InvalidJson { error: json::Error },
+    InvalidUtf8 { error: std::string::FromUtf8Error },
+    DecryptionFailure { error: aes_gcm::Error },
     PasswordMissingType,
     PasswordUnknownType,
     PasswordMissingSite,

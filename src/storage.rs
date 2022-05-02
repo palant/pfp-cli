@@ -22,11 +22,11 @@ const STORAGE_PREFIX: &str = "site:";
 
 fn parse_json_object(input: &str) -> Result<json::object::Object, Error>
 {
-    let parsed = json::parse(input).or(Err(Error::InvalidJson))?;
+    let parsed = json::parse(input).or_else(|error| Err(Error::InvalidJson { error }))?;
     return match parsed
     {
         json::JsonValue::Object(object) => Ok(object),
-        _unexpected => Err(Error::InvalidJson),
+        _unexpected => Err(Error::UnexpectedData),
     };
 }
 
@@ -51,7 +51,7 @@ fn get_json_u32(obj: &json::object::Object, key: &str) -> Result<u32, Error>
 
 fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String, String>), Error>
 {
-    let contents = fs::read_to_string(path).or_else(|error| Err(Error::FileReadFailure { error: error.kind() }))?;
+    let contents = fs::read_to_string(path).or_else(|error| Err(Error::FileReadFailure { error }))?;
     let mut root = parse_json_object(&contents)?;
 
     if get_json_string(&root, APPLICATION_KEY)? != APPLICATION_VALUE || get_json_u32(&root, FORMAT_KEY)? != CURRENT_FORMAT
@@ -145,18 +145,18 @@ impl Storage
         let parent = self.path.parent();
         match parent
         {
-            Some(parent) => fs::create_dir_all(parent).or_else(|error| Err(Error::CreateDirFailure { error: error.kind() }))?,
+            Some(parent) => fs::create_dir_all(parent).or_else(|error| Err(Error::CreateDirFailure { error }))?,
             None => {},
         }
-        fs::write(&self.path, json::stringify(root)).or_else(|error| Err(Error::FileWriteFailure { error: error.kind() }))?;
+        fs::write(&self.path, json::stringify(root)).or_else(|error| Err(Error::FileWriteFailure { error }))?;
         return Ok(());
     }
 
-    pub fn initialized(&self) -> Result<(), Error>
+    pub fn initialized(&self) -> Result<(), &Error>
     {
         return match &self.error
         {
-            Some(error) => Err(error.clone()),
+            Some(error) => Err(error),
             None => Ok(()),
         };
     }
@@ -189,7 +189,7 @@ impl Storage
     pub fn get_salt(&self) -> Result<Vec<u8>, Error>
     {
         let encoded = self.salt.as_ref().ok_or(Error::StorageNotInitialized)?;
-        return base64::decode(encoded.as_bytes()).or(Err(Error::InvalidBase64));
+        return base64::decode(encoded.as_bytes()).or_else(|error| Err(Error::InvalidBase64 { error }));
     }
 
     fn set_salt(&mut self, salt: &[u8])
@@ -201,9 +201,9 @@ impl Storage
     {
         let ciphertext = self.hmac_secret.as_ref().ok_or(Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
-        let parsed = json::parse(&decrypted).or(Err(Error::InvalidJson))?;
+        let parsed = json::parse(&decrypted).or_else(|error| Err(Error::InvalidJson { error }))?;
         let hmac_secret = parsed.as_str().ok_or(Error::UnexpectedData)?;
-        return base64::decode(hmac_secret).or(Err(Error::InvalidBase64));
+        return base64::decode(hmac_secret).or_else(|error| Err(Error::InvalidBase64 { error }));
     }
 
     fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &Vec<u8>)
@@ -258,8 +258,6 @@ impl Storage
 
     pub fn ensure_site_data(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
-        assert!(self.initialized().is_ok());
-
         let key = self.get_site_key(site, hmac_secret);
         let existing: Result<Site, Error> = self.get(&key, encryption_key);
         if existing.is_err()

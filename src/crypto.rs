@@ -123,11 +123,11 @@ pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Result<String, Error>
         return Err(Error::InvalidCiphertext);
     }
 
-    let nonce_data = base64::decode(&parts[0]).or(Err(Error::InvalidBase64))?;
+    let nonce_data = base64::decode(&parts[0]).or_else(|error| Err(Error::InvalidBase64 { error }))?;
     let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
-    let ciphertext = base64::decode(&parts[1]).or(Err(Error::InvalidBase64))?;
-    let decrypted = cipher.decrypt(&nonce, ciphertext.as_slice()).or(Err(Error::DecryptionFailure))?;
-    return String::from_utf8(decrypted).or(Err(Error::InvalidUtf8));
+    let ciphertext = base64::decode(&parts[1]).or_else(|error| Err(Error::InvalidBase64 { error }))?;
+    let decrypted = cipher.decrypt(&nonce, ciphertext.as_slice()).or_else(|error| Err(Error::DecryptionFailure { error }))?;
+    return String::from_utf8(decrypted).or_else(|error| Err(Error::InvalidUtf8 { error }));
 }
 
 pub fn get_digest(hmac_secret: &[u8], data: &str) -> String

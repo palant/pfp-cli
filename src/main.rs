@@ -119,19 +119,19 @@ impl fmt::Display for Error
     {
         match self
         {
-            Error::CreateDirFailure { error } => write!(f, "Failed creating directory for storage ({}).", std::io::Error::from(*error)),
-            Error::FileReadFailure { error } => write!(f, "Failed reading storage file ({}). Maybe use set-master subcommand first?", std::io::Error::from(*error)),
-            Error::FileWriteFailure { error } => write!(f, "Failed writing storage file ({}).", std::io::Error::from(*error)),
+            Error::CreateDirFailure { error } => write!(f, "Failed creating directory for storage ({}).", *error),
+            Error::FileReadFailure { error } => write!(f, "Failed reading storage file ({}). Maybe use set-master subcommand first?", *error),
+            Error::FileWriteFailure { error } => write!(f, "Failed writing storage file ({}).", *error),
             Error::StorageNotInitialized => write!(f, "Unexpected: Storage is being accessed before initialization."),
             Error::UnexpectedStorageFormat => write!(f, "Unexpected storage file format."),
             Error::PasswordsLocked => write!(f, "Passwords are locked."),
             Error::KeyMissing => write!(f, "No such value in storage."),
             Error::UnexpectedData => write!(f, "Unexpected JSON data in storage."),
             Error::InvalidCiphertext => write!(f, "Corrupt ciphertext data in storage."),
-            Error::InvalidBase64 => write!(f, "Corrupt Base64 data in storage."),
-            Error::InvalidJson => write!(f, "Corrupt JSON data in storage."),
-            Error::InvalidUtf8 => write!(f, "Corrupt UTF-8 data in storage."),
-            Error::DecryptionFailure => write!(f, "Decryption failure, wrong master password?"),
+            Error::InvalidBase64 { error } => write!(f, "Corrupt Base64 data in storage ({}).", error),
+            Error::InvalidJson { error } => write!(f, "Corrupt JSON data in storage ({}).", error),
+            Error::InvalidUtf8 { error } => write!(f, "Corrupt UTF-8 data in storage ({}).", error),
+            Error::DecryptionFailure { error } => write!(f, "Decryption failure ({}), wrong master password?", error),
             Error::PasswordMissingType => write!(f, "Corrupt data, missing password type."),
             Error::PasswordUnknownType => write!(f, "Unknown password type."),
             Error::PasswordMissingSite => write!(f, "Corrupt data, missing password site."),
@@ -166,6 +166,22 @@ impl<T> HandleError<T> for Result<T, Error>
     }
 }
 
+impl<T> HandleError<T> for Result<T, &Error>
+{
+    fn handle_error(self) -> T
+    {
+        match self
+        {
+            Ok(value) => return value,
+            Err(error) =>
+            {
+                eprintln!("{}", *error);
+                process::exit(1);
+            }
+        };
+    }
+}
+
 fn get_default_storage_path() -> path::PathBuf
 {
     let app_info = app_dirs2::AppInfo {name: "PfP", author: "Wladimir Palant"};
@@ -185,9 +201,9 @@ fn ensure_unlocked_passwords(passwords: &mut passwords::Passwords)
         {
             eprintln!("Master password length should be at least 6 characters.");
         }
-        else if passwords.unlock(&master_password).is_err()
+        else
         {
-            eprintln!("This does not seem to be the correct master password.");
+            passwords.unlock(&master_password).unwrap_or_else(|error| eprintln!("{}", error));
         }
     }
 }

@@ -38,7 +38,7 @@ impl Passwords
         }
     }
 
-    pub fn initialized(&self) -> Result<(), Error>
+    pub fn initialized(&self) -> Result<(), &Error>
     {
         return self.storage.initialized();
     }
