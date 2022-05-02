@@ -60,7 +60,7 @@ pub fn derive_password(master_password: &str, salt: &str, length: usize, charset
 fn to_password(bytes: &[u8], charset: enumset::EnumSet<CharacterType>) -> String
 {
     let mut result = String::with_capacity(bytes.len());
-    let mut seen : enumset::EnumSet<CharacterType> = new_charset();
+    let mut seen = new_charset();
     for i in 0 .. bytes.len()
     {
         let allowed = if charset.len() - seen.len() >= bytes.len() - i { charset - seen } else { charset };
