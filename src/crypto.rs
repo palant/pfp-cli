@@ -61,12 +61,12 @@ fn to_password(bytes: &[u8], charset: enumset::EnumSet<CharacterType>) -> String
 {
     let mut result = String::with_capacity(bytes.len());
     let mut seen = new_charset();
-    for i in 0 .. bytes.len()
+    for (i, byte) in bytes.iter().enumerate()
     {
         let allowed = if charset.len() - seen.len() >= bytes.len() - i { charset - seen } else { charset };
         let num_chars = CHARS_MAPPING.iter().fold(0, |current, (chartype, chars)| if allowed.contains(*chartype) { current + chars.len() } else { current });
 
-        let mut index = usize::from(bytes[i]) % num_chars;
+        let mut index = usize::from(*byte) % num_chars;
         for (chartype, chars) in CHARS_MAPPING
         {
             if allowed.contains(chartype)
