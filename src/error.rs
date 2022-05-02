@@ -4,7 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Error
 {
     CreateDirFailure,

@@ -85,6 +85,7 @@ fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String
 
 pub struct Storage
 {
+    error: Option<Error>,
     path: path::PathBuf,
     salt: Option<String>,
     hmac_secret: Option<String>,
@@ -99,13 +100,15 @@ impl Storage
         {
             Ok((salt, hmac_secret, data)) => Storage
             {
+                error: None,
                 path: path.clone(),
                 salt: Some(salt),
                 hmac_secret: Some(hmac_secret),
                 data: Some(data),
             },
-            Err(_error) => Storage
+            Err(error) => Storage
             {
+                error: Some(error),
                 path: path.clone(),
                 salt: None,
                 hmac_secret: None,
@@ -116,6 +119,7 @@ impl Storage
 
     pub fn clear(&mut self, salt: &[u8], hmac_secret: &[u8], encryption_key: &Vec<u8>)
     {
+        self.error = None;
         self.data = Some(HashMap::new());
         self.set_salt(salt);
         self.set_hmac_secret(hmac_secret, encryption_key);
@@ -150,10 +154,10 @@ impl Storage
 
     pub fn initialized(&self) -> Result<(), Error>
     {
-        return match self.data.as_ref()
+        return match &self.error
         {
-            Some(_) => Ok(()),
-            None => Err(Error::StorageNotInitialized),
+            Some(error) => Err(error.clone()),
+            None => Ok(()),
         };
     }
 
@@ -176,8 +180,6 @@ impl Storage
     pub fn set<'a, T>(&'a mut self, key: &'a str, value: &'a T, encryption_key: &'a [u8]) -> Result<(), Error>
         where json::object::Object: From<&'a T>
     {
-        self.initialized()?;
-
         let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
         let value = json::object::Object::from(value);
         data.insert(key.to_string(), crypto::encrypt_data(value.dump().as_bytes(), encryption_key));
