@@ -7,9 +7,9 @@
 #[derive(Debug, Clone)]
 pub enum Error
 {
-    CreateDirFailure,
-    FileReadFailure,
-    FileWriteFailure,
+    CreateDirFailure  { error: std::io::ErrorKind },
+    FileReadFailure { error: std::io::ErrorKind },
+    FileWriteFailure  { error: std::io::ErrorKind },
     StorageNotInitialized,
     UnexpectedStorageFormat,
     PasswordsLocked,

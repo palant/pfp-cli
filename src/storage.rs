@@ -51,7 +51,7 @@ fn get_json_u32(obj: &json::object::Object, key: &str) -> Result<u32, Error>
 
 fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String, String>), Error>
 {
-    let contents = fs::read_to_string(path).or(Err(Error::FileReadFailure))?;
+    let contents = fs::read_to_string(path).or_else(|error| Err(Error::FileReadFailure { error: error.kind() }))?;
     let mut root = parse_json_object(&contents)?;
 
     if get_json_string(&root, APPLICATION_KEY)? != APPLICATION_VALUE || get_json_u32(&root, FORMAT_KEY)? != CURRENT_FORMAT
@@ -145,10 +145,10 @@ impl Storage
         let parent = self.path.parent();
         match parent
         {
-            Some(parent) => fs::create_dir_all(parent).or(Err(Error::CreateDirFailure))?,
+            Some(parent) => fs::create_dir_all(parent).or_else(|error| Err(Error::CreateDirFailure { error: error.kind() }))?,
             None => {},
         }
-        fs::write(&self.path, json::stringify(root)).or(Err(Error::FileWriteFailure))?;
+        fs::write(&self.path, json::stringify(root)).or_else(|error| Err(Error::FileWriteFailure { error: error.kind() }))?;
         return Ok(());
     }
 

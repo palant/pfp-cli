@@ -121,6 +121,7 @@ impl<T> HandleError<T> for Result<T, Error>
 {
     fn handle_error(self) -> T
     {
+        let message;
         match self
         {
             Ok(value) => return value,
@@ -128,10 +129,22 @@ impl<T> HandleError<T> for Result<T, Error>
             {
                 eprintln!("{}", match error
                 {
-                    Error::CreateDirFailure => "Failed creating directory for storage.",
-                    Error::FileReadFailure => "Failed reading storage file. Maybe use set-master subcommand first?",
-                    Error::FileWriteFailure => "Failed writing storage file.",
                     Error::StorageNotInitialized => "Unexpected: Storage is being accessed before initialization.",
+                    Error::CreateDirFailure { error } =>
+                    {
+                        message = format!("Failed creating directory for storage ({}).", std::io::Error::from(error));
+                        &message
+                    },
+                    Error::FileReadFailure { error } =>
+                    {
+                        message = format!("Failed reading storage file ({}). Maybe use set-master subcommand first?", std::io::Error::from(error));
+                        &message
+                    },
+                    Error::FileWriteFailure { error } =>
+                    {
+                        message = format!("Failed writing storage file ({}).", std::io::Error::from(error));
+                        &message
+                    },
                     Error::UnexpectedStorageFormat => "Unexpected storage file format.",
                     Error::PasswordsLocked => "Passwords are locked.",
                     Error::KeyMissing => "No such value in storage.",
