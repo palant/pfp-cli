@@ -9,7 +9,7 @@ use std::fs;
 use std::path;
 use super::crypto;
 use super::error::Error;
-use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
+use super::storage_types::{FromJson, ToJson, PasswordId, GeneratedPassword, StoredPassword, Password, Site};
 
 const APPLICATION_KEY: &str = "application";
 const APPLICATION_VALUE: &str = "pfp";
@@ -167,21 +167,21 @@ impl Storage
         return Ok(data.contains_key(key));
     }
 
-    pub fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
-        where T: TryFrom<json::object::Object, Error = Error>
+    pub fn get<'a, T>(&'a self, key: &'a str, encryption_key: &'a [u8]) -> Result<T, Error>
+        where T: FromJson
     {
         let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
         let value = data.get(key).ok_or(Error::KeyMissing)?;
         let decrypted = crypto::decrypt_data(value, encryption_key)?;
         let parsed = parse_json_object(&decrypted)?;
-        return T::try_from(parsed);
+        return T::from_json(&parsed);
     }
 
     pub fn set<'a, T>(&'a mut self, key: &'a str, value: &'a T, encryption_key: &'a [u8]) -> Result<(), Error>
-        where json::object::Object: From<&'a T>
+        where T: ToJson
     {
         let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
-        let value = json::object::Object::from(value);
+        let value = value.to_json();
         data.insert(key.to_string(), crypto::encrypt_data(value.dump().as_bytes(), encryption_key));
         return Ok(());
     }

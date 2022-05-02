@@ -7,6 +7,16 @@
 use super::crypto;
 use super::error::Error;
 
+pub trait FromJson
+{
+    fn from_json(value: &json::object::Object) -> Result<Self, Error> where Self: Sized;
+}
+
+pub trait ToJson
+{
+    fn to_json(&self) -> json::object::Object;
+}
+
 pub struct PasswordId
 {
     site: String,
@@ -42,10 +52,9 @@ impl PasswordId
     }
 }
 
-impl TryFrom<&json::object::Object> for PasswordId
+impl FromJson for PasswordId
 {
-    type Error = Error;
-    fn try_from(value: &json::object::Object) -> Result<Self, Self::Error>
+    fn from_json(value: &json::object::Object) -> Result<Self, Error>
     {
         return Ok(PasswordId::new(
             value["site"].as_str().ok_or(Error::PasswordMissingSite)?,
@@ -55,14 +64,14 @@ impl TryFrom<&json::object::Object> for PasswordId
     }
 }
 
-impl From<&PasswordId> for json::object::Object
+impl ToJson for PasswordId
 {
-    fn from(value: &PasswordId) -> Self
+    fn to_json(&self) -> json::object::Object
     {
         let mut obj = json::object::Object::new();
-        obj.insert("site", value.site().into());
-        obj.insert("name", value.name().into());
-        obj.insert("revision", value.revision().into());
+        obj.insert("site", self.site().into());
+        obj.insert("name", self.name().into());
+        obj.insert("revision", self.revision().into());
         return obj;
     }
 }
@@ -115,12 +124,11 @@ impl GeneratedPassword
     }
 }
 
-impl TryFrom<&json::object::Object> for GeneratedPassword
+impl FromJson for GeneratedPassword
 {
-    type Error = Error;
-    fn try_from(value: &json::object::Object) -> Result<Self, Self::Error>
+    fn from_json(value: &json::object::Object) -> Result<Self, Error>
     {
-        let id = PasswordId::try_from(value)?;
+        let id = PasswordId::from_json(value)?;
 
         let mut charset = crypto::new_charset();
         if value["lower"].as_bool().unwrap_or(false)
@@ -148,16 +156,16 @@ impl TryFrom<&json::object::Object> for GeneratedPassword
     }
 }
 
-impl From<&GeneratedPassword> for json::object::Object
+impl ToJson for GeneratedPassword
 {
-    fn from(value: &GeneratedPassword) -> Self
+    fn to_json(&self) -> json::object::Object
     {
-        let mut obj = Self::from(&value.id);
-        obj.insert("length", value.length().into());
-        obj.insert("lower", value.charset().contains(crypto::CharacterType::LOWER).into());
-        obj.insert("upper", value.charset().contains(crypto::CharacterType::UPPER).into());
-        obj.insert("number", value.charset().contains(crypto::CharacterType::DIGIT).into());
-        obj.insert("symbol", value.charset().contains(crypto::CharacterType::SYMBOL).into());
+        let mut obj = self.id.to_json();
+        obj.insert("length", self.length().into());
+        obj.insert("lower", self.charset().contains(crypto::CharacterType::LOWER).into());
+        obj.insert("upper", self.charset().contains(crypto::CharacterType::UPPER).into());
+        obj.insert("number", self.charset().contains(crypto::CharacterType::DIGIT).into());
+        obj.insert("symbol", self.charset().contains(crypto::CharacterType::SYMBOL).into());
         return obj;
     }
 }
@@ -190,12 +198,11 @@ impl StoredPassword
     }
 }
 
-impl TryFrom<&json::object::Object> for StoredPassword
+impl FromJson for StoredPassword
 {
-    type Error = Error;
-    fn try_from(value: &json::object::Object) -> Result<StoredPassword, Self::Error>
+    fn from_json(value: &json::object::Object) -> Result<StoredPassword, Error>
     {
-        let id = PasswordId::try_from(value)?;
+        let id = PasswordId::from_json(value)?;
         let password = value["password"].as_str().ok_or(Error::PasswordMissingValue)?;
         return Ok(StoredPassword {
             id: id,
@@ -204,12 +211,12 @@ impl TryFrom<&json::object::Object> for StoredPassword
     }
 }
 
-impl From<&StoredPassword> for json::object::Object
+impl ToJson for StoredPassword
 {
-    fn from(value: &StoredPassword) -> Self
+    fn to_json(&self) -> json::object::Object
     {
-        let mut obj = Self::from(&value.id);
-        obj.insert("password", value.password().into());
+        let mut obj = self.id.to_json();
+        obj.insert("password", self.password().into());
         return obj;
     }
 }
@@ -226,39 +233,38 @@ pub enum Password
     },
 }
 
-impl TryFrom<json::object::Object> for Password
+impl FromJson for Password
 {
-    type Error = Error;
-    fn try_from(value: json::object::Object) -> Result<Self, Self::Error>
+    fn from_json(value: &json::object::Object) -> Result<Self, Error>
     {
         let password_type = value["type"].as_str().ok_or(Error::PasswordMissingType)?;
         if password_type == "generated2"
         {
-            return Ok(Password::Generated { password: GeneratedPassword::try_from(&value)? });
+            return Ok(Password::Generated { password: GeneratedPassword::from_json(value)? });
         }
         else if password_type == "stored"
         {
-            return Ok(Password::Stored { password: StoredPassword::try_from(&value)? });
+            return Ok(Password::Stored { password: StoredPassword::from_json(value)? });
         }
         return Err(Error::PasswordUnknownType);
     }
 }
 
-impl From<&Password> for json::object::Object
+impl ToJson for Password
 {
-    fn from(value: &Password) -> Self
+    fn to_json(&self) -> json::object::Object
     {
-        match value
+        match self
         {
             Password::Generated {password} =>
             {
-                let mut value = json::object::Object::from(password);
+                let mut value = password.to_json();
                 value.insert("type", "generated2".into());
                 return value;
             },
             Password::Stored {password} =>
             {
-                let mut value = json::object::Object::from(password);
+                let mut value = password.to_json();
                 value.insert("type", "stored".into());
                 return value;
             }
@@ -302,10 +308,9 @@ impl Site
     }
 }
 
-impl TryFrom<json::object::Object> for Site
+impl FromJson for Site
 {
-    type Error = Error;
-    fn try_from(value: json::object::Object) -> Result<Site, Self::Error>
+    fn from_json(value: &json::object::Object) -> Result<Site, Error>
     {
         return Ok(Site::new(
             value["site"].as_str().ok_or(Error::SiteMissingName)?,
@@ -314,13 +319,13 @@ impl TryFrom<json::object::Object> for Site
     }
 }
 
-impl From<&Site> for json::object::Object
+impl ToJson for Site
 {
-    fn from(value: &Site) -> json::object::Object
+    fn to_json(&self) -> json::object::Object
     {
         let mut obj = json::object::Object::new();
-        obj.insert("site", value.name().into());
-        match value.alias()
+        obj.insert("site", self.name().into());
+        match self.alias()
         {
             Some(value) => obj.insert("alias", value.into()),
             None => {},
