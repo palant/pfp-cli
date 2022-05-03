@@ -302,3 +302,91 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         } else { None })
     }
 }
+
+#[cfg(test)]
+mod tests
+{
+    use super::Error;
+    use super::Storage;
+    use super::storage_io;
+
+    #[test]
+    fn read_empty_file()
+    {
+        let io = storage_io::MemoryIO::new("");
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::InvalidJson { .. }));
+    }
+
+    #[test]
+    fn read_literal()
+    {
+        let io = storage_io::MemoryIO::new("42");
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"),  Error::UnexpectedData { .. }));
+    }
+
+    #[test]
+    fn read_empty_object()
+    {
+        let io = storage_io::MemoryIO::new("{}");
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+    }
+
+    #[test]
+    fn read_wrong_application()
+    {
+        let io = storage_io::MemoryIO::new(r#"{"application":"easypasswords","format":3}"#);
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedStorageFormat { .. }));
+    }
+
+    #[test]
+    fn read_wrong_format_version()
+    {
+        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":8}"#);
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedStorageFormat { .. }));
+    }
+
+    #[test]
+    fn read_missing_data()
+    {
+        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":null}"#);
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+    }
+
+    #[test]
+    fn read_empty_data()
+    {
+        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{}}"#);
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+    }
+
+    #[test]
+    fn read_missing_hmac()
+    {
+        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"salt":"asdf"}}"#);
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+    }
+
+    #[test]
+    fn read_missing_salt()
+    {
+        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"hmac-secret":"fdsa"}}"#);
+        let storage = Storage::new(io);
+        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+    }
+
+    #[test]
+    fn read_success()
+    {
+        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"salt":"asdf","hmac-secret":"fdsa"}}"#);
+        let storage = Storage::new(io);
+        storage.initialized().expect("Storage should be initialized");
+    }
+}

@@ -4,6 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+use std::cell::Cell;
 use std::fs;
 use std::path;
 use super::error::Error;
@@ -43,5 +44,34 @@ impl StorageIO for FileIO
             None => {},
         }
         return fs::write(&self.path, data).or_else(|error| Err(Error::FileWriteFailure { error }));
+    }
+}
+
+pub struct MemoryIO
+{
+    data: Cell<String>,
+}
+
+impl MemoryIO
+{
+    pub fn new(data: &str) -> Self
+    {
+        return Self { data: Cell::new(data.to_string()) };
+    }
+}
+
+impl StorageIO for MemoryIO
+{
+    fn load(&self) -> Result<String, Error>
+    {
+        let data = self.data.take();
+        self.data.set(data.clone());
+        return Ok(data);
+    }
+
+    fn save(&self, data: &str) -> Result<(), Error>
+    {
+        self.data.set(data.to_string());
+        return Ok(());
     }
 }
