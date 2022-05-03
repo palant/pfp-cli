@@ -116,7 +116,7 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         };
     }
 
-    pub fn clear(&mut self, salt: &[u8], hmac_secret: &[u8], encryption_key: &Vec<u8>)
+    pub fn clear(&mut self, salt: &[u8], hmac_secret: &[u8], encryption_key: &[u8])
     {
         self.error = None;
         self.data = Some(HashMap::new());
@@ -197,7 +197,7 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         return base64::decode(hmac_secret).or_else(|error| Err(Error::InvalidBase64 { error }));
     }
 
-    fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &Vec<u8>)
+    fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &[u8])
     {
         let stringified = json::JsonValue::from(base64::encode(hmac_secret)).dump();
         let encrypted = crypto::encrypt_data(stringified.as_bytes(), encryption_key);
@@ -304,8 +304,9 @@ impl<IO: storage_io::StorageIO> Storage<IO>
 }
 
 #[cfg(test)]
-mod tests
+mod initialization
 {
+    use json::object;
     use super::Error;
     use super::Storage;
     use super::storage_io;
@@ -329,7 +330,7 @@ mod tests
     #[test]
     fn read_empty_object()
     {
-        let io = storage_io::MemoryIO::new("{}");
+        let io = storage_io::MemoryIO::new(&json::stringify(object!{}));
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
     }
@@ -337,7 +338,10 @@ mod tests
     #[test]
     fn read_wrong_application()
     {
-        let io = storage_io::MemoryIO::new(r#"{"application":"easypasswords","format":3}"#);
+        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+            "application": "easypasswords",
+            "format": 3,
+        }));
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedStorageFormat { .. }));
     }
@@ -345,7 +349,10 @@ mod tests
     #[test]
     fn read_wrong_format_version()
     {
-        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":8}"#);
+        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+            "application": "pfp",
+            "format": 8,
+        }));
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedStorageFormat { .. }));
     }
@@ -353,7 +360,11 @@ mod tests
     #[test]
     fn read_missing_data()
     {
-        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":null}"#);
+        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+            "application": "pfp",
+            "format": 3,
+            "data": null,
+        }));
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
     }
@@ -361,7 +372,11 @@ mod tests
     #[test]
     fn read_empty_data()
     {
-        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{}}"#);
+        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+            "application": "pfp",
+            "format": 3,
+            "data": {},
+        }));
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
     }
@@ -369,7 +384,13 @@ mod tests
     #[test]
     fn read_missing_hmac()
     {
-        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"salt":"asdf"}}"#);
+        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+            "application": "pfp",
+            "format": 3,
+            "data": {
+                "salt": "asdf",
+            },
+        }));
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
     }
@@ -377,7 +398,13 @@ mod tests
     #[test]
     fn read_missing_salt()
     {
-        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"hmac-secret":"fdsa"}}"#);
+        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+            "application": "pfp",
+            "format": 3,
+            "data": {
+                "hmac-secret": "fdsa",
+            },
+        }));
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
         assert!(matches!(storage.get_salt().expect_err("Storage should be uninitialized"), Error::StorageNotInitialized { ..}));
@@ -388,11 +415,47 @@ mod tests
     fn read_success()
     {
         // Encryption key: abcdefghijklmnopqrstuvwxyz123456
-        // Nonce: 123456789012
-        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"salt":"Y2Jh","hmac-secret":"MTIzNDU2Nzg5MDEy_raK5meC9iZHJ7CO7lUUdXTiXarF73A=="}}"#);
+        // Nonce: abcdefghijkl
+        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+            "application": "pfp",
+            "format": 3,
+            "data": {
+                "salt": "Y2Jh",
+                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+            },
+        }));
         let storage = Storage::new(io);
         storage.initialized().expect("Storage should be initialized");
         assert_eq!(storage.get_salt().expect("Storage should be initialized"), b"cba");
         assert_eq!(storage.get_hmac_secret(b"abcdefghijklmnopqrstuvwxyz123456").expect("Storage should be initialized"), b"abc");
+    }
+}
+
+#[cfg(test)]
+mod clear
+{
+    use json::object;
+    use super::Storage;
+    use super::storage_io::{StorageIO, MemoryIO};
+
+    #[test]
+    fn flush()
+    {
+        let io = MemoryIO::new("dummy");
+        let mut storage = Storage::new(io);
+
+        storage.clear(b"cba", b"abc", b"abcdefghijklmnopqrstuvwxyz123456");
+        storage.initialized().expect("Storage should be initialized");
+
+        storage.flush().expect("Flush should succeed");
+
+        assert_eq!(json::parse(&storage.io.load().unwrap()).expect("Should be valid JSON"), object!{
+            "application": "pfp",
+            "format": 3,
+            "data": {
+                "salt": "Y2Jh",
+                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+            },
+        });
     }
 }

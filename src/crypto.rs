@@ -89,11 +89,23 @@ pub fn derive_key(master_password: &str, salt: &[u8]) -> Vec<u8>
     return derive_bits(master_password.as_bytes(), salt, AES_KEY_SIZE / 8);
 }
 
+#[cfg(not(test))]
+pub fn get_rng() -> rand::rngs::ThreadRng
+{
+    return rand::thread_rng();
+}
+
+#[cfg(test)]
+pub fn get_rng() -> rand::rngs::mock::StepRng
+{
+    return rand::rngs::mock::StepRng::new(97, 1);
+}
+
 pub fn encrypt_data(value: &[u8], encryption_key: &[u8]) -> String
 {
     let key = aes_gcm::Key::from_slice(encryption_key);
     let cipher = aes_gcm::Aes256Gcm::new(key);
-    let nonce_data = rand::thread_rng().gen::<[u8; AES_NONCE_SIZE / 8]>();
+    let nonce_data = get_rng().gen::<[u8; AES_NONCE_SIZE / 8]>();
     let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
     let mut result = base64::encode(nonce_data);
     result.push_str("_");
