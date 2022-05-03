@@ -570,6 +570,7 @@ mod retrieval
 
         let storage = Storage::new(io);
 
+        assert!(storage.has_password(&PasswordId::new("example.com", "blabber", "2"), b"abc").expect("Storage should be initialized"));
         let password1 = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
         assert_eq!(password1.to_json(), object!{
             "type": "stored",
@@ -579,6 +580,7 @@ mod retrieval
             "password": "asdf"
         });
 
+        assert!(storage.has_password(&PasswordId::new("example.com", "blubber", ""), b"abc").expect("Storage should be initialized"));
         let password2 = storage.get_password(&PasswordId::new("example.com", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
         assert_eq!(password2.to_json(), object!{
             "type": "generated2",
@@ -592,6 +594,7 @@ mod retrieval
             "symbol": true,
         });
 
+        assert!(storage.has_password(&PasswordId::new("example.info", "test", "yet another"), b"abc").expect("Storage should be initialized"));
         let password3 = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
         assert_eq!(password3.to_json(), object!{
             "type": "generated2",
@@ -605,6 +608,7 @@ mod retrieval
             "symbol": false,
         });
 
+        assert!(!storage.has_password(&PasswordId::new("example.net", "blubber", ""), b"abc").expect("Storage should be initialized"));
         assert!(matches!(storage.get_password(&PasswordId::new("example.net", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Password should be missing"), Error::KeyMissing { .. }));
     }
 }
