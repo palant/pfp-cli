@@ -8,6 +8,7 @@ use rand::Rng;
 use super::crypto;
 use super::error::Error;
 use super::storage;
+use super::storage_io;
 use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password};
 
 fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
@@ -17,19 +18,19 @@ fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
     return crypto::derive_key(master_password, salt_str.as_bytes());
 }
 
-pub struct Passwords
+pub struct Passwords<IO>
 {
-    storage: storage::Storage,
+    storage: storage::Storage<IO>,
     key: Option<Vec<u8>>,
     hmac_secret: Option<Vec<u8>>,
     master_password: Option<String>,
 }
 
-impl Passwords
+impl<IO: storage_io::StorageIO> Passwords<IO>
 {
-    pub fn new(storage: storage::Storage) -> Passwords
+    pub fn new(storage: storage::Storage<IO>) -> Self
     {
-        return Passwords
+        return Self
         {
             storage: storage,
             key: None,

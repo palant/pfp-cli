@@ -8,6 +8,7 @@ mod crypto;
 mod error;
 mod passwords;
 mod storage;
+mod storage_io;
 mod storage_types;
 
 use app_dirs2;
@@ -190,7 +191,7 @@ fn get_default_storage_path() -> path::PathBuf
     return path;
 }
 
-fn ensure_unlocked_passwords(passwords: &mut passwords::Passwords)
+fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(passwords: &mut passwords::Passwords<IO>)
 {
     passwords.initialized().handle_error();
 
@@ -233,7 +234,8 @@ fn main()
         Some(value) => value,
         None => get_default_storage_path(),
     };
-    let mut passwords = passwords::Passwords::new(storage::Storage::new(&storage_path));
+    let storage = storage::Storage::new(storage_io::FileIO::new(&storage_path));
+    let mut passwords = passwords::Passwords::new(storage);
 
     match &args.command
     {

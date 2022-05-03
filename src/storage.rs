@@ -5,10 +5,9 @@
  */
 
 use std::collections::HashMap;
-use std::fs;
-use std::path;
 use super::crypto;
 use super::error::Error;
+use super::storage_io;
 use super::storage_types::{FromJson, ToJson, PasswordId, GeneratedPassword, StoredPassword, Password, Site};
 
 const APPLICATION_KEY: &str = "application";
@@ -49,9 +48,9 @@ fn get_json_u32(obj: &json::object::Object, key: &str) -> Result<u32, Error>
     return obj[key].as_u32().ok_or(Error::UnexpectedData);
 }
 
-fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String, String>), Error>
+fn parse_storage(io: &impl storage_io::StorageIO) -> Result<(String, String, HashMap<String, String>), Error>
 {
-    let contents = fs::read_to_string(path).or_else(|error| Err(Error::FileReadFailure { error }))?;
+    let contents = io.load()?;
     let mut root = parse_json_object(&contents)?;
 
     if get_json_string(&root, APPLICATION_KEY)? != APPLICATION_VALUE || get_json_u32(&root, FORMAT_KEY)? != CURRENT_FORMAT
@@ -83,33 +82,33 @@ fn parse_storage(path: &path::PathBuf) -> Result<(String, String, HashMap<String
     return Ok((salt, hmac, data));
 }
 
-pub struct Storage
+pub struct Storage<IO>
 {
     error: Option<Error>,
-    path: path::PathBuf,
+    io: IO,
     salt: Option<String>,
     hmac_secret: Option<String>,
     data: Option<HashMap<String, String>>,
 }
 
-impl Storage
+impl<IO: storage_io::StorageIO> Storage<IO>
 {
-    pub fn new(path: &path::PathBuf) -> Storage
+    pub fn new(io: IO) -> Self
     {
-        return match parse_storage(path)
+        return match parse_storage(&io)
         {
-            Ok((salt, hmac_secret, data)) => Storage
+            Ok((salt, hmac_secret, data)) => Self
             {
                 error: None,
-                path: path.clone(),
+                io: io,
                 salt: Some(salt),
                 hmac_secret: Some(hmac_secret),
                 data: Some(data),
             },
-            Err(error) => Storage
+            Err(error) => Self
             {
                 error: Some(error),
-                path: path.clone(),
+                io: io,
                 salt: None,
                 hmac_secret: None,
                 data: None,
@@ -141,15 +140,7 @@ impl Storage
             data.insert(&storage_key, val.clone().into());
         }
         root.insert(DATA_KEY, data.into());
-
-        let parent = self.path.parent();
-        match parent
-        {
-            Some(parent) => fs::create_dir_all(parent).or_else(|error| Err(Error::CreateDirFailure { error }))?,
-            None => {},
-        }
-        fs::write(&self.path, json::stringify(root)).or_else(|error| Err(Error::FileWriteFailure { error }))?;
-        return Ok(());
+        return self.io.save(&json::stringify(root));
     }
 
     pub fn initialized(&self) -> Result<(), &Error>
