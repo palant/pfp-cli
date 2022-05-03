@@ -309,12 +309,12 @@ mod initialization
     use json::object;
     use super::Error;
     use super::Storage;
-    use super::storage_io;
+    use super::storage_io::MemoryIO;
 
     #[test]
     fn read_empty_file()
     {
-        let io = storage_io::MemoryIO::new("");
+        let io = MemoryIO::new("");
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::InvalidJson { .. }));
     }
@@ -322,7 +322,7 @@ mod initialization
     #[test]
     fn read_literal()
     {
-        let io = storage_io::MemoryIO::new("42");
+        let io = MemoryIO::new("42");
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"),  Error::UnexpectedData { .. }));
     }
@@ -330,7 +330,7 @@ mod initialization
     #[test]
     fn read_empty_object()
     {
-        let io = storage_io::MemoryIO::new(&json::stringify(object!{}));
+        let io = MemoryIO::new(&json::stringify(object!{}));
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
     }
@@ -338,7 +338,7 @@ mod initialization
     #[test]
     fn read_wrong_application()
     {
-        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+        let io = MemoryIO::new(&json::stringify(object!{
             "application": "easypasswords",
             "format": 3,
         }));
@@ -349,7 +349,7 @@ mod initialization
     #[test]
     fn read_wrong_format_version()
     {
-        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+        let io = MemoryIO::new(&json::stringify(object!{
             "application": "pfp",
             "format": 8,
         }));
@@ -360,7 +360,7 @@ mod initialization
     #[test]
     fn read_missing_data()
     {
-        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+        let io = MemoryIO::new(&json::stringify(object!{
             "application": "pfp",
             "format": 3,
             "data": null,
@@ -372,7 +372,7 @@ mod initialization
     #[test]
     fn read_empty_data()
     {
-        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+        let io = MemoryIO::new(&json::stringify(object!{
             "application": "pfp",
             "format": 3,
             "data": {},
@@ -384,7 +384,7 @@ mod initialization
     #[test]
     fn read_missing_hmac()
     {
-        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+        let io = MemoryIO::new(&json::stringify(object!{
             "application": "pfp",
             "format": 3,
             "data": {
@@ -398,7 +398,7 @@ mod initialization
     #[test]
     fn read_missing_salt()
     {
-        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+        let io = MemoryIO::new(&json::stringify(object!{
             "application": "pfp",
             "format": 3,
             "data": {
@@ -416,7 +416,7 @@ mod initialization
     {
         // Encryption key: abcdefghijklmnopqrstuvwxyz123456
         // Nonce: abcdefghijkl
-        let io = storage_io::MemoryIO::new(&json::stringify(object!{
+        let io = MemoryIO::new(&json::stringify(object!{
             "application": "pfp",
             "format": 3,
             "data": {
@@ -457,5 +457,99 @@ mod clear
                 "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
             },
         });
+    }
+}
+
+#[cfg(test)]
+mod list
+{
+    use json::object;
+    use super::Storage;
+    use super::storage_io::MemoryIO;
+    use super::ToJson;
+
+    fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String>
+    {
+        let mut vec = storage.list_sites(b"abcdefghijklmnopqrstuvwxyz123456").collect::<Vec<String>>();
+        vec.sort();
+        return vec;
+    }
+
+    fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<json::JsonValue>
+    {
+        let mut vec = storage.list_passwords(site, b"abc", b"abcdefghijklmnopqrstuvwxyz123456").map(|password| json::JsonValue::from(password.to_json())).collect::<Vec<json::JsonValue>>();
+        vec.sort_by_key(|password| password["name"].as_str().unwrap().to_owned());
+        return vec;
+    }
+
+    #[test]
+    fn list_empty()
+    {
+        let io = MemoryIO::new(&json::stringify(object!{
+            "application": "pfp",
+            "format": 3,
+            "data": {
+                "salt": "Y2Jh",
+                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+            },
+        }));
+
+        let storage = Storage::new(io);
+        assert_eq!(list_sites(&storage).len(), 0);
+        assert_eq!(list_passwords(&storage, "example.com").len(), 0);
+    }
+
+    #[test]
+    fn list_non_empty()
+    {
+        let io = MemoryIO::new(&json::stringify(object!{
+            "application": "pfp",
+            "format": 3,
+            "data": {
+                "salt": "Y2Jh",
+                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=": "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zVWlVX2CndVHow98vMbf1CEoCMinc=",
+                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:wwiphANOrRICNdjAHNLekZQsy+X7KNqnW+OqXdlcGzI=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8AQBt60o0dplkj0d85WabgV46VFsKYTYFREBpwu0V2UXOYtfLQs57L0+RhGX8DLb6mfNMvwdeQ6tYPZdSNhdrqVOBlYbdeOA1HTq+OcNoPb4MDZ+TJeVX2kK+88Hj0mn4QSrloOrHS7WRBuHsAJM4DOPrxOLF00=",
+                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:22dJ6uy/10EVlEO5ief+VLOmVmSLTW+mYp9ZpW8Lq3U=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFfo6QS4fFiGF6URlEBwON0VbSrmlg0kBtyJkOH/EtMtO5plpY+3TpTqNWaZwI4pxZsbt6TFB0YoFrnGjkXL4sNYFom/rwrVluP6GKeoiODIKEGZcC+lKGefkKz97EFdEM=",
+                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=": "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zfW14ah7y+PC4vvSZR2oUnodSsOmi/",
+                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:CSxQAXXUjiRnWpLwYehEFlRdC4zxZ89gClbGIFXvn7E=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8A4AvOAm35ZqnjVa643adhVp/xYyKdqfER0EpxezGjEXeswJIUg75qcxVwuX5iGBoyvGKeNaMRS7NuhHWpEN+e9KEVFcY7WH0WGjqKtCq/XxMXFoGouVVydN+pRQmVS+phL9l4+jAu/UlX6+yWgvwdxujw6gg3PFRIUACUVMB+vd",
+            },
+        }));
+
+        let storage = Storage::new(io);
+        assert_eq!(list_sites(&storage), vec!["example.com", "example.info"]);
+
+        let password1 = object!{
+            "type": "stored",
+            "site": "example.com",
+            "name": "blabber",
+            "revision": "2",
+            "password": "asdf"
+        };
+        let password2 = object!{
+            "type": "generated2",
+            "site": "example.com",
+            "name": "blubber",
+            "revision": "",
+            "length": 16,
+            "lower": true,
+            "upper": true,
+            "number": true,
+            "symbol": true,
+        };
+        let password3 = object!{
+            "type": "generated2",
+            "site": "example.info",
+            "name": "test",
+            "revision": "yet another",
+            "length": 8,
+            "lower": true,
+            "upper": false,
+            "number": true,
+            "symbol": false,
+        };
+        assert_eq!(list_passwords(&storage, "example.com"), vec![password1, password2]);
+        assert_eq!(list_passwords(&storage, "example.info"), vec![password3]);
+        assert_eq!(list_passwords(&storage, "example.net").len(), 0);
     }
 }
