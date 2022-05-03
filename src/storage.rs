@@ -307,9 +307,8 @@ impl<IO: storage_io::StorageIO> Storage<IO>
 mod initialization
 {
     use json::object;
-    use super::Error;
-    use super::Storage;
-    use super::storage_io::MemoryIO;
+    use storage_io::MemoryIO;
+    use super::*;
 
     #[test]
     fn read_empty_file()
@@ -435,8 +434,8 @@ mod initialization
 mod clear
 {
     use json::object;
-    use super::Storage;
-    use super::storage_io::{StorageIO, MemoryIO};
+    use storage_io::{StorageIO, MemoryIO};
+    use super::*;
 
     #[test]
     fn flush()
@@ -464,11 +463,8 @@ mod clear
 mod retrieval
 {
     use json::object;
-    use super::Error;
-    use super::PasswordId;
-    use super::Storage;
-    use super::storage_io::MemoryIO;
-    use super::ToJson;
+    use storage_io::MemoryIO;
+    use super::*;
 
     fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String>
     {
