@@ -17,6 +17,7 @@ pub trait ToJson
     fn to_json(&self) -> json::object::Object;
 }
 
+#[derive(Debug)]
 pub struct PasswordId
 {
     site: String,
@@ -76,6 +77,7 @@ impl ToJson for PasswordId
     }
 }
 
+#[derive(Debug)]
 pub struct GeneratedPassword
 {
     id: PasswordId,
@@ -170,6 +172,7 @@ impl ToJson for GeneratedPassword
     }
 }
 
+#[derive(Debug)]
 pub struct StoredPassword
 {
     id: PasswordId,
@@ -221,6 +224,7 @@ impl ToJson for StoredPassword
     }
 }
 
+#[derive(Debug)]
 pub enum Password
 {
     Generated
@@ -272,6 +276,7 @@ impl ToJson for Password
     }
 }
 
+#[derive(Debug)]
 pub struct Site
 {
     name: String,

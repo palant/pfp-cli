@@ -21,7 +21,7 @@ const CHARS_UPPER: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ";
 const CHARS_DIGIT: &[u8] = b"23456789";
 const CHARS_SYMBOL: &[u8] = b"!#$%&()*+,-./:;<=>?@[]^_{|}~";
 
-#[derive(enumset::EnumSetType)]
+#[derive(enumset::EnumSetType, Debug)]
 pub enum CharacterType
 {
     LOWER,
