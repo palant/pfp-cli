@@ -484,13 +484,29 @@ mod tests
         use super::*;
 
         #[test]
-        fn flush()
+        fn clear_uninitialized()
         {
             let io = MemoryIO::new("dummy");
             let mut storage = Storage::new(io);
 
             storage.clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY);
             storage.initialized().expect("Storage should be initialized");
+            assert_eq!(storage.list_sites(ENCRYPTION_KEY).count(), 0);
+
+            storage.flush().expect("Flush should succeed");
+
+            assert_eq!(json::parse(&storage.io.load().unwrap()).expect("Should be valid JSON"), json::parse(&empty_data()).unwrap());
+        }
+
+        #[test]
+        fn clear_initialized()
+        {
+            let io = MemoryIO::new(&default_data());
+            let mut storage = Storage::new(io);
+
+            storage.clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY);
+            storage.initialized().expect("Storage should be initialized");
+            assert_eq!(storage.list_sites(ENCRYPTION_KEY).count(), 0);
 
             storage.flush().expect("Flush should succeed");
 
