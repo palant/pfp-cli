@@ -152,13 +152,13 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         };
     }
 
-    pub fn contains(&self, key: &str) -> Result<bool, Error>
+    fn contains(&self, key: &str) -> Result<bool, Error>
     {
         let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
         return Ok(data.contains_key(key));
     }
 
-    pub fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
+    fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
         where T: FromJson
     {
         let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
@@ -168,7 +168,7 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         return T::from_json(&parsed);
     }
 
-    pub fn set<T>(&mut self, key: &str, value: &T, encryption_key: &[u8]) -> Result<(), Error>
+    fn set<T>(&mut self, key: &str, value: &T, encryption_key: &[u8]) -> Result<(), Error>
         where T: ToJson
     {
         let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
