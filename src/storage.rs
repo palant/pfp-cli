@@ -298,6 +298,7 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         return data.keys().filter_map(move |key| if key.find(":").is_none()
         {
             let site: Site = self.get(key, encryption_key).ok()?;
+            site.alias().xor(Some(""))?;
             Some(site.name().to_string())
         } else { None })
     }
@@ -340,6 +341,10 @@ mod tests
                 "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:BSjLwWY3MLEPQdG1f/jwKOtJRKCxwXpRH5qkMrUnVsI=":
                     // {"type":"generated2","site":"example.info","name":"test","revision":"yet another","length":8,"lower":true,"upper":false,"number":true,"symbol":false} encrypted
                     "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8A4AvOAm35ZqnjVa643adhVp/xYyKdqfER0EpxezGjEXeswJIUg75qcxVwuX5iGBoyvGKeNaMRS7NuhHWpEN+e9KEVFcY7WH0WGjqKtCq/XxMXFoGouVVydN+pRQmVS+phL9l4+jAu/UlX6+yWgvwdxujw6gg3PFRIUACUVMB+vd",
+                // example.org (hmac-sha256)
+                "site:5IS/IdH3aaMwyzRv0fwy+2oh5OsXZ2emV8991dFWrko=":
+                    // {"site":"example.org","alias":"example.com"} encrypted
+                    "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zZR19XieMvG7iyiBd+3hskJEGasgJAueBp0cngww8j0ruPmOiqFSkDcdc0",
             },
         });
     }
@@ -524,7 +529,6 @@ mod tests
         fn list_non_empty()
         {
             let io = MemoryIO::new(&default_data());
-
             let storage = Storage::new(io);
             assert_eq!(list_sites(&storage), vec!["example.com", "example.info"]);
 
@@ -566,7 +570,6 @@ mod tests
         fn get_password()
         {
             let io = MemoryIO::new(&default_data());
-
             let storage = Storage::new(io);
 
             assert!(storage.has_password(&PasswordId::new("example.com", "blabber", "2"), b"abc").expect("Storage should be initialized"));
@@ -607,8 +610,18 @@ mod tests
                 "symbol": false,
             });
 
-            assert!(!storage.has_password(&PasswordId::new("example.net", "blubber", ""), b"abc").expect("Storage should be initialized"));
-            assert!(matches!(storage.get_password(&PasswordId::new("example.net", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Password should be missing"), Error::KeyMissing { .. }));
+            assert!(!storage.has_password(&PasswordId::new("example.org", "blubber", ""), b"abc").expect("Storage should be initialized"));
+            assert!(matches!(storage.get_password(&PasswordId::new("example.org", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Password should be missing"), Error::KeyMissing { .. }));
+        }
+
+        #[test]
+        fn get_alias()
+        {
+            let io = MemoryIO::new(&default_data());
+            let storage = Storage::new(io);
+
+            assert!(matches!(storage.get_alias("example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Alias shouldn't be present"), Error::NoSuchAlias { .. }));
+            assert_eq!(storage.get_alias("example.org", b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Alias should be present"), "example.com");
         }
     }
 }
