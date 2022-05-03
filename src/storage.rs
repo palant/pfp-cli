@@ -623,5 +623,19 @@ mod tests
             assert!(matches!(storage.get_alias("example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Alias shouldn't be present"), Error::NoSuchAlias { .. }));
             assert_eq!(storage.get_alias("example.org", b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Alias should be present"), "example.com");
         }
+
+        #[test]
+        fn resolve_site()
+        {
+            let io = MemoryIO::new(&default_data());
+            let storage = Storage::new(io);
+
+            assert_eq!(storage.resolve_site("example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.com");
+            assert_eq!(storage.resolve_site("www.example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.com");
+            assert_eq!(storage.resolve_site("www2.example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "www2.example.com");
+            assert_eq!(storage.resolve_site("www.example.net", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.net");
+            assert_eq!(storage.resolve_site("example.org", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.com");
+            assert_eq!(storage.resolve_site("www.example.org", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.com");
+        }
     }
 }
