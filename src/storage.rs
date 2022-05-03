@@ -188,7 +188,7 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         self.salt = Some(base64::encode(salt));
     }
 
-    pub fn get_hmac_secret(&self, encryption_key: &Vec<u8>) -> Result<Vec<u8>, Error>
+    pub fn get_hmac_secret(&self, encryption_key: &[u8]) -> Result<Vec<u8>, Error>
     {
         let ciphertext = self.hmac_secret.as_ref().ok_or(Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
@@ -380,13 +380,19 @@ mod tests
         let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"hmac-secret":"fdsa"}}"#);
         let storage = Storage::new(io);
         assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+        assert!(matches!(storage.get_salt().expect_err("Storage should be uninitialized"), Error::StorageNotInitialized { ..}));
+        assert!(matches!(storage.get_hmac_secret(b"").expect_err("Storage should be uninitialized"), Error::StorageNotInitialized { ..}));
     }
 
     #[test]
     fn read_success()
     {
-        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"salt":"asdf","hmac-secret":"fdsa"}}"#);
+        // Encryption key: abcdefghijklmnopqrstuvwxyz123456
+        // Nonce: 123456789012
+        let io = storage_io::MemoryIO::new(r#"{"application":"pfp","format":3,"data":{"salt":"Y2Jh","hmac-secret":"MTIzNDU2Nzg5MDEy_raK5meC9iZHJ7CO7lUUdXTiXarF73A=="}}"#);
         let storage = Storage::new(io);
         storage.initialized().expect("Storage should be initialized");
+        assert_eq!(storage.get_salt().expect("Storage should be initialized"), b"cba");
+        assert_eq!(storage.get_hmac_secret(b"abcdefghijklmnopqrstuvwxyz123456").expect("Storage should be initialized"), b"abc");
     }
 }
