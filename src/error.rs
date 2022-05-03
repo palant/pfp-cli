@@ -29,4 +29,6 @@ pub enum Error
     PasswordMissingValue,
     SiteMissingName,
     NoSuchAlias,
+    AliasToSelf,
+    SiteHasPasswords,
 }

@@ -107,11 +107,20 @@ enum Commands
         name: String,
     },
     /// Lists websites that have data associated with them
-    ListSites{
+    ListSites
+    {
         /// Website name wildcard pattern
         #[clap(default_value = "*")]
         domain: String,
-    }
+    },
+    /// Sets an alias for a website
+    SetAlias
+    {
+        /// Website name to become an alias
+        domain: String,
+        /// Website name the domain should be equivalent to
+        alias: String,
+    },
 }
 
 impl fmt::Display for Error
@@ -142,6 +151,8 @@ impl fmt::Display for Error
             Error::PasswordMissingValue => write!(f, "Corrupt data, missing password value."),
             Error::SiteMissingName => write!(f, "Corrupt data, missing site name."),
             Error::NoSuchAlias => write!(f, "Site isn't aliased."),
+            Error::AliasToSelf => write!(f, "Cannot make a site an alias for itself."),
+            Error::SiteHasPasswords => write!(f, "Site has passwords, remove before making it an alias."),
         }
     }
 }
@@ -386,6 +397,15 @@ fn main()
             {
                 println!("No matching websites found.");
             }
+        }
+
+
+        Commands::SetAlias {domain, alias} =>
+        {
+            ensure_unlocked_passwords(&mut passwords);
+
+            passwords.set_alias(&domain, &alias).handle_error();
+            println!("Alias added.");
         }
     }
 }

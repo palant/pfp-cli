@@ -79,6 +79,22 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         return Ok(());
     }
 
+    pub fn set_alias(&mut self, site: &str, alias: &str) -> Result<(), Error>
+    {
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
+
+        let site_normalized = self.storage.normalize_site(site);
+        let alias_resolved = self.storage.resolve_site(alias, hmac_secret, key);
+        if self.storage.list_passwords(&site_normalized, hmac_secret, key).next().is_some()
+        {
+            return Err(Error::SiteHasPasswords);
+        }
+
+        self.storage.set_alias(&site_normalized, &alias_resolved, hmac_secret, key)?;
+        return self.storage.flush();
+    }
+
     pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();

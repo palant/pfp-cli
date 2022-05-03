@@ -241,10 +241,15 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         };
     }
 
+    pub fn normalize_site(&self, site: &str) -> String
+    {
+        return site.strip_prefix("www.").unwrap_or(site).to_string();
+    }
+
     pub fn resolve_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> String
     {
-        let stripped = site.strip_prefix("www.").unwrap_or(site).to_string();
-        return self.get_alias(&stripped, hmac_secret, encryption_key).unwrap_or(stripped);
+        let normalized = self.normalize_site(site);
+        return self.get_alias(&normalized, hmac_secret, encryption_key).unwrap_or(normalized);
     }
 
     pub fn ensure_site_data(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
@@ -256,6 +261,17 @@ impl<IO: storage_io::StorageIO> Storage<IO>
             return self.set(&key, &Site::new(site, None), encryption_key);
         }
         return Ok(());
+    }
+
+    pub fn set_alias(&mut self, site: &str, alias: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
+    {
+        if site == alias
+        {
+            return Err(Error::AliasToSelf);
+        }
+        let key = self.get_site_key(site, hmac_secret);
+        let site = Site::new(site, Some(alias));
+        return self.set(&key, &site, encryption_key);
     }
 
     pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> Result<bool, Error>
@@ -648,12 +664,100 @@ mod tests
             let io = MemoryIO::new(&default_data());
             let storage = Storage::new(io);
 
+            assert_eq!(storage.normalize_site("example.com"), "example.com");
             assert_eq!(storage.resolve_site("example.com", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+
+            assert_eq!(storage.normalize_site("www.example.com"), "example.com");
             assert_eq!(storage.resolve_site("www.example.com", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+
+            assert_eq!(storage.normalize_site("www2.example.com"), "www2.example.com");
             assert_eq!(storage.resolve_site("www2.example.com", HMAC_SECRET, ENCRYPTION_KEY), "www2.example.com");
+
+            assert_eq!(storage.normalize_site("www.example.net"), "example.net");
             assert_eq!(storage.resolve_site("www.example.net", HMAC_SECRET, ENCRYPTION_KEY), "example.net");
+
+            assert_eq!(storage.normalize_site("example.org"), "example.org");
             assert_eq!(storage.resolve_site("example.org", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+
+            assert_eq!(storage.normalize_site("www.example.org"), "example.org");
             assert_eq!(storage.resolve_site("www.example.org", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+        }
+    }
+
+    mod write
+    {
+        use super::*;
+
+        fn parse_storage_data(data: &str) -> json::JsonValue
+        {
+            let mut obj = json::parse(data).expect("Should be valid JSON");
+            for (key, value) in obj["data"].entries_mut()
+            {
+                if key.starts_with("site:")
+                {
+                    let str = value.as_str().expect("Value should be a string");
+                    let decrypted = crypto::decrypt_data(&str, ENCRYPTION_KEY).expect("Value should be decryptable");
+                    *value = json::parse(&decrypted).expect("Should be valid JSON");
+                }
+            }
+            return obj;
+        }
+
+        fn compare_storage_data(data1: &str, data2: &str)
+        {
+            assert_eq!(parse_storage_data(data1), parse_storage_data(data2));
+        }
+
+        #[test]
+        fn add_passwords()
+        {
+            let io = MemoryIO::new(&empty_data());
+            let mut storage = Storage::new(io);
+
+            storage.ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
+            storage.ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding existing site data should be ignored");
+
+            storage.set_generated(GeneratedPassword::from_json(&parse_json_object(r#"{
+                "site": "example.com",
+                "name": "blubber",
+                "revision": "",
+                "length": 16,
+                "lower": true,
+                "upper": true,
+                "number": true,
+                "symbol": true
+            }"#).unwrap()).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+
+            storage.set_stored(StoredPassword::from_json(&parse_json_object(r#"{
+                "site": "example.com",
+                "name": "blabber",
+                "revision": "2",
+                "password": "asdf"
+            }"#).unwrap()).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+
+            storage.ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
+            storage.ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding existing site data should be ignored");
+
+            storage.set_generated(GeneratedPassword::from_json(&parse_json_object(r#"{
+                "site": "example.info",
+                "name": "test",
+                "revision": "yet another",
+                "length": 8,
+                "lower": true,
+                "upper": false,
+                "number": true,
+                "symbol": false
+            }"#).unwrap()).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+
+            let result = storage.set_alias("example.com", "example.com", HMAC_SECRET, ENCRYPTION_KEY);
+            assert!(matches!(result.expect_err("Setting an alias to itself should fail"), Error::AliasToSelf { .. }));
+
+            storage.set_alias("example.org", "example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Setting alias should succeed");
+            storage.ensure_site_data("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding existing site data should be ignored");
+
+            storage.flush().expect("Flush should succeed");
+
+            compare_storage_data(&storage.io.load().unwrap(), &default_data());
         }
     }
 }
