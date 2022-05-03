@@ -304,311 +304,311 @@ impl<IO: storage_io::StorageIO> Storage<IO>
 }
 
 #[cfg(test)]
-mod initialization
+mod tests
 {
     use json::object;
-    use storage_io::MemoryIO;
+    use storage_io::{MemoryIO, StorageIO};
     use super::*;
 
-    #[test]
-    fn read_empty_file()
+    fn default_data() -> String
     {
-        let io = MemoryIO::new("");
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::InvalidJson { .. }));
-    }
-
-    #[test]
-    fn read_literal()
-    {
-        let io = MemoryIO::new("42");
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"),  Error::UnexpectedData { .. }));
-    }
-
-    #[test]
-    fn read_empty_object()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{}));
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
-    }
-
-    #[test]
-    fn read_wrong_application()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "easypasswords",
-            "format": 3,
-        }));
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedStorageFormat { .. }));
-    }
-
-    #[test]
-    fn read_wrong_format_version()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "pfp",
-            "format": 8,
-        }));
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedStorageFormat { .. }));
-    }
-
-    #[test]
-    fn read_missing_data()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": null,
-        }));
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
-    }
-
-    #[test]
-    fn read_empty_data()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {},
-        }));
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
-    }
-
-    #[test]
-    fn read_missing_hmac()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{
+        return json::stringify(object!{
             "application": "pfp",
             "format": 3,
             "data": {
-                "salt": "asdf",
-            },
-        }));
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
-    }
-
-    #[test]
-    fn read_missing_salt()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {
-                "hmac-secret": "fdsa",
-            },
-        }));
-        let storage = Storage::new(io);
-        assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
-        assert!(matches!(storage.get_salt().expect_err("Storage should be uninitialized"), Error::StorageNotInitialized { ..}));
-        assert!(matches!(storage.get_hmac_secret(b"").expect_err("Storage should be uninitialized"), Error::StorageNotInitialized { ..}));
-    }
-
-    #[test]
-    fn read_success()
-    {
-        // Encryption key: abcdefghijklmnopqrstuvwxyz123456
-        // Nonce: abcdefghijkl
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {
+                // cba as base64
                 "salt": "Y2Jh",
+                // abc encrypted (nonce abcdefghijkl, encryption key abcdefghijklmnopqrstuvwxyz123456)
                 "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
-            },
-        }));
-        let storage = Storage::new(io);
-        storage.initialized().expect("Storage should be initialized");
-        assert_eq!(storage.get_salt().expect("Storage should be initialized"), b"cba");
-        assert_eq!(storage.get_hmac_secret(b"abcdefghijklmnopqrstuvwxyz123456").expect("Storage should be initialized"), b"abc");
-    }
-}
-
-#[cfg(test)]
-mod clear
-{
-    use json::object;
-    use storage_io::{StorageIO, MemoryIO};
-    use super::*;
-
-    #[test]
-    fn flush()
-    {
-        let io = MemoryIO::new("dummy");
-        let mut storage = Storage::new(io);
-
-        storage.clear(b"cba", b"abc", b"abcdefghijklmnopqrstuvwxyz123456");
-        storage.initialized().expect("Storage should be initialized");
-
-        storage.flush().expect("Flush should succeed");
-
-        assert_eq!(json::parse(&storage.io.load().unwrap()).expect("Should be valid JSON"), object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {
-                "salt": "Y2Jh",
-                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+                // example.com (hmac-sha256)
+                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=":
+                    // {"site":"example.com"} encrypted
+                    "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zVWlVX2CndVHow98vMbf1CEoCMinc=",
+                // example.com\x00blubber\x00 (hmac-sha256)
+                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:/uudghlPp4TDZPtfZFPj6nJs/zMDAE2AqVfz6Hu8N9I=":
+                    // {"type":"generated2","site":"example.com","name":"blubber","revision":"","length":16,"lower":true,"upper":true,"number":true,"symbol":true} encrypted
+                    "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8AQBt60o0dplkj0d85WabgV46VFsKYTYFREBpwu0V2UXOYtfLQs57L0+RhGX8DLb6mfNMvwdeQ6tYPZdSNhdrqVOBlYbdeOA1HTq+OcNoPb4MDZ+TJeVX2kK+88Hj0mn4QSrloOrHS7WRBuHsAJM4DOPrxOLF00=",
+                // example.com\x00blabber\x002 (hmac-sha256)
+                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:h2pnx6RFyNbAUBLcuQYz9w79/vnf4fgJlY/c+EP44d8=":
+                    // {"type":"stored","site":"example.com","name":"blabber","revision":"2","password":"asdf"} encrypted
+                    "YWJjZGVmZ2hpamts_e0/xiFNCrXFfo6QS4fFiGF6URlEBwON0VbSrmlg0kBtyJkOH/EtMtO5plpY+3TpTqNWaZwI4pxZsbt6TFB0YoFrnGjkXL4sNYFom/rwrVluP6GKeoiODIKEGZcC+lKGefkKz97EFdEM=",
+                // example.info (hmac-sha256)
+                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=":
+                    // {"site":"example.info"} encrypted
+                    "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zfW14ah7y+PC4vvSZR2oUnodSsOmi/",
+                // example.info\x00test\x00yet another (hmac-sha256)
+                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:BSjLwWY3MLEPQdG1f/jwKOtJRKCxwXpRH5qkMrUnVsI=":
+                    // {"type":"generated2","site":"example.info","name":"test","revision":"yet another","length":8,"lower":true,"upper":false,"number":true,"symbol":false} encrypted
+                    "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8A4AvOAm35ZqnjVa643adhVp/xYyKdqfER0EpxezGjEXeswJIUg75qcxVwuX5iGBoyvGKeNaMRS7NuhHWpEN+e9KEVFcY7WH0WGjqKtCq/XxMXFoGouVVydN+pRQmVS+phL9l4+jAu/UlX6+yWgvwdxujw6gg3PFRIUACUVMB+vd",
             },
         });
     }
-}
 
-#[cfg(test)]
-mod retrieval
-{
-    use json::object;
-    use storage_io::MemoryIO;
-    use super::*;
-
-    fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String>
+    mod initialization
     {
-        let mut vec = storage.list_sites(b"abcdefghijklmnopqrstuvwxyz123456").collect::<Vec<String>>();
-        vec.sort();
-        return vec;
+        use super::*;
+
+        #[test]
+        fn read_empty_file()
+        {
+            let io = MemoryIO::new("");
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::InvalidJson { .. }));
+        }
+
+        #[test]
+        fn read_literal()
+        {
+            let io = MemoryIO::new("42");
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"),  Error::UnexpectedData { .. }));
+        }
+
+        #[test]
+        fn read_empty_object()
+        {
+            let io = MemoryIO::new(&json::stringify(object!{}));
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+        }
+
+        #[test]
+        fn read_wrong_application()
+        {
+            let io = MemoryIO::new(&json::stringify(object!{
+                "application": "easypasswords",
+                "format": 3,
+            }));
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedStorageFormat { .. }));
+        }
+
+        #[test]
+        fn read_wrong_format_version()
+        {
+            let io = MemoryIO::new(&json::stringify(object!{
+                "application": "pfp",
+                "format": 8,
+            }));
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedStorageFormat { .. }));
+        }
+
+        #[test]
+        fn read_missing_data()
+        {
+            let io = MemoryIO::new(&json::stringify(object!{
+                "application": "pfp",
+                "format": 3,
+                "data": null,
+            }));
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+        }
+
+        #[test]
+        fn read_empty_data()
+        {
+            let io = MemoryIO::new(&json::stringify(object!{
+                "application": "pfp",
+                "format": 3,
+                "data": {},
+            }));
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+        }
+
+        #[test]
+        fn read_missing_hmac()
+        {
+            let io = MemoryIO::new(&json::stringify(object!{
+                "application": "pfp",
+                "format": 3,
+                "data": {
+                    "salt": "asdf",
+                },
+            }));
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+        }
+
+        #[test]
+        fn read_missing_salt()
+        {
+            let io = MemoryIO::new(&json::stringify(object!{
+                "application": "pfp",
+                "format": 3,
+                "data": {
+                    "hmac-secret": "fdsa",
+                },
+            }));
+            let storage = Storage::new(io);
+            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+            assert!(matches!(storage.get_salt().expect_err("Storage should be uninitialized"), Error::StorageNotInitialized { ..}));
+            assert!(matches!(storage.get_hmac_secret(b"").expect_err("Storage should be uninitialized"), Error::StorageNotInitialized { ..}));
+        }
+
+        #[test]
+        fn read_success()
+        {
+            let io = MemoryIO::new(&default_data());
+            let storage = Storage::new(io);
+            storage.initialized().expect("Storage should be initialized");
+            assert_eq!(storage.get_salt().expect("Storage should be initialized"), b"cba");
+            assert_eq!(storage.get_hmac_secret(b"abcdefghijklmnopqrstuvwxyz123456").expect("Storage should be initialized"), b"abc");
+        }
     }
 
-    fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<json::JsonValue>
+    mod clear
     {
-        let mut vec = storage.list_passwords(site, b"abc", b"abcdefghijklmnopqrstuvwxyz123456").map(|password| json::JsonValue::from(password.to_json())).collect::<Vec<json::JsonValue>>();
-        vec.sort_by_key(|password| password["name"].as_str().unwrap().to_owned());
-        return vec;
+        use super::*;
+
+        #[test]
+        fn flush()
+        {
+            let io = MemoryIO::new("dummy");
+            let mut storage = Storage::new(io);
+
+            storage.clear(b"cba", b"abc", b"abcdefghijklmnopqrstuvwxyz123456");
+            storage.initialized().expect("Storage should be initialized");
+
+            storage.flush().expect("Flush should succeed");
+
+            assert_eq!(json::parse(&storage.io.load().unwrap()).expect("Should be valid JSON"), object!{
+                "application": "pfp",
+                "format": 3,
+                "data": {
+                    "salt": "Y2Jh",
+                    "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+                },
+            });
+        }
     }
 
-    #[test]
-    fn list_empty()
+    mod retrieval
     {
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {
-                "salt": "Y2Jh",
-                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
-            },
-        }));
+        use super::*;
 
-        let storage = Storage::new(io);
-        assert_eq!(list_sites(&storage).len(), 0);
-        assert_eq!(list_passwords(&storage, "example.com").len(), 0);
-    }
+        fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String>
+        {
+            let mut vec = storage.list_sites(b"abcdefghijklmnopqrstuvwxyz123456").collect::<Vec<String>>();
+            vec.sort();
+            return vec;
+        }
 
-    #[test]
-    fn list_non_empty()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {
-                "salt": "Y2Jh",
-                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=": "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zVWlVX2CndVHow98vMbf1CEoCMinc=",
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:/uudghlPp4TDZPtfZFPj6nJs/zMDAE2AqVfz6Hu8N9I=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8AQBt60o0dplkj0d85WabgV46VFsKYTYFREBpwu0V2UXOYtfLQs57L0+RhGX8DLb6mfNMvwdeQ6tYPZdSNhdrqVOBlYbdeOA1HTq+OcNoPb4MDZ+TJeVX2kK+88Hj0mn4QSrloOrHS7WRBuHsAJM4DOPrxOLF00=",
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:h2pnx6RFyNbAUBLcuQYz9w79/vnf4fgJlY/c+EP44d8=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFfo6QS4fFiGF6URlEBwON0VbSrmlg0kBtyJkOH/EtMtO5plpY+3TpTqNWaZwI4pxZsbt6TFB0YoFrnGjkXL4sNYFom/rwrVluP6GKeoiODIKEGZcC+lKGefkKz97EFdEM=",
-                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=": "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zfW14ah7y+PC4vvSZR2oUnodSsOmi/",
-                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:BSjLwWY3MLEPQdG1f/jwKOtJRKCxwXpRH5qkMrUnVsI=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8A4AvOAm35ZqnjVa643adhVp/xYyKdqfER0EpxezGjEXeswJIUg75qcxVwuX5iGBoyvGKeNaMRS7NuhHWpEN+e9KEVFcY7WH0WGjqKtCq/XxMXFoGouVVydN+pRQmVS+phL9l4+jAu/UlX6+yWgvwdxujw6gg3PFRIUACUVMB+vd",
-            },
-        }));
+        fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<json::JsonValue>
+        {
+            let mut vec = storage.list_passwords(site, b"abc", b"abcdefghijklmnopqrstuvwxyz123456").map(|password| json::JsonValue::from(password.to_json())).collect::<Vec<json::JsonValue>>();
+            vec.sort_by_key(|password| password["name"].as_str().unwrap().to_owned());
+            return vec;
+        }
 
-        let storage = Storage::new(io);
-        assert_eq!(list_sites(&storage), vec!["example.com", "example.info"]);
+        #[test]
+        fn list_empty()
+        {
+            let io = MemoryIO::new(&json::stringify(object!{
+                "application": "pfp",
+                "format": 3,
+                "data": {
+                    "salt": "Y2Jh",
+                    "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+                },
+            }));
 
-        let password1 = object!{
-            "type": "stored",
-            "site": "example.com",
-            "name": "blabber",
-            "revision": "2",
-            "password": "asdf"
-        };
-        let password2 = object!{
-            "type": "generated2",
-            "site": "example.com",
-            "name": "blubber",
-            "revision": "",
-            "length": 16,
-            "lower": true,
-            "upper": true,
-            "number": true,
-            "symbol": true,
-        };
-        let password3 = object!{
-            "type": "generated2",
-            "site": "example.info",
-            "name": "test",
-            "revision": "yet another",
-            "length": 8,
-            "lower": true,
-            "upper": false,
-            "number": true,
-            "symbol": false,
-        };
-        assert_eq!(list_passwords(&storage, "example.com"), vec![password1, password2]);
-        assert_eq!(list_passwords(&storage, "example.info"), vec![password3]);
-        assert_eq!(list_passwords(&storage, "example.net").len(), 0);
-    }
+            let storage = Storage::new(io);
+            assert_eq!(list_sites(&storage).len(), 0);
+            assert_eq!(list_passwords(&storage, "example.com").len(), 0);
+        }
 
-    #[test]
-    fn get_password()
-    {
-        let io = MemoryIO::new(&json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {
-                "salt": "Y2Jh",
-                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=": "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zVWlVX2CndVHow98vMbf1CEoCMinc=",
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:/uudghlPp4TDZPtfZFPj6nJs/zMDAE2AqVfz6Hu8N9I=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8AQBt60o0dplkj0d85WabgV46VFsKYTYFREBpwu0V2UXOYtfLQs57L0+RhGX8DLb6mfNMvwdeQ6tYPZdSNhdrqVOBlYbdeOA1HTq+OcNoPb4MDZ+TJeVX2kK+88Hj0mn4QSrloOrHS7WRBuHsAJM4DOPrxOLF00=",
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:h2pnx6RFyNbAUBLcuQYz9w79/vnf4fgJlY/c+EP44d8=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFfo6QS4fFiGF6URlEBwON0VbSrmlg0kBtyJkOH/EtMtO5plpY+3TpTqNWaZwI4pxZsbt6TFB0YoFrnGjkXL4sNYFom/rwrVluP6GKeoiODIKEGZcC+lKGefkKz97EFdEM=",
-                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=": "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zfW14ah7y+PC4vvSZR2oUnodSsOmi/",
-                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:BSjLwWY3MLEPQdG1f/jwKOtJRKCxwXpRH5qkMrUnVsI=": "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8A4AvOAm35ZqnjVa643adhVp/xYyKdqfER0EpxezGjEXeswJIUg75qcxVwuX5iGBoyvGKeNaMRS7NuhHWpEN+e9KEVFcY7WH0WGjqKtCq/XxMXFoGouVVydN+pRQmVS+phL9l4+jAu/UlX6+yWgvwdxujw6gg3PFRIUACUVMB+vd",
-            },
-        }));
+        #[test]
+        fn list_non_empty()
+        {
+            let io = MemoryIO::new(&default_data());
 
-        let storage = Storage::new(io);
+            let storage = Storage::new(io);
+            assert_eq!(list_sites(&storage), vec!["example.com", "example.info"]);
 
-        assert!(storage.has_password(&PasswordId::new("example.com", "blabber", "2"), b"abc").expect("Storage should be initialized"));
-        let password1 = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
-        assert_eq!(password1.to_json(), object!{
-            "type": "stored",
-            "site": "example.com",
-            "name": "blabber",
-            "revision": "2",
-            "password": "asdf"
-        });
+            let password1 = object!{
+                "type": "stored",
+                "site": "example.com",
+                "name": "blabber",
+                "revision": "2",
+                "password": "asdf"
+            };
+            let password2 = object!{
+                "type": "generated2",
+                "site": "example.com",
+                "name": "blubber",
+                "revision": "",
+                "length": 16,
+                "lower": true,
+                "upper": true,
+                "number": true,
+                "symbol": true,
+            };
+            let password3 = object!{
+                "type": "generated2",
+                "site": "example.info",
+                "name": "test",
+                "revision": "yet another",
+                "length": 8,
+                "lower": true,
+                "upper": false,
+                "number": true,
+                "symbol": false,
+            };
+            assert_eq!(list_passwords(&storage, "example.com"), vec![password1, password2]);
+            assert_eq!(list_passwords(&storage, "example.info"), vec![password3]);
+            assert_eq!(list_passwords(&storage, "example.net").len(), 0);
+        }
 
-        assert!(storage.has_password(&PasswordId::new("example.com", "blubber", ""), b"abc").expect("Storage should be initialized"));
-        let password2 = storage.get_password(&PasswordId::new("example.com", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
-        assert_eq!(password2.to_json(), object!{
-            "type": "generated2",
-            "site": "example.com",
-            "name": "blubber",
-            "revision": "",
-            "length": 16,
-            "lower": true,
-            "upper": true,
-            "number": true,
-            "symbol": true,
-        });
+        #[test]
+        fn get_password()
+        {
+            let io = MemoryIO::new(&default_data());
 
-        assert!(storage.has_password(&PasswordId::new("example.info", "test", "yet another"), b"abc").expect("Storage should be initialized"));
-        let password3 = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
-        assert_eq!(password3.to_json(), object!{
-            "type": "generated2",
-            "site": "example.info",
-            "name": "test",
-            "revision": "yet another",
-            "length": 8,
-            "lower": true,
-            "upper": false,
-            "number": true,
-            "symbol": false,
-        });
+            let storage = Storage::new(io);
 
-        assert!(!storage.has_password(&PasswordId::new("example.net", "blubber", ""), b"abc").expect("Storage should be initialized"));
-        assert!(matches!(storage.get_password(&PasswordId::new("example.net", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Password should be missing"), Error::KeyMissing { .. }));
+            assert!(storage.has_password(&PasswordId::new("example.com", "blabber", "2"), b"abc").expect("Storage should be initialized"));
+            let password1 = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
+            assert_eq!(password1.to_json(), object!{
+                "type": "stored",
+                "site": "example.com",
+                "name": "blabber",
+                "revision": "2",
+                "password": "asdf"
+            });
+
+            assert!(storage.has_password(&PasswordId::new("example.com", "blubber", ""), b"abc").expect("Storage should be initialized"));
+            let password2 = storage.get_password(&PasswordId::new("example.com", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
+            assert_eq!(password2.to_json(), object!{
+                "type": "generated2",
+                "site": "example.com",
+                "name": "blubber",
+                "revision": "",
+                "length": 16,
+                "lower": true,
+                "upper": true,
+                "number": true,
+                "symbol": true,
+            });
+
+            assert!(storage.has_password(&PasswordId::new("example.info", "test", "yet another"), b"abc").expect("Storage should be initialized"));
+            let password3 = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
+            assert_eq!(password3.to_json(), object!{
+                "type": "generated2",
+                "site": "example.info",
+                "name": "test",
+                "revision": "yet another",
+                "length": 8,
+                "lower": true,
+                "upper": false,
+                "number": true,
+                "symbol": false,
+            });
+
+            assert!(!storage.has_password(&PasswordId::new("example.net", "blubber", ""), b"abc").expect("Storage should be initialized"));
+            assert!(matches!(storage.get_password(&PasswordId::new("example.net", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Password should be missing"), Error::KeyMissing { .. }));
+        }
     }
 }
