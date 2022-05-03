@@ -580,6 +580,7 @@ mod tests
             };
             assert_eq!(list_passwords(&storage, "example.com"), vec![password1, password2]);
             assert_eq!(list_passwords(&storage, "example.info"), vec![password3]);
+            assert_eq!(list_passwords(&storage, "example.org").len(), 0);
             assert_eq!(list_passwords(&storage, "example.net").len(), 0);
         }
 
