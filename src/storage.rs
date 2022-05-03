@@ -311,6 +311,21 @@ mod tests
     use storage_io::{MemoryIO, StorageIO};
     use super::*;
 
+    const HMAC_SECRET: &[u8] = b"abc";
+    const ENCRYPTION_KEY: &[u8] = b"abcdefghijklmnopqrstuvwxyz123456";
+
+    fn empty_data() -> String
+    {
+        return json::stringify(object!{
+            "application": "pfp",
+            "format": 3,
+            "data": {
+                "salt": "Y2Jh",
+                "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+            },
+        });
+    }
+
     fn default_data() -> String
     {
         return json::stringify(object!{
@@ -460,7 +475,7 @@ mod tests
             let storage = Storage::new(io);
             storage.initialized().expect("Storage should be initialized");
             assert_eq!(storage.get_salt().expect("Storage should be initialized"), b"cba");
-            assert_eq!(storage.get_hmac_secret(b"abcdefghijklmnopqrstuvwxyz123456").expect("Storage should be initialized"), b"abc");
+            assert_eq!(storage.get_hmac_secret(ENCRYPTION_KEY).expect("Storage should be initialized"), HMAC_SECRET);
         }
     }
 
@@ -474,19 +489,12 @@ mod tests
             let io = MemoryIO::new("dummy");
             let mut storage = Storage::new(io);
 
-            storage.clear(b"cba", b"abc", b"abcdefghijklmnopqrstuvwxyz123456");
+            storage.clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY);
             storage.initialized().expect("Storage should be initialized");
 
             storage.flush().expect("Flush should succeed");
 
-            assert_eq!(json::parse(&storage.io.load().unwrap()).expect("Should be valid JSON"), object!{
-                "application": "pfp",
-                "format": 3,
-                "data": {
-                    "salt": "Y2Jh",
-                    "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
-                },
-            });
+            assert_eq!(json::parse(&storage.io.load().unwrap()).expect("Should be valid JSON"), json::parse(&empty_data()).unwrap());
         }
     }
 
@@ -496,14 +504,14 @@ mod tests
 
         fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String>
         {
-            let mut vec = storage.list_sites(b"abcdefghijklmnopqrstuvwxyz123456").collect::<Vec<String>>();
+            let mut vec = storage.list_sites(ENCRYPTION_KEY).collect::<Vec<String>>();
             vec.sort();
             return vec;
         }
 
         fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<json::JsonValue>
         {
-            let mut vec = storage.list_passwords(site, b"abc", b"abcdefghijklmnopqrstuvwxyz123456").map(|password| json::JsonValue::from(password.to_json())).collect::<Vec<json::JsonValue>>();
+            let mut vec = storage.list_passwords(site, HMAC_SECRET, ENCRYPTION_KEY).map(|password| json::JsonValue::from(password.to_json())).collect::<Vec<json::JsonValue>>();
             vec.sort_by_key(|password| password["name"].as_str().unwrap().to_owned());
             return vec;
         }
@@ -511,16 +519,9 @@ mod tests
         #[test]
         fn list_empty()
         {
-            let io = MemoryIO::new(&json::stringify(object!{
-                "application": "pfp",
-                "format": 3,
-                "data": {
-                    "salt": "Y2Jh",
-                    "hmac-secret": "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
-                },
-            }));
-
+            let io = MemoryIO::new(&empty_data());
             let storage = Storage::new(io);
+
             assert_eq!(list_sites(&storage).len(), 0);
             assert_eq!(list_passwords(&storage, "example.com").len(), 0);
         }
@@ -572,8 +573,8 @@ mod tests
             let io = MemoryIO::new(&default_data());
             let storage = Storage::new(io);
 
-            assert!(storage.has_password(&PasswordId::new("example.com", "blabber", "2"), b"abc").expect("Storage should be initialized"));
-            let password1 = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
+            assert!(storage.has_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET).expect("Storage should be initialized"));
+            let password1 = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
             assert_eq!(password1.to_json(), object!{
                 "type": "stored",
                 "site": "example.com",
@@ -582,8 +583,8 @@ mod tests
                 "password": "asdf"
             });
 
-            assert!(storage.has_password(&PasswordId::new("example.com", "blubber", ""), b"abc").expect("Storage should be initialized"));
-            let password2 = storage.get_password(&PasswordId::new("example.com", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
+            assert!(storage.has_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET).expect("Storage should be initialized"));
+            let password2 = storage.get_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
             assert_eq!(password2.to_json(), object!{
                 "type": "generated2",
                 "site": "example.com",
@@ -596,8 +597,8 @@ mod tests
                 "symbol": true,
             });
 
-            assert!(storage.has_password(&PasswordId::new("example.info", "test", "yet another"), b"abc").expect("Storage should be initialized"));
-            let password3 = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Password should be present");
+            assert!(storage.has_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET).expect("Storage should be initialized"));
+            let password3 = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
             assert_eq!(password3.to_json(), object!{
                 "type": "generated2",
                 "site": "example.info",
@@ -610,8 +611,8 @@ mod tests
                 "symbol": false,
             });
 
-            assert!(!storage.has_password(&PasswordId::new("example.org", "blubber", ""), b"abc").expect("Storage should be initialized"));
-            assert!(matches!(storage.get_password(&PasswordId::new("example.org", "blubber", ""), b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Password should be missing"), Error::KeyMissing { .. }));
+            assert!(!storage.has_password(&PasswordId::new("example.org", "blubber", ""), HMAC_SECRET).expect("Storage should be initialized"));
+            assert!(matches!(storage.get_password(&PasswordId::new("example.org", "blubber", ""), HMAC_SECRET, ENCRYPTION_KEY).expect_err("Password should be missing"), Error::KeyMissing { .. }));
         }
 
         #[test]
@@ -620,8 +621,8 @@ mod tests
             let io = MemoryIO::new(&default_data());
             let storage = Storage::new(io);
 
-            assert!(matches!(storage.get_alias("example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect_err("Alias shouldn't be present"), Error::NoSuchAlias { .. }));
-            assert_eq!(storage.get_alias("example.org", b"abc", b"abcdefghijklmnopqrstuvwxyz123456").expect("Alias should be present"), "example.com");
+            assert!(matches!(storage.get_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Alias shouldn't be present"), Error::NoSuchAlias { .. }));
+            assert_eq!(storage.get_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Alias should be present"), "example.com");
         }
 
         #[test]
@@ -630,12 +631,12 @@ mod tests
             let io = MemoryIO::new(&default_data());
             let storage = Storage::new(io);
 
-            assert_eq!(storage.resolve_site("example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.com");
-            assert_eq!(storage.resolve_site("www.example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.com");
-            assert_eq!(storage.resolve_site("www2.example.com", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "www2.example.com");
-            assert_eq!(storage.resolve_site("www.example.net", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.net");
-            assert_eq!(storage.resolve_site("example.org", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.com");
-            assert_eq!(storage.resolve_site("www.example.org", b"abc", b"abcdefghijklmnopqrstuvwxyz123456"), "example.com");
+            assert_eq!(storage.resolve_site("example.com", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+            assert_eq!(storage.resolve_site("www.example.com", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+            assert_eq!(storage.resolve_site("www2.example.com", HMAC_SECRET, ENCRYPTION_KEY), "www2.example.com");
+            assert_eq!(storage.resolve_site("www.example.net", HMAC_SECRET, ENCRYPTION_KEY), "example.net");
+            assert_eq!(storage.resolve_site("example.org", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+            assert_eq!(storage.resolve_site("www.example.org", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
         }
     }
 }
