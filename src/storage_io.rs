@@ -54,7 +54,7 @@ pub struct MemoryIO
 
 impl MemoryIO
 {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub fn new(data: &str) -> Self
     {
         return Self { data: Cell::new(data.to_string()) };
