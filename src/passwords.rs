@@ -256,6 +256,15 @@ mod tests
         });
     }
 
+    fn password_name(password: Password) -> String
+    {
+        return match password
+        {
+            Password::Generated {password} => password.id().name().to_string(),
+            Password::Stored {password} => password.id().name().to_string(),
+        };
+    }
+
     mod initialization
     {
         use super::*;
@@ -349,11 +358,7 @@ mod tests
 
         fn list_passwords(passwords: &Passwords<MemoryIO>, site: &str, name: &str) -> Vec<String>
         {
-            let mut vec = passwords.list(site, name).map(|password| match password
-            {
-                Password::Generated {password} => password.id().name().to_string(),
-                Password::Stored {password} => password.id().name().to_string(),
-            }).collect::<Vec<String>>();
+            let mut vec = passwords.list(site, name).map(password_name).collect::<Vec<String>>();
             vec.sort();
             return vec;
         }
@@ -406,6 +411,41 @@ mod tests
             assert_eq!(list_passwords(&passwords, "www.example.org", "*a*"), vec!["blabber"]);
             assert_eq!(list_passwords(&passwords, "example.info", "t*t"), vec!["test"]);
             assert_eq!(list_passwords(&passwords, "www.example.info", "t*t"), vec!["test"]);
+        }
+
+        #[test]
+        fn query_passwords()
+        {
+            let io = MemoryIO::new(&default_data());
+            let mut passwords = Passwords::new(Storage::new(io));
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+
+            assert!(passwords.has("example.com", "blubber", "").expect("Check should succeed"));
+            assert_eq!(passwords.get("example.com", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
+            assert!(passwords.has("www.example.com", "blubber", "").expect("Check should succeed"));
+            assert_eq!(passwords.get("www.example.com", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
+            assert!(passwords.has("example.org", "blubber", "").expect("Check should succeed"));
+            assert_eq!(passwords.get("example.org", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
+            assert!(passwords.has("www.example.org", "blubber", "").expect("Check should succeed"));
+            assert_eq!(passwords.get("www.example.org", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
+
+            assert!(passwords.has("example.com", "blabber", "2").expect("Check should succeed"));
+            assert_eq!(passwords.get("example.com", "blabber", "2").expect("Retrieval should succeed"), "asdf");
+            assert!(passwords.has("www.example.com", "blabber", "2").expect("Check should succeed"));
+            assert_eq!(passwords.get("www.example.com", "blabber", "2").expect("Retrieval should succeed"), "asdf");
+            assert!(passwords.has("example.org", "blabber", "2").expect("Check should succeed"));
+            assert_eq!(passwords.get("example.org", "blabber", "2").expect("Retrieval should succeed"), "asdf");
+            assert!(passwords.has("www.example.org", "blabber", "2").expect("Check should succeed"));
+            assert_eq!(passwords.get("www.example.org", "blabber", "2").expect("Retrieval should succeed"), "asdf");
+
+            assert!(passwords.has("example.info", "test", "yet another").expect("Check should succeed"));
+            assert_eq!(passwords.get("example.info", "test", "yet another").expect("Retrieval should succeed"), "rjtfxqf4");
+            assert!(passwords.has("www.example.info", "test", "yet another").expect("Check should succeed"));
+            assert_eq!(passwords.get("www.example.info", "test", "yet another").expect("Retrieval should succeed"), "rjtfxqf4");
+            assert!(!passwords.has("example.info", "blubber", "").expect("Check should succeed"));
+            assert!(matches!(passwords.get("example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
+            assert!(!passwords.has("www.example.info", "blubber", "").expect("Check should succeed"));
+            assert!(matches!(passwords.get("www.example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
         }
     }
 }
