@@ -86,6 +86,17 @@ enum Commands
         #[clap(short = 'f', long)]
         force: bool,
     },
+    /// Removes a password from the storage
+    Remove
+    {
+        /// Website name to generate password for
+        domain: String,
+        /// User name associated with the account
+        name: String,
+        /// Password revision
+        #[clap(short = 'r', long, default_value = "1")]
+        revision: String,
+    },
     /// Retrieves a password
     Password
     {
@@ -121,6 +132,12 @@ enum Commands
         /// Website name the domain should be equivalent to
         alias: String,
     },
+    /// Makes a website no longer be an alias
+    RemoveAlias
+    {
+        /// Website name that is an alias
+        domain: String,
+    },
 }
 
 impl fmt::Display for Error
@@ -150,7 +167,7 @@ impl fmt::Display for Error
             Error::PasswordMissingLength => write!(f, "Corrupt data, missing password length."),
             Error::PasswordMissingValue => write!(f, "Corrupt data, missing password value."),
             Error::SiteMissingName => write!(f, "Corrupt data, missing site name."),
-            Error::NoSuchAlias => write!(f, "Site isn't aliased."),
+            Error::NoSuchAlias => write!(f, "Site is not an alias."),
             Error::AliasToSelf => write!(f, "Cannot make a site an alias for itself."),
             Error::SiteHasPasswords => write!(f, "Site has passwords, remove before making it an alias."),
         }
@@ -333,6 +350,14 @@ fn main()
             println!("Password added.");
         }
 
+        Commands::Remove {domain, name, revision} =>
+        {
+            ensure_unlocked_passwords(&mut passwords);
+
+            passwords.remove(domain, name, revision).handle_error();
+            println!("Password removed.");
+        }
+
         Commands::Password {domain, name, revision} =>
         {
             ensure_unlocked_passwords(&mut passwords);
@@ -399,13 +424,20 @@ fn main()
             }
         }
 
-
         Commands::SetAlias {domain, alias} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
             passwords.set_alias(&domain, &alias).handle_error();
             println!("Alias added.");
+        }
+
+        Commands::RemoveAlias {domain} =>
+        {
+            ensure_unlocked_passwords(&mut passwords);
+
+            passwords.remove_alias(&domain).handle_error();
+            println!("Alias removed.");
         }
     }
 }

@@ -103,6 +103,16 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         return self.storage.flush();
     }
 
+    pub fn remove_alias(&mut self, site: &str) -> Result<(), Error>
+    {
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
+
+        let site_normalized = self.storage.normalize_site(site);
+        self.storage.remove_alias(&site_normalized, hmac_secret, key)?;
+        return self.storage.flush();
+    }
+
     pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
@@ -168,6 +178,16 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
                 return Ok(password.password().to_string());
             }
         }
+    }
+
+    pub fn remove(&mut self, site: &str, name: &str, revision: &str) -> Result<(), Error>
+    {
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
+
+        let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
+        self.storage.remove_password(&PasswordId::new(&site_resolved, name, revision), hmac_secret)?;
+        return self.storage.flush();
     }
 
     pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = Password> + '_
@@ -449,7 +469,7 @@ mod tests
         }
     }
 
-    mod write
+    mod addition
     {
         use super::*;
 
@@ -478,6 +498,30 @@ mod tests
 
             assert_eq!(passwords.get("example.info", "test", "yet another").expect("Retrieval should succeed"), "rjtfxqf4");
             assert!(matches!(passwords.get("example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
+        }
+    }
+
+    mod removal
+    {
+        use super::*;
+
+        #[test]
+        fn remove_passwords()
+        {
+            let io = MemoryIO::new(&default_data());
+            let mut passwords = Passwords::new(Storage::new(io));
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+
+            assert!(matches!(passwords.remove_alias("example.net").expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));
+            passwords.remove("www.example.org", "blubber", "").expect("Removing password should succeed");
+            passwords.remove_alias("www.example.org").expect("Removing alias should succeed");
+            assert!(matches!(passwords.remove("example.org", "blabber", "2").expect_err("Removing password should fail"), Error::KeyMissing { .. }));
+            passwords.remove("example.com", "blabber", "2").expect("Removing password should succeed");
+            passwords.remove("example.info", "test", "yet another").expect("Removing password should succeed");
+            assert!(matches!(passwords.remove("example.info", "test", "yet another").expect_err("Removing password should fail"), Error::KeyMissing { .. }));
+
+            assert_eq!(passwords.list("example.com", "*").count(), 0);
+            assert_eq!(passwords.list("example.info", "*").count(), 0);
         }
     }
 }

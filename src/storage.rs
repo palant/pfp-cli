@@ -177,6 +177,13 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         return Ok(());
     }
 
+    fn remove(&mut self, key: &str) -> Result<(), Error>
+    {
+        let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
+        data.remove(key).ok_or(Error::KeyMissing)?;
+        return Ok(());
+    }
+
     pub fn get_salt(&self) -> Result<Vec<u8>, Error>
     {
         let encoded = self.salt.as_ref().ok_or(Error::StorageNotInitialized)?;
@@ -274,6 +281,17 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         return self.set(&key, &site, encryption_key);
     }
 
+    pub fn remove_alias(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
+    {
+        let key = self.get_site_key(site, hmac_secret);
+        let site: Site = self.get(&key, encryption_key).or(Err(Error::NoSuchAlias))?;
+        if site.alias().is_none()
+        {
+            return Err(Error::NoSuchAlias);
+        }
+        return self.remove(&key);
+    }
+
     pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> Result<bool, Error>
     {
         let key = self.get_password_key(id, hmac_secret);
@@ -296,6 +314,12 @@ impl<IO: storage_io::StorageIO> Storage<IO>
     {
         let key = self.get_password_key(id, hmac_secret);
         return self.get(&key, encryption_key);
+    }
+
+    pub fn remove_password(&mut self, id: &PasswordId, hmac_secret: &[u8]) -> Result<(), Error>
+    {
+        let key = self.get_password_key(id, hmac_secret);
+        return self.remove(&key);
     }
 
     pub fn list_passwords<'a>(&'a self, site: &str, hmac_secret: &[u8], encryption_key: &'a [u8]) -> impl Iterator<Item = Password> + 'a
@@ -378,6 +402,26 @@ mod tests
                     "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zZR19XieMvG7iyiBd+3hskJEGasgJAueBp0cngww8j0ruPmOiqFSkDcdc0",
             },
         });
+    }
+
+    fn parse_storage_data(data: &str) -> json::JsonValue
+    {
+        let mut obj = json::parse(data).expect("Should be valid JSON");
+        for (key, value) in obj["data"].entries_mut()
+        {
+            if key.starts_with("site:")
+            {
+                let str = value.as_str().expect("Value should be a string");
+                let decrypted = crypto::decrypt_data(&str, ENCRYPTION_KEY).expect("Value should be decryptable");
+                *value = json::parse(&decrypted).expect("Should be valid JSON");
+            }
+        }
+        return obj;
+    }
+
+    fn compare_storage_data(data1: &str, data2: &str)
+    {
+        assert_eq!(parse_storage_data(data1), parse_storage_data(data2));
     }
 
     mod initialization
@@ -684,29 +728,9 @@ mod tests
         }
     }
 
-    mod write
+    mod addition
     {
         use super::*;
-
-        fn parse_storage_data(data: &str) -> json::JsonValue
-        {
-            let mut obj = json::parse(data).expect("Should be valid JSON");
-            for (key, value) in obj["data"].entries_mut()
-            {
-                if key.starts_with("site:")
-                {
-                    let str = value.as_str().expect("Value should be a string");
-                    let decrypted = crypto::decrypt_data(&str, ENCRYPTION_KEY).expect("Value should be decryptable");
-                    *value = json::parse(&decrypted).expect("Should be valid JSON");
-                }
-            }
-            return obj;
-        }
-
-        fn compare_storage_data(data1: &str, data2: &str)
-        {
-            assert_eq!(parse_storage_data(data1), parse_storage_data(data2));
-        }
 
         #[test]
         fn add_passwords()
@@ -758,6 +782,34 @@ mod tests
             storage.flush().expect("Flush should succeed");
 
             compare_storage_data(&storage.io.load().unwrap(), &default_data());
+        }
+    }
+
+    mod removal
+    {
+        use super::*;
+
+        #[test]
+        fn remove_passwords()
+        {
+            let io = MemoryIO::new(&default_data());
+            let mut storage = Storage::new(io);
+
+            assert!(matches!(storage.remove_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));
+            assert!(matches!(storage.remove_alias("example.net", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));
+            assert!(matches!(storage.remove_password(&PasswordId::new("example.info", "blubber", ""), HMAC_SECRET).expect_err("Removing password should fail"), Error::KeyMissing { .. }));
+
+            storage.remove_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET).expect("Removing password should succeed");
+            storage.remove_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET).expect("Removing password should succeed");
+            storage.remove_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET).expect("Removing password should succeed");
+            storage.remove_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Removing alias should succeed");
+
+            storage.remove(&storage.get_site_key("example.com", HMAC_SECRET)).expect("Removing site entry should succeed");
+            storage.remove(&storage.get_site_key("example.info", HMAC_SECRET)).expect("Removing site entry should succeed");
+
+            storage.flush().expect("Flush should succeed");
+
+            compare_storage_data(&storage.io.load().unwrap(), &empty_data());
         }
     }
 }
