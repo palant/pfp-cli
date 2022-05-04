@@ -55,9 +55,9 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     pub fn reset(&mut self, master_password: &str) -> Result<(), Error>
     {
-        let salt = rand::thread_rng().gen::<[u8; 16]>();
+        let salt = crypto::get_rng().gen::<[u8; 16]>();
         let key = get_encryption_key(master_password, &salt);
-        let hmac_secret = rand::thread_rng().gen::<[u8; 32]>();
+        let hmac_secret = crypto::get_rng().gen::<[u8; 32]>();
 
         self.storage.clear(&salt, &hmac_secret, &key);
         self.storage.flush()?;
@@ -77,6 +77,14 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.hmac_secret = Some(hmac_secret);
         self.master_password = Some(master_password.to_string());
         return Ok(());
+    }
+
+    #[allow(dead_code)]
+    pub fn lock(&mut self)
+    {
+        self.key = None;
+        self.hmac_secret = None;
+        self.master_password = None;
     }
 
     pub fn set_alias(&mut self, site: &str, alias: &str) -> Result<(), Error>
@@ -196,6 +204,8 @@ mod tests
     use storage_io::MemoryIO;
     use super::*;
 
+    const MASTER_PASSWORD: &str = "foobar";
+
     fn empty_data() -> String
     {
         return json::stringify(object!{
@@ -210,7 +220,6 @@ mod tests
 
     fn default_data() -> String
     {
-        // Master password is foobar
         return json::stringify(object!{
             "application": "pfp",
             "format": 3,
@@ -278,7 +287,52 @@ mod tests
             let mut passwords = Passwords::new(Storage::new(io));
 
             assert!(matches!(passwords.unlock("asdfyxcv").expect_err("Passwords shouldn't unlock"), Error::DecryptionFailure { .. }));
-            passwords.unlock("foobar").expect("Passwords should unlock");
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+        }
+    }
+
+    mod reset
+    {
+        use super::*;
+
+        #[test]
+        fn reset_uninitialized()
+        {
+            let io = MemoryIO::new("");
+            let mut passwords = Passwords::new(Storage::new(io));
+            passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
+
+            passwords.initialized().expect("Passwords should be initialized");
+            passwords.unlocked().expect("Passwords should be unlocked");
+            assert!(passwords.list_sites("*").next().is_none());
+
+            assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
+            assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
+
+            passwords.lock();
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
+            assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
+        }
+
+        #[test]
+        fn reset_initialized()
+        {
+            let io = MemoryIO::new(&default_data());
+            let mut passwords = Passwords::new(Storage::new(io));
+            passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
+
+            passwords.initialized().expect("Passwords should be initialized");
+            passwords.unlocked().expect("Passwords should be unlocked");
+            assert!(passwords.list_sites("*").next().is_none());
+
+            assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
+            assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
+
+            passwords.lock();
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
+            assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
         }
     }
 
@@ -309,7 +363,7 @@ mod tests
         {
             let io = MemoryIO::new(&default_data());
             let mut passwords = Passwords::new(Storage::new(io));
-            passwords.unlock("foobar").expect("Passwords should unlock");
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
             assert_eq!(list_sites(&passwords, "*"), vec!["example.com", "example.info"]);
             assert_eq!(list_sites(&passwords, "ex*"), vec!["example.com", "example.info"]);
@@ -323,7 +377,7 @@ mod tests
         {
             let io = MemoryIO::new(&default_data());
             let mut passwords = Passwords::new(Storage::new(io));
-            passwords.unlock("foobar").expect("Passwords should unlock");
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
             assert_eq!(list_passwords(&passwords, "example.com", "*"), vec!["blabber", "blubber"]);
             assert_eq!(list_passwords(&passwords, "www.example.com", "*"), vec!["blabber", "blubber"]);
