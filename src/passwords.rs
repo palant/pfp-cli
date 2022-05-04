@@ -448,4 +448,36 @@ mod tests
             assert!(matches!(passwords.get("www.example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
         }
     }
+
+    mod write
+    {
+        use super::*;
+
+        #[test]
+        fn add_passwords()
+        {
+            let io = MemoryIO::new(&empty_data());
+            let mut passwords = Passwords::new(Storage::new(io));
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+
+            assert!(matches!(passwords.set_alias("www.example.org", "example.org").expect_err("Adding alias should fail"), Error::AliasToSelf { .. }));
+            passwords.set_alias("www.example.org", "www.example.com").expect("Adding alias should succeed");
+            assert!(matches!(passwords.set_alias("www.example.com", "example.org").expect_err("Adding alias should fail"), Error::AliasToSelf { .. }));
+
+            passwords.set_generated("example.com", "blubber", "", 16, crypto::CharacterType::LOWER | crypto::CharacterType::UPPER | crypto::CharacterType::DIGIT | crypto::CharacterType::SYMBOL).expect("Adding password should succeed");
+            passwords.set_stored("example.com", "blabber", "2", "asdf").expect("Adding password should succeed");
+            passwords.set_generated("example.info", "test", "yet another", 8, crypto::CharacterType::LOWER | crypto::CharacterType::DIGIT).expect("Adding password should succeed");
+
+            assert!(matches!(passwords.set_alias("www.example.com", "example.info").expect_err("Adding alias should fail"), Error::SiteHasPasswords { .. }));
+
+            assert_eq!(passwords.get("example.com", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
+            assert_eq!(passwords.get("example.org", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
+
+            assert_eq!(passwords.get("www.example.com", "blabber", "2").expect("Retrieval should succeed"), "asdf");
+            assert_eq!(passwords.get("www.example.org", "blabber", "2").expect("Retrieval should succeed"), "asdf");
+
+            assert_eq!(passwords.get("example.info", "test", "yet another").expect("Retrieval should succeed"), "rjtfxqf4");
+            assert!(matches!(passwords.get("example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
+        }
+    }
 }
