@@ -412,7 +412,7 @@ fn main()
                     }
                     if revision != ""
                     {
-                        println!("    {} #{} ({})", name, revision, password_type);
+                        println!("    {} ({}, revision: {})", name, password_type, revision);
                     }
                     else
                     {
