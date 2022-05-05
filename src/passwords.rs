@@ -26,6 +26,11 @@ pub struct Passwords<IO>
     master_password: Option<String>,
 }
 
+fn is_pattern(value: &str) -> bool
+{
+    return value.contains('*') || value.contains('?');
+}
+
 impl<IO: storage_io::StorageIO> Passwords<IO>
 {
     pub fn new(storage: storage::Storage<IO>) -> Self
@@ -110,6 +115,21 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
         let site_normalized = self.storage.normalize_site(site);
         self.storage.remove_alias(&site_normalized, hmac_secret, key)?;
+        return self.storage.flush();
+    }
+
+    pub fn remove_sites(&mut self, sites: &[String]) -> Result<(), Error>
+    {
+        if sites.len() == 0
+        {
+            return Ok(());
+        }
+
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        for site in sites
+        {
+            self.storage.remove_site(&site, hmac_secret)?;
+        }
         return self.storage.flush();
     }
 
@@ -198,7 +218,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let matcher = wildmatch::WildMatch::new(name);
         return self.storage.list_passwords(&site_resolved, self.hmac_secret.as_ref().unwrap().as_slice(), self.key.as_ref().unwrap().as_slice()).filter(move |password|
         {
-            let name =  match password
+            let name = match password
             {
                 Password::Generated {password} => password.id().name(),
                 Password::Stored {password} => password.id().name(),
@@ -207,12 +227,26 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         });
     }
 
-    pub fn list_sites(&self, site: &str) -> impl Iterator<Item = String> + '_
+    pub fn list_sites(&self, site: &str) -> Box<dyn Iterator<Item = String> + '_>
     {
         assert!(self.unlocked().is_ok());
 
-        let matcher = wildmatch::WildMatch::new(site);
-        return self.storage.list_sites(self.key.as_ref().unwrap().as_slice()).filter(move |site| matcher.matches(&site));
+        let hmac_secret = self.hmac_secret.as_ref().unwrap();
+        let key = self.key.as_ref().unwrap();
+
+        if is_pattern(site)
+        {
+            let matcher = wildmatch::WildMatch::new(site);
+            return Box::new(self.storage.list_sites(key).filter(move |site| matcher.matches(&site)));
+        }
+        else
+        {
+            return match self.storage.get_site(site, hmac_secret, key)
+            {
+                Ok(site) => Box::new(std::iter::once(site.name().to_string())),
+                Err(_error) => Box::new(std::iter::empty()),
+            };
+        }
     }
 }
 
@@ -394,6 +428,8 @@ mod tests
             assert_eq!(list_sites(&passwords, "ex*"), vec!["example.com", "example.info"]);
             assert_eq!(list_sites(&passwords, "*.com"), vec!["example.com"]);
             assert_eq!(list_sites(&passwords, "*am*i*"), vec!["example.info"]);
+            assert_eq!(list_sites(&passwords, "example.info"), vec!["example.info"]);
+            assert_eq!(list_sites(&passwords, "example.net").len(), 0);
             assert_eq!(list_sites(&passwords, "blub*").len(), 0);
         }
 
@@ -522,6 +558,9 @@ mod tests
 
             assert_eq!(passwords.list("example.com", "*").count(), 0);
             assert_eq!(passwords.list("example.info", "*").count(), 0);
+
+            passwords.remove_sites(&["example.com".to_string(), "example.info".to_string()]).expect("Removing sites should succeed");
+            assert_eq!(passwords.list_sites("*").count(), 0);
         }
     }
 }

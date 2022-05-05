@@ -111,18 +111,12 @@ enum Commands
     /// Lists passwords for a website
     List
     {
-        /// Website name to list passwords for
+        /// Website name to list passwords for (can be a wildcard pattern)
+        #[clap(default_value = "*")]
         domain: String,
         /// User name wildcard pattern
         #[clap(default_value = "*")]
         name: String,
-    },
-    /// Lists websites that have data associated with them
-    ListSites
-    {
-        /// Website name wildcard pattern
-        #[clap(default_value = "*")]
-        domain: String,
     },
     /// Sets an alias for a website
     SetAlias
@@ -371,56 +365,63 @@ fn main()
         {
             ensure_unlocked_passwords(&mut passwords);
 
-            let mut found = false;
-            for password in passwords.list(domain, name)
-            {
-                let name;
-                let revision;
-                let password_type;
-                match password
-                {
-                    Password::Generated { password } =>
-                    {
-                        name = password.id().name().to_owned();
-                        revision = password.id().revision().to_owned();
-                        password_type = "generated";
-                    }
-                    Password::Stored { password } =>
-                    {
-                        name = password.id().name().to_owned();
-                        revision = password.id().revision().to_owned();
-                        password_type = "stored";
-                    }
-                }
-                if revision != ""
-                {
-                    println!("{} #{} ({})", name, revision, password_type);
-                }
-                else
-                {
-                    println!("{} ({})", name, password_type);
-                }
-                found = true;
-            }
-            if !found
-            {
-                println!("No matching passwords found.");
-            }
-        }
-
-        Commands::ListSites {domain} =>
-        {
-            ensure_unlocked_passwords(&mut passwords);
+            let mut empty_sites = Vec::new();
 
             let mut found = false;
             for site in passwords.list_sites(domain)
             {
-                println!("{}", site);
-                found = true;
+                let mut empty = true;
+                for password in passwords.list(&site, name)
+                {
+                    if empty
+                    {
+                        empty = false;
+                        println!("Passwords for {}:", site);
+                    }
+
+                    let name;
+                    let revision;
+                    let password_type;
+                    match password
+                    {
+                        Password::Generated { password } =>
+                        {
+                            name = password.id().name().to_owned();
+                            revision = password.id().revision().to_owned();
+                            password_type = "generated";
+                        }
+                        Password::Stored { password } =>
+                        {
+                            name = password.id().name().to_owned();
+                            revision = password.id().revision().to_owned();
+                            password_type = "stored";
+                        }
+                    }
+                    if revision != ""
+                    {
+                        println!("    {} #{} ({})", name, revision, password_type);
+                    }
+                    else
+                    {
+                        println!("    {} ({})", name, password_type);
+                    }
+                }
+
+                if empty
+                {
+                    empty_sites.push(site);
+                }
+                else
+                {
+                    found = true;
+                }
             }
+
+            passwords.remove_sites(&empty_sites).handle_error();
+
             if !found
             {
-                println!("No matching websites found.");
+                println!("No matching passwords found.");
             }
         }
 

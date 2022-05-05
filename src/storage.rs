@@ -281,6 +281,12 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         return self.set(&key, &site, encryption_key);
     }
 
+    pub fn get_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<Site, Error>
+    {
+        let key = self.get_site_key(site, hmac_secret);
+        return self.get(&key, encryption_key);
+    }
+
     pub fn remove_alias(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
         let key = self.get_site_key(site, hmac_secret);
@@ -289,6 +295,12 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         {
             return Err(Error::NoSuchAlias);
         }
+        return self.remove(&key);
+    }
+
+    pub fn remove_site(&mut self, site: &str, hmac_secret: &[u8]) -> Result<(), Error>
+    {
+        let key = self.get_site_key(site, hmac_secret);
         return self.remove(&key);
     }
 
@@ -650,6 +662,21 @@ mod tests
             let io = MemoryIO::new(&default_data());
             let storage = Storage::new(io);
 
+            let site1 = storage.get_site("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Site should be present");
+            assert_eq!(site1.to_json(), object!{
+                "site": "example.com",
+            });
+            let site2 = storage.get_site("example.info", HMAC_SECRET, ENCRYPTION_KEY).expect("Site should be present");
+            assert_eq!(site2.to_json(), object!{
+                "site": "example.info",
+            });
+            let site3 = storage.get_site("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Site should be present");
+            assert_eq!(site3.to_json(), object!{
+                "site": "example.org",
+                "alias": "example.com",
+            });
+            assert!(matches!(storage.get_site("example.net", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Site should be missing"), Error::KeyMissing { .. }));
+
             assert!(storage.has_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET).expect("Storage should be initialized"));
             let password1 = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
             assert_eq!(password1.to_json(), object!{
@@ -804,8 +831,8 @@ mod tests
             storage.remove_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET).expect("Removing password should succeed");
             storage.remove_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Removing alias should succeed");
 
-            storage.remove(&storage.get_site_key("example.com", HMAC_SECRET)).expect("Removing site entry should succeed");
-            storage.remove(&storage.get_site_key("example.info", HMAC_SECRET)).expect("Removing site entry should succeed");
+            storage.remove_site("example.com", HMAC_SECRET).expect("Removing site should succeed");
+            storage.remove_site("example.info", HMAC_SECRET).expect("Removing site should succeed");
 
             storage.flush().expect("Flush should succeed");
 
