@@ -117,6 +117,9 @@ enum Commands
         /// User name wildcard pattern
         #[clap(default_value = "*")]
         name: String,
+        /// Show password values (can be slow)
+        #[clap(short = 's', long)]
+        show: bool,
         /// Show site aliases and password generation parameters
         #[clap(short = 'v', long)]
         verbose: bool,
@@ -377,7 +380,7 @@ fn main()
             println!("{}", password);
         }
 
-        Commands::List {domain, name, verbose} =>
+        Commands::List {domain, name, show, verbose} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
@@ -448,6 +451,11 @@ fn main()
                     else
                     {
                         println!("    {} ({})", name, password_type);
+                    }
+
+                    if *show
+                    {
+                        println!("        {}", passwords.get(site.name(), &name, &revision).handle_error());
                     }
 
                     if *verbose
