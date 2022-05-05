@@ -54,7 +54,7 @@ pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
 pub fn derive_password(master_password: &str, salt: &str, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
 {
     let bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
-    return to_password(bytes.as_slice(), charset);
+    return to_password(&bytes, charset);
 }
 
 fn to_password(bytes: &[u8], charset: enumset::EnumSet<CharacterType>) -> String

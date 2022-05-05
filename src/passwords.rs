@@ -130,8 +130,8 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Result<(), Error>
     {
-        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
-        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         self.storage.ensure_site_data(&site_resolved, hmac_secret, key)?;
@@ -145,8 +145,8 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     pub fn set_stored(&mut self, site: &str, name: &str, revision: &str, password: &str) -> Result<(), Error>
     {
-        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
-        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         self.storage.ensure_site_data(&site_resolved, hmac_secret, key)?;
@@ -160,8 +160,8 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     pub fn has(&self, site: &str, name: &str, revision: &str) -> Result<bool, Error>
     {
-        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
-        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         return self.storage.has_password(
@@ -172,8 +172,8 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     pub fn get(&self, site: &str, name: &str, revision: &str) -> Result<String, Error>
     {
-        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
-        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?.as_slice();
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
         let master_password = self.master_password.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
@@ -209,9 +209,9 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     {
         assert!(self.unlocked().is_ok());
 
-        let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref().unwrap().as_slice(), self.key.as_ref().unwrap().as_slice());
+        let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap());
         let matcher = wildmatch::WildMatch::new(name);
-        return self.storage.list_passwords(&site_resolved, self.hmac_secret.as_ref().unwrap().as_slice(), self.key.as_ref().unwrap().as_slice()).filter(move |password|
+        return self.storage.list_passwords(&site_resolved, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap()).filter(move |password|
         {
             let name = match password
             {
