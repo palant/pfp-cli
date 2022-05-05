@@ -97,8 +97,8 @@ enum Commands
         #[clap(short = 'r', long, default_value = "1")]
         revision: String,
     },
-    /// Retrieves a password
-    Password
+    /// Retrieves a password and displays it
+    Show
     {
         /// Website name to generate password for
         domain: String,
@@ -365,7 +365,7 @@ fn main()
             println!("Password removed.");
         }
 
-        Commands::Password {domain, name, revision} =>
+        Commands::Show {domain, name, revision} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
