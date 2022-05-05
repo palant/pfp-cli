@@ -37,6 +37,10 @@ const CHARS_MAPPING: [(CharacterType, &[u8]); 4] = [
     (CharacterType::SYMBOL, CHARS_SYMBOL),
 ];
 
+// Our Base32 variant follows RFC 4648 but uses a custom alphabet to remove
+// ambiguous characters: 0, 1, O, I.
+pub const BASE32_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
 pub fn new_charset() -> enumset::EnumSet<CharacterType>
 {
     return enumset::EnumSet::empty();
@@ -137,4 +141,51 @@ pub fn get_digest(hmac_secret: &[u8], data: &str) -> String
     mac.update(data.as_bytes());
     let result = mac.finalize().into_bytes();
     return base64::encode(result);
+}
+
+pub fn base32_encode(input: &[u8]) -> Vec<u8>
+{
+    let mut encoded = Vec::with_capacity((input.len() + 3) / 4 * 5);
+
+    for chunk in input.chunks(5)
+    {
+        let extended =
+        {
+            let mut result = [0u8; 5];
+            result[..chunk.len()].copy_from_slice(chunk);
+            result
+        };
+
+        encoded.push(BASE32_ALPHABET[(extended[0] >> 3) as usize]);
+        encoded.push(BASE32_ALPHABET[((extended[0] & 0x07) << 2 | extended[1] >> 6) as usize]);
+        encoded.push(BASE32_ALPHABET[(extended[1] >> 1 & 0x1F) as usize]);
+        encoded.push(BASE32_ALPHABET[((extended[1] & 0x01) << 4 | extended[2] >> 4) as usize]);
+        encoded.push(BASE32_ALPHABET[((extended[2] & 0x0F) << 1 | extended[3] >> 7) as usize]);
+        encoded.push(BASE32_ALPHABET[(extended[3] >> 2 & 0x1F) as usize]);
+        encoded.push(BASE32_ALPHABET[((extended[3] & 0x03) << 3 | extended[4] >> 5) as usize]);
+        encoded.push(BASE32_ALPHABET[(extended[4] & 0x1F) as usize]);
+    }
+    return encoded;
+}
+
+pub fn pearson_hash(input: &[u8], virtual_byte: u8) -> u8
+{
+    static PERMUTATIONS: [u8; 256] =
+    {
+        let mut array = [0u8; 256];
+        let mut i = 0;
+        while i < array.len()
+        {
+            array[i] = ((i + 379) * 467) as u8;
+            i += 1;
+        }
+        array
+    };
+
+    let mut hash = PERMUTATIONS[virtual_byte as usize];
+    for byte in input
+    {
+        hash = PERMUTATIONS[(hash ^ byte) as usize];
+    }
+    return hash;
 }

@@ -7,6 +7,7 @@
 mod crypto;
 mod error;
 mod passwords;
+mod recovery_codes;
 mod storage;
 mod storage_io;
 mod storage_types;
@@ -120,6 +121,9 @@ enum Commands
         /// Show password values (can be slow)
         #[clap(short = 's', long)]
         show: bool,
+        /// Show recovery codes for stored passwords
+        #[clap(short = 'r', long)]
+        recovery: bool,
         /// Show site aliases and password generation parameters
         #[clap(short = 'v', long)]
         verbose: bool,
@@ -380,7 +384,7 @@ fn main()
             println!("{}", password);
         }
 
-        Commands::List {domain, name, show, verbose} =>
+        Commands::List {domain, name, show, recovery, verbose} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
@@ -458,9 +462,21 @@ fn main()
                         println!("        {}", passwords.get(site.name(), &name, &revision).handle_error());
                     }
 
+                    if *recovery
+                    {
+                        if let Password::Stored { password } = &password
+                        {
+                            println!("        Recovery code:");
+                            for line in passwords.get_recovery_code(&password).handle_error().split("\n")
+                            {
+                                println!("        {}", line);
+                            }
+                        }
+                    }
+
                     if *verbose
                     {
-                        if let Password::Generated { password } = password
+                        if let Password::Generated { password } = &password
                         {
                             println!("        Length: {}", password.length());
 

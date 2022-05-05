@@ -7,6 +7,7 @@
 use rand::Rng;
 use super::crypto;
 use super::error::Error;
+use super::recovery_codes;
 use super::storage;
 use super::storage_io;
 use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
@@ -193,6 +194,13 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
                 return Ok(password.password().to_string());
             }
         }
+    }
+
+    pub fn get_recovery_code(&self, password: &StoredPassword) -> Result<String, Error>
+    {
+        let salt = self.storage.get_salt()?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
+        return recovery_codes::generate(password.password(), &salt, key);
     }
 
     pub fn remove(&mut self, site: &str, name: &str, revision: &str) -> Result<(), Error>
