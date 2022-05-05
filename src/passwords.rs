@@ -221,12 +221,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let matcher = wildmatch::WildMatch::new(name);
         return self.storage.list_passwords(&site_resolved, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap()).filter(move |password|
         {
-            let name = match password
-            {
-                Password::Generated {password} => password.id().name(),
-                Password::Stored {password} => password.id().name(),
-            };
-            return matcher.matches(name);
+            return matcher.matches(password.id().name());
         });
     }
 
@@ -310,11 +305,7 @@ mod tests
 
     fn password_name(password: Password) -> String
     {
-        return match password
-        {
-            Password::Generated {password} => password.id().name().to_string(),
-            Password::Stored {password} => password.id().name().to_string(),
-        };
+        return password.id().name().to_string();
     }
 
     mod initialization

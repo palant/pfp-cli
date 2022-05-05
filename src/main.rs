@@ -414,37 +414,40 @@ fn main()
             let mut found = false;
             for site in sites
             {
-                let mut empty = true;
-                for password in passwords.list(site.name(), name)
+                let mut list = passwords.list(site.name(), name).collect::<Vec<Password>>();
+                if list.len() == 0
                 {
-                    if empty
+                    if name == "*"
                     {
-                        empty = false;
-                        println!("Passwords for {}:", site.name());
-                        if *verbose
-                        {
-                            if let Some(aliased) = aliases.get(site.name())
-                            {
-                                println!("    Aliases: {}", aliased.join(", "));
-                            }
-                        }
+                        empty_sites.push(site.name().to_string());
                     }
+                    continue;
+                }
 
-                    let name;
-                    let revision;
+                found = true;
+                println!("Passwords for {}:", site.name());
+                if *verbose
+                {
+                    if let Some(aliased) = aliases.get(site.name())
+                    {
+                        println!("    Aliases: {}", aliased.join(", "));
+                    }
+                }
+
+                list.sort_by_key(|password| password.id().name().to_string() + " " + password.id().revision());
+                for password in list
+                {
+                    let name = password.id().name().to_owned();
+                    let revision = password.id().revision().to_owned();
                     let password_type;
                     match &password
                     {
-                        Password::Generated { password } =>
+                        Password::Generated { .. } =>
                         {
-                            name = password.id().name().to_owned();
-                            revision = password.id().revision().to_owned();
                             password_type = "generated";
                         }
-                        Password::Stored { password } =>
+                        Password::Stored { .. } =>
                         {
-                            name = password.id().name().to_owned();
-                            revision = password.id().revision().to_owned();
                             password_type = "stored";
                         }
                     }
@@ -500,15 +503,6 @@ fn main()
                             println!("        Allowed characters: {}", chars.join(" "));
                         }
                     }
-                }
-
-                if empty && name == "*"
-                {
-                    empty_sites.push(site.name().to_string());
-                }
-                else
-                {
-                    found = true;
                 }
             }
 

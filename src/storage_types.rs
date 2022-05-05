@@ -237,6 +237,18 @@ pub enum Password
     },
 }
 
+impl Password
+{
+    pub fn id(&self) -> &PasswordId
+    {
+        return match self
+        {
+            Self::Generated { password } => password.id(),
+            Self::Stored { password } => password.id(),
+        };
+    }
+}
+
 impl FromJson for Password
 {
     fn from_json(value: &json::object::Object) -> Result<Self, Error>
