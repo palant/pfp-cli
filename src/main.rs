@@ -18,7 +18,7 @@ use rpassword;
 use std::fmt;
 use std::path;
 use std::process;
-use storage_types::{Password};
+use storage_types::{Password, Site};
 use error::Error;
 
 /// PfP: Pain-free Passwords, command line edition
@@ -117,6 +117,9 @@ enum Commands
         /// User name wildcard pattern
         #[clap(default_value = "*")]
         name: String,
+        /// Show site aliases and password generation parameters
+        #[clap(short = 'v', long)]
+        verbose: bool,
     },
     /// Sets an alias for a website
     SetAlias
@@ -374,20 +377,36 @@ fn main()
             println!("{}", password);
         }
 
-        Commands::List {domain, name} =>
+        Commands::List {domain, name, verbose} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
             let mut empty_sites = Vec::new();
 
-            let mut found = false;
-            for site in passwords.list_sites(domain)
-            {
-                if site.alias().is_some()
-                {
-                    continue;
-                }
+            let mut sites = passwords.list_sites(domain).collect::<Vec<Site>>();
+            sites.sort_by_key(|site| site.name().to_owned());
 
+            let mut aliases = std::collections::HashMap::new();
+            sites.retain(|site|
+            {
+                match site.alias()
+                {
+                    Some(alias) =>
+                    {
+                        if !aliases.contains_key(alias)
+                        {
+                            aliases.insert(alias.to_owned(), Vec::new());
+                        }
+                        aliases.get_mut(alias).unwrap().push(site.name().to_string());
+                        return false;
+                    },
+                    None => return true,
+                };
+            });
+
+            let mut found = false;
+            for site in sites
+            {
                 let mut empty = true;
                 for password in passwords.list(site.name(), name)
                 {
@@ -395,12 +414,19 @@ fn main()
                     {
                         empty = false;
                         println!("Passwords for {}:", site.name());
+                        if *verbose
+                        {
+                            if let Some(aliased) = aliases.get(site.name())
+                            {
+                                println!("    Aliases: {}", aliased.iter().fold(String::new(), |acc, current| if acc.len() > 0 { acc + ", " } else { acc } + current));
+                            }
+                        }
                     }
 
                     let name;
                     let revision;
                     let password_type;
-                    match password
+                    match &password
                     {
                         Password::Generated { password } =>
                         {
@@ -423,9 +449,36 @@ fn main()
                     {
                         println!("    {} ({})", name, password_type);
                     }
+
+                    if *verbose
+                    {
+                        if let Password::Generated { password } = password
+                        {
+                            println!("        Length: {}", password.length());
+
+                            let mut chars = Vec::new();
+                            if password.charset().contains(crypto::CharacterType::LOWER)
+                            {
+                                chars.push("abc");
+                            }
+                            if password.charset().contains(crypto::CharacterType::UPPER)
+                            {
+                                chars.push("ABC");
+                            }
+                            if password.charset().contains(crypto::CharacterType::DIGIT)
+                            {
+                                chars.push("789");
+                            }
+                            if password.charset().contains(crypto::CharacterType::SYMBOL)
+                            {
+                                chars.push("+^;");
+                            }
+                            println!("        Allowed characters: {}", chars.iter().fold(String::new(), |acc, current| if acc.len() > 0 { acc + " " } else { acc } + current));
+                        }
+                    }
                 }
 
-                if empty
+                if empty && name == "*"
                 {
                     empty_sites.push(site.name().to_string());
                 }

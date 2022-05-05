@@ -239,8 +239,7 @@ impl<IO: storage_io::StorageIO> Storage<IO>
 
     pub fn get_alias(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<String, Error>
     {
-        let key = self.get_site_key(site, hmac_secret);
-        let site: Site = self.get(&key, encryption_key)?;
+        let site = self.get_site(site, hmac_secret, encryption_key)?;
         return match site.alias()
         {
             Some(value) => Ok(value.to_string()),

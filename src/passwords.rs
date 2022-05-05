@@ -26,11 +26,6 @@ pub struct Passwords<IO>
     master_password: Option<String>,
 }
 
-fn is_pattern(value: &str) -> bool
-{
-    return value.contains('*') || value.contains('?');
-}
-
 impl<IO: storage_io::StorageIO> Passwords<IO>
 {
     pub fn new(storage: storage::Storage<IO>) -> Self
@@ -227,33 +222,21 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         });
     }
 
-    pub fn list_sites(&self, site: &str) -> Box<dyn Iterator<Item = Site> + '_>
+    pub fn list_sites(&self, site: &str) -> impl Iterator<Item = Site> + '_
     {
         assert!(self.unlocked().is_ok());
 
-        let hmac_secret = self.hmac_secret.as_ref().unwrap();
         let key = self.key.as_ref().unwrap();
 
-        if is_pattern(site)
+        let matcher = wildmatch::WildMatch::new(site);
+        return self.storage.list_sites(key).filter(move |site|
         {
-            let matcher = wildmatch::WildMatch::new(site);
-            return Box::new(self.storage.list_sites(key).filter(move |site|
+            return match site.alias()
             {
-                return match site.alias()
-                {
-                    Some(alias) => matcher.matches(alias),
-                    None => false,
-                } || matcher.matches(site.name());
-            }));
-        }
-        else
-        {
-            return match self.storage.get_site(site, hmac_secret, key)
-            {
-                Ok(site) => Box::new(std::iter::once(site)),
-                Err(_error) => Box::new(std::iter::empty()),
-            };
-        }
+                Some(alias) => matcher.matches(alias),
+                None => false,
+            } || matcher.matches(site.name());
+        });
     }
 }
 
