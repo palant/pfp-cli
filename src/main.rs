@@ -68,9 +68,9 @@ enum Commands
         /// Do not include symbols
         #[clap(short = 's', long)]
         no_symbol: bool,
-        /// Overwrite existing passwords if present
-        #[clap(short = 'f', long)]
-        force: bool,
+        /// Do not prompt before overwriting existing passwords
+        #[clap(short = 'y', long)]
+        assume_yes: bool
     },
     /// Stores a verbatim password in the storage
     AddStored
@@ -82,9 +82,9 @@ enum Commands
         /// Password revision
         #[clap(short = 'r', long, default_value = "1")]
         revision: String,
-        /// Overwrite existing passwords if present
-        #[clap(short = 'f', long)]
-        force: bool,
+        /// Do not prompt before overwriting existing passwords
+        #[clap(short = 'y', long)]
+        assume_yes: bool
     },
     /// Removes a password from the storage
     Remove
@@ -293,7 +293,7 @@ fn main()
             println!("New master password set for {}.", storage_path.to_string_lossy());
         }
 
-        Commands::Add {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol, force} =>
+        Commands::Add {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol, assume_yes} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
@@ -320,24 +320,36 @@ fn main()
                 process::exit(1);
             }
 
-            if !force && passwords.has(domain, name, revision).unwrap_or(false)
+            if !assume_yes && passwords.has(domain, name, revision).unwrap_or(false)
             {
-                eprintln!("A password with this domain/name/revision combination already exists. Specify a different revision or use --force flag to overwrite.");
-                process::exit(1);
+                let allow = question::Question::new("A password with this domain/name/revision combination already exists. Overwrite?")
+                        .default(question::Answer::NO)
+                        .show_defaults()
+                        .confirm();
+                if allow == question::Answer::NO
+                {
+                    process::exit(0);
+                }
             }
 
             passwords.set_generated(domain, name, revision, *length, charset).handle_error();
             println!("Password added.");
         }
 
-        Commands::AddStored {domain, name, revision, force} =>
+        Commands::AddStored {domain, name, revision, assume_yes} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
-            if !force && passwords.has(domain, name, revision).unwrap_or(false)
+            if !assume_yes && passwords.has(domain, name, revision).unwrap_or(false)
             {
-                eprintln!("A password with this domain/name/revision combination already exists. Specify a different revision or use --force flag to overwrite.");
-                process::exit(1);
+                let allow = question::Question::new("A password with this domain/name/revision combination already exists. Overwrite?")
+                        .default(question::Answer::NO)
+                        .show_defaults()
+                        .confirm();
+                if allow == question::Answer::NO
+                {
+                    process::exit(0);
+                }
             }
 
             let password = rpassword::prompt_password("Password to be stored: ").unwrap();
