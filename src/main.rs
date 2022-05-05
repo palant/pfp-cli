@@ -267,6 +267,7 @@ fn main()
             {
                 let allow = question::Question::new("Changing master password will remove all existing data. Continue?")
                         .default(question::Answer::NO)
+                        .show_defaults()
                         .confirm();
                 if allow == question::Answer::NO
                 {
