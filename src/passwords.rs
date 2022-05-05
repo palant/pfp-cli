@@ -9,7 +9,7 @@ use super::crypto;
 use super::error::Error;
 use super::storage;
 use super::storage_io;
-use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password};
+use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
 
 fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
@@ -227,7 +227,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         });
     }
 
-    pub fn list_sites(&self, site: &str) -> Box<dyn Iterator<Item = String> + '_>
+    pub fn list_sites(&self, site: &str) -> Box<dyn Iterator<Item = Site> + '_>
     {
         assert!(self.unlocked().is_ok());
 
@@ -237,13 +237,20 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         if is_pattern(site)
         {
             let matcher = wildmatch::WildMatch::new(site);
-            return Box::new(self.storage.list_sites(key).filter(move |site| matcher.matches(&site)));
+            return Box::new(self.storage.list_sites(key).filter(move |site|
+            {
+                return match site.alias()
+                {
+                    Some(alias) => matcher.matches(alias),
+                    None => false,
+                } || matcher.matches(site.name());
+            }));
         }
         else
         {
             return match self.storage.get_site(site, hmac_secret, key)
             {
-                Ok(site) => Box::new(std::iter::once(site.name().to_string())),
+                Ok(site) => Box::new(std::iter::once(site)),
                 Err(_error) => Box::new(std::iter::empty()),
             };
         }
@@ -367,7 +374,7 @@ mod tests
 
             passwords.initialized().expect("Passwords should be initialized");
             passwords.unlocked().expect("Passwords should be unlocked");
-            assert!(passwords.list_sites("*").next().is_none());
+            assert_eq!(passwords.list_sites("*").count(), 0);
 
             assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
             assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
@@ -387,7 +394,7 @@ mod tests
 
             passwords.initialized().expect("Passwords should be initialized");
             passwords.unlocked().expect("Passwords should be unlocked");
-            assert!(passwords.list_sites("*").next().is_none());
+            assert_eq!(passwords.list_sites("*").count(), 0);
 
             assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
             assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
@@ -405,7 +412,7 @@ mod tests
 
         fn list_sites(passwords: &Passwords<MemoryIO>, site: &str) -> Vec<String>
         {
-            let mut vec = passwords.list_sites(site).collect::<Vec<String>>();
+            let mut vec = passwords.list_sites(site).map(|site| site.name().to_string()).collect::<Vec<String>>();
             vec.sort();
             return vec;
         }
@@ -424,9 +431,9 @@ mod tests
             let mut passwords = Passwords::new(Storage::new(io));
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
-            assert_eq!(list_sites(&passwords, "*"), vec!["example.com", "example.info"]);
-            assert_eq!(list_sites(&passwords, "ex*"), vec!["example.com", "example.info"]);
-            assert_eq!(list_sites(&passwords, "*.com"), vec!["example.com"]);
+            assert_eq!(list_sites(&passwords, "*"), vec!["example.com", "example.info", "example.org"]);
+            assert_eq!(list_sites(&passwords, "ex*"), vec!["example.com", "example.info", "example.org"]);
+            assert_eq!(list_sites(&passwords, "*.com"), vec!["example.com", "example.org"]);
             assert_eq!(list_sites(&passwords, "*am*i*"), vec!["example.info"]);
             assert_eq!(list_sites(&passwords, "example.info"), vec!["example.info"]);
             assert_eq!(list_sites(&passwords, "example.net").len(), 0);

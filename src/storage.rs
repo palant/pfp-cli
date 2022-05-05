@@ -344,14 +344,12 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         } else { None });
     }
 
-    pub fn list_sites<'a>(&'a self, encryption_key: &'a [u8]) -> impl Iterator<Item = String> + 'a
+    pub fn list_sites<'a>(&'a self, encryption_key: &'a [u8]) -> impl Iterator<Item = Site> + 'a
     {
         let data = self.data.as_ref().unwrap();
         return data.keys().filter_map(move |key| if key.find(":").is_none()
         {
-            let site: Site = self.get(key, encryption_key).ok()?;
-            site.alias().xor(Some(""))?;
-            Some(site.name().to_string())
+            self.get(key, encryption_key).ok()
         } else { None })
     }
 }
@@ -592,7 +590,7 @@ mod tests
 
         fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String>
         {
-            let mut vec = storage.list_sites(ENCRYPTION_KEY).collect::<Vec<String>>();
+            let mut vec = storage.list_sites(ENCRYPTION_KEY).map(|site| site.name().to_string()).collect::<Vec<String>>();
             vec.sort();
             return vec;
         }
@@ -619,7 +617,7 @@ mod tests
         {
             let io = MemoryIO::new(&default_data());
             let storage = Storage::new(io);
-            assert_eq!(list_sites(&storage), vec!["example.com", "example.info"]);
+            assert_eq!(list_sites(&storage), vec!["example.com", "example.info", "example.org"]);
 
             let password1 = object!{
                 "type": "stored",

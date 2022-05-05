@@ -383,13 +383,18 @@ fn main()
             let mut found = false;
             for site in passwords.list_sites(domain)
             {
+                if site.alias().is_some()
+                {
+                    continue;
+                }
+
                 let mut empty = true;
-                for password in passwords.list(&site, name)
+                for password in passwords.list(site.name(), name)
                 {
                     if empty
                     {
                         empty = false;
-                        println!("Passwords for {}:", site);
+                        println!("Passwords for {}:", site.name());
                     }
 
                     let name;
@@ -422,7 +427,7 @@ fn main()
 
                 if empty
                 {
-                    empty_sites.push(site);
+                    empty_sites.push(site.name().to_string());
                 }
                 else
                 {
