@@ -430,7 +430,7 @@ fn main()
                 {
                     if let Some(aliased) = aliases.get(site.name())
                     {
-                        println!("    Aliases: {}", aliased.join(", "));
+                        println!("    Aliases: {}", aliased.join(",\n             "));
                     }
                 }
 
