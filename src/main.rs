@@ -425,7 +425,7 @@ fn main()
                         {
                             if let Some(aliased) = aliases.get(site.name())
                             {
-                                println!("    Aliases: {}", aliased.iter().fold(String::new(), |acc, current| if acc.len() > 0 { acc + ", " } else { acc } + current));
+                                println!("    Aliases: {}", aliased.join(", "));
                             }
                         }
                     }
@@ -497,7 +497,7 @@ fn main()
                             {
                                 chars.push("+^;");
                             }
-                            println!("        Allowed characters: {}", chars.iter().fold(String::new(), |acc, current| if acc.len() > 0 { acc + " " } else { acc } + current));
+                            println!("        Allowed characters: {}", chars.join(" "));
                         }
                     }
                 }
