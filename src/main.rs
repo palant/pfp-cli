@@ -44,7 +44,7 @@ enum Commands
         assume_yes: bool
     },
     /// Adds a generated password to the storage
-    AddGenerated
+    Add
     {
         /// Website name to generate password for
         domain: String,
@@ -292,7 +292,7 @@ fn main()
             println!("New master password set for {}.", storage_path.to_string_lossy());
         }
 
-        Commands::AddGenerated {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol, force} =>
+        Commands::Add {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol, force} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
