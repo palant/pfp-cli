@@ -195,13 +195,23 @@ mod tests
 {
     use super::*;
 
+    fn encode(value: &str) -> String
+    {
+        let bytes = value.chars()
+                         .collect::<Vec<char>>()
+                         .chunks(2)
+                         .map(|chunk| u8::from_str_radix(&chunk.iter().collect::<String>(), 16).expect("Should be a valid hex string"))
+                         .collect::<Vec<u8>>();
+        return String::from_utf8(base32_encode(&bytes)).expect("Base32 result should decode to UTF-8");
+    }
+
     #[test]
     fn base32()
     {
-        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\x00\x00\x00\x00\x00")), "AAAAAAAA");
-        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\x08\x42\x10\x84\x21")), "BBBBBBBB");
-        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\xff\xff\xff\xff\xff")), "99999999");
-        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff")), "AAAAAAAA99999999");
-        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\x00\x44\x32\x14\xC7\x42\x54\xB6\x35\xCF\x84\x65\x3A\x56\xD7\xC6\x75\xBE\x77\xDF")), "ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
+        assert_eq!(encode("0000000000"), "AAAAAAAA");
+        assert_eq!(encode("0842108421"), "BBBBBBBB");
+        assert_eq!(encode("ffffffffff"), "99999999");
+        assert_eq!(encode("0000000000ffffffffff"), "AAAAAAAA99999999");
+        assert_eq!(encode("00443214C74254B635CF84653A56D7C675BE77DF"), "ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
     }
 }
