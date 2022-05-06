@@ -189,3 +189,19 @@ pub fn pearson_hash(input: &[u8], virtual_byte: u8) -> u8
     }
     return hash;
 }
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+
+    #[test]
+    fn base32()
+    {
+        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\x00\x00\x00\x00\x00")), "AAAAAAAA");
+        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\x08\x42\x10\x84\x21")), "BBBBBBBB");
+        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\xff\xff\xff\xff\xff")), "99999999");
+        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\x00\x00\x00\x00\x00\xff\xff\xff\xff\xff")), "AAAAAAAA99999999");
+        assert_eq!(String::from_utf8_lossy(&base32_encode(b"\x00\x44\x32\x14\xC7\x42\x54\xB6\x35\xCF\x84\x65\x3A\x56\xD7\xC6\x75\xBE\x77\xDF")), "ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
+    }
+}
