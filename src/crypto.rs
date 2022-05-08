@@ -121,15 +121,10 @@ pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Result<String, Error>
     let key = aes_gcm::Key::from_slice(encryption_key);
     let cipher = aes_gcm::Aes256Gcm::new(key);
 
-    let parts: Vec<&str> = value.split('_').collect();
-    if parts.len() != 2
-    {
-        return Err(Error::InvalidCiphertext);
-    }
-
-    let nonce_data = base64::decode(&parts[0]).map_err(|error| Error::InvalidBase64 { error })?;
+    let (nonce_base64, ciphertext_base64) = value.split_once('_').ok_or(Error::InvalidCiphertext)?;
+    let nonce_data = base64::decode(nonce_base64).map_err(|error| Error::InvalidBase64 { error })?;
     let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
-    let ciphertext = base64::decode(&parts[1]).map_err(|error| Error::InvalidBase64 { error })?;
+    let ciphertext = base64::decode(ciphertext_base64).map_err(|error| Error::InvalidBase64 { error })?;
     let decrypted = cipher.decrypt(nonce, ciphertext.as_slice()).or(Err(Error::DecryptionFailure))?;
     String::from_utf8(decrypted).map_err(|error| Error::InvalidUtf8 { error })
 }

@@ -30,19 +30,15 @@ pub fn generate(password: &str, salt: &[u8], encryption_key: &[u8]) -> Result<St
     }
 
     let encrypted = crypto::encrypt_data(&password_vec, encryption_key);
-    let parts: Vec<&str> = encrypted.split('_').collect();
-    if parts.len() != 2
-    {
-        return Err(Error::InvalidCiphertext);
-    }
+    let (nonce_base64, ciphertext_base64) = encrypted.split_once('_').ok_or(Error::InvalidCiphertext)?;
 
-    let nonce = base64::decode(&parts[0]).map_err(|error| Error::InvalidBase64 { error })?;
+    let nonce = base64::decode(nonce_base64).map_err(|error| Error::InvalidBase64 { error })?;
     if nonce.len() != NONCE_SIZE
     {
         return Err(Error::UnexpectedData);
     }
 
-    let ciphertext = base64::decode(&parts[1]).map_err(|error| Error::InvalidBase64 { error })?;
+    let ciphertext = base64::decode(ciphertext_base64).map_err(|error| Error::InvalidBase64 { error })?;
     if ciphertext.len() != password_vec.len() + TAG_SIZE
     {
         return Err(Error::UnexpectedData);
