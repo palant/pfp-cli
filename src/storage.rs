@@ -21,17 +21,17 @@ const STORAGE_PREFIX: &str = "site:";
 
 fn parse_json_object(input: &str) -> Result<json::object::Object, Error>
 {
-    let parsed = json::parse(input).or_else(|error| Err(Error::InvalidJson { error }))?;
-    return match parsed
+    let parsed = json::parse(input).map_err(|error| Error::InvalidJson { error })?;
+    match parsed
     {
         json::JsonValue::Object(object) => Ok(object),
         _unexpected => Err(Error::UnexpectedData),
-    };
+    }
 }
 
 fn get_json_object(obj: &mut json::object::Object, key: &str) -> Result<json::object::Object, Error>
 {
-    return match obj.remove(key).ok_or(Error::KeyMissing)?
+    match obj.remove(key).ok_or(Error::KeyMissing)?
     {
         json::JsonValue::Object(obj) => Ok(obj),
         _unexpected => Err(Error::UnexpectedData),
@@ -40,12 +40,12 @@ fn get_json_object(obj: &mut json::object::Object, key: &str) -> Result<json::ob
 
 fn get_json_string(obj: &json::object::Object, key: &str) -> Result<String, Error>
 {
-    return Ok(obj[key].as_str().ok_or(Error::UnexpectedData)?.to_string());
+    Ok(obj[key].as_str().ok_or(Error::UnexpectedData)?.to_string())
 }
 
 fn get_json_u32(obj: &json::object::Object, key: &str) -> Result<u32, Error>
 {
-    return obj[key].as_u32().ok_or(Error::UnexpectedData);
+    obj[key].as_u32().ok_or(Error::UnexpectedData)
 }
 
 fn parse_storage(io: &impl storage_io::StorageIO) -> Result<(String, String, HashMap<String, String>), Error>
@@ -65,21 +65,16 @@ fn parse_storage(io: &impl storage_io::StorageIO) -> Result<(String, String, Has
     let mut data = HashMap::new();
     for (key, value) in data_obj.iter()
     {
-        match value.as_str()
+        if let Some(str) = value.as_str()
         {
-            Some(str) =>
+            if let Some(key) = key.strip_prefix(STORAGE_PREFIX)
             {
-                match key.strip_prefix(STORAGE_PREFIX)
-                {
-                    Some(key) => { data.insert(key.to_string(), str.to_string()); },
-                    None => {},
-                }
-            },
-            None => {},
+                data.insert(key.to_string(), str.to_string());
+            }
         }
     }
 
-    return Ok((salt, hmac, data));
+    Ok((salt, hmac, data))
 }
 
 pub struct Storage<IO>
@@ -95,25 +90,23 @@ impl<IO: storage_io::StorageIO> Storage<IO>
 {
     pub fn new(io: IO) -> Self
     {
-        return match parse_storage(&io)
+        match parse_storage(&io)
         {
-            Ok((salt, hmac_secret, data)) => Self
-            {
+            Ok((salt, hmac_secret, data)) => Self {
                 error: None,
-                io: io,
+                io,
                 salt: Some(salt),
                 hmac_secret: Some(hmac_secret),
                 data: Some(data),
             },
-            Err(error) => Self
-            {
+            Err(error) => Self {
                 error: Some(error),
-                io: io,
+                io,
                 salt: None,
                 hmac_secret: None,
                 data: None,
             },
-        };
+        }
     }
 
     pub fn clear(&mut self, salt: &[u8], hmac_secret: &[u8], encryption_key: &[u8])
@@ -140,22 +133,22 @@ impl<IO: storage_io::StorageIO> Storage<IO>
             data.insert(&storage_key, val.clone().into());
         }
         root.insert(DATA_KEY, data.into());
-        return self.io.save(&json::stringify(root));
+        self.io.save(&json::stringify(root))
     }
 
     pub fn initialized(&self) -> Result<(), &Error>
     {
-        return match &self.error
+        match &self.error
         {
             Some(error) => Err(error),
             None => Ok(()),
-        };
+        }
     }
 
     fn contains(&self, key: &str) -> Result<bool, Error>
     {
         let data = self.data.as_ref().ok_or(Error::StorageNotInitialized)?;
-        return Ok(data.contains_key(key));
+        Ok(data.contains_key(key))
     }
 
     fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
@@ -165,7 +158,7 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         let value = data.get(key).ok_or(Error::KeyMissing)?;
         let decrypted = crypto::decrypt_data(value, encryption_key)?;
         let parsed = parse_json_object(&decrypted)?;
-        return T::from_json(&parsed);
+        T::from_json(&parsed)
     }
 
     fn set<T>(&mut self, key: &str, value: &T, encryption_key: &[u8]) -> Result<(), Error>
@@ -174,20 +167,20 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
         let obj = value.to_json();
         data.insert(key.to_string(), crypto::encrypt_data(obj.dump().as_bytes(), encryption_key));
-        return Ok(());
+        Ok(())
     }
 
     fn remove(&mut self, key: &str) -> Result<(), Error>
     {
         let data = self.data.as_mut().ok_or(Error::StorageNotInitialized)?;
         data.remove(key).ok_or(Error::KeyMissing)?;
-        return Ok(());
+        Ok(())
     }
 
     pub fn get_salt(&self) -> Result<Vec<u8>, Error>
     {
         let encoded = self.salt.as_ref().ok_or(Error::StorageNotInitialized)?;
-        return base64::decode(encoded.as_bytes()).or_else(|error| Err(Error::InvalidBase64 { error }));
+        base64::decode(encoded.as_bytes()).map_err(|error| Error::InvalidBase64 { error })
     }
 
     fn set_salt(&mut self, salt: &[u8])
@@ -199,9 +192,9 @@ impl<IO: storage_io::StorageIO> Storage<IO>
     {
         let ciphertext = self.hmac_secret.as_ref().ok_or(Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
-        let parsed = json::parse(&decrypted).or_else(|error| Err(Error::InvalidJson { error }))?;
+        let parsed = json::parse(&decrypted).map_err(|error| Error::InvalidJson { error })?;
         let hmac_secret = parsed.as_str().ok_or(Error::UnexpectedData)?;
-        return base64::decode(hmac_secret).or_else(|error| Err(Error::InvalidBase64 { error }));
+        base64::decode(hmac_secret).map_err(|error| Error::InvalidBase64 { error })
     }
 
     fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &[u8])
@@ -213,60 +206,58 @@ impl<IO: storage_io::StorageIO> Storage<IO>
 
     fn get_site_key(&self, site: &str, hmac_secret: &[u8]) -> String
     {
-        return crypto::get_digest(hmac_secret, site);
+        crypto::get_digest(hmac_secret, site)
     }
 
     fn get_site_prefix(&self, site: &str, hmac_secret: &[u8]) -> String
     {
         let mut result = self.get_site_key(site, hmac_secret);
-        result.push_str(":");
-        return result;
+        result.push(':');
+        result
     }
 
     fn get_password_key(&self, id: &PasswordId, hmac_secret: &[u8]) -> String
     {
         let mut input = String::new();
         input.push_str(id.site());
-        input.push_str("\0");
+        input.push('\0');
         input.push_str(id.name());
-        input.push_str("\0");
+        input.push('\0');
         input.push_str(id.revision());
 
         let mut result = self.get_site_prefix(&id.site().to_string(), hmac_secret);
         result.push_str(&crypto::get_digest(hmac_secret, &input));
-        return result;
+        result
     }
 
     pub fn get_alias(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<String, Error>
     {
         let site = self.get_site(site, hmac_secret, encryption_key)?;
-        return match site.alias()
-        {
-            Some(value) => Ok(value.to_string()),
-            None => Err(Error::NoSuchAlias),
-        };
+        site.alias().map(|value| value.to_string()).ok_or(Error::NoSuchAlias)
     }
 
     pub fn normalize_site(&self, site: &str) -> String
     {
-        return site.strip_prefix("www.").unwrap_or(site).to_string();
+        site.strip_prefix("www.").unwrap_or(site).to_string()
     }
 
     pub fn resolve_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> String
     {
         let normalized = self.normalize_site(site);
-        return self.get_alias(&normalized, hmac_secret, encryption_key).unwrap_or(normalized);
+        self.get_alias(&normalized, hmac_secret, encryption_key).unwrap_or(normalized)
     }
 
     pub fn ensure_site_data(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
         let key = self.get_site_key(site, hmac_secret);
-        let existing: Result<Site, Error> = self.get(&key, encryption_key);
-        if existing.is_err()
+        if self.get::<Site>(&key, encryption_key).is_err()
         {
-            return self.set(&key, &Site::new(site, None), encryption_key);
+            self.set(&key, &Site::new(site, None), encryption_key)
         }
-        return Ok(());
+        else
+        {
+            Ok(())
+        }
     }
 
     pub fn set_alias(&mut self, site: &str, alias: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
@@ -277,13 +268,13 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         }
         let key = self.get_site_key(site, hmac_secret);
         let site = Site::new(site, Some(alias));
-        return self.set(&key, &site, encryption_key);
+        self.set(&key, &site, encryption_key)
     }
 
     pub fn get_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<Site, Error>
     {
         let key = self.get_site_key(site, hmac_secret);
-        return self.get(&key, encryption_key);
+        self.get(&key, encryption_key)
     }
 
     pub fn remove_alias(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
@@ -292,61 +283,64 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         let site: Site = self.get(&key, encryption_key).or(Err(Error::NoSuchAlias))?;
         if site.alias().is_none()
         {
-            return Err(Error::NoSuchAlias);
+            Err(Error::NoSuchAlias)
         }
-        return self.remove(&key);
+        else
+        {
+            self.remove(&key)
+        }
     }
 
     pub fn remove_site(&mut self, site: &str, hmac_secret: &[u8]) -> Result<(), Error>
     {
         let key = self.get_site_key(site, hmac_secret);
-        return self.remove(&key);
+        self.remove(&key)
     }
 
     pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> Result<bool, Error>
     {
         let key = self.get_password_key(id, hmac_secret);
-        return self.contains(&key);
+        self.contains(&key)
     }
 
     pub fn set_generated(&mut self, password: GeneratedPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
         let key = self.get_password_key(password.id(), hmac_secret);
-        return self.set(&key, &Password::Generated { password }, encryption_key);
+        self.set(&key, &Password::Generated { password }, encryption_key)
     }
 
     pub fn set_stored(&mut self, password: StoredPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
         let key = self.get_password_key(password.id(), hmac_secret);
-        return self.set(&key, &Password::Stored { password }, encryption_key);
+        self.set(&key, &Password::Stored { password }, encryption_key)
     }
 
     pub fn get_password(&self, id: &PasswordId, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<Password, Error>
     {
         let key = self.get_password_key(id, hmac_secret);
-        return self.get(&key, encryption_key);
+        self.get(&key, encryption_key)
     }
 
     pub fn remove_password(&mut self, id: &PasswordId, hmac_secret: &[u8]) -> Result<(), Error>
     {
         let key = self.get_password_key(id, hmac_secret);
-        return self.remove(&key);
+        self.remove(&key)
     }
 
     pub fn list_passwords<'a>(&'a self, site: &str, hmac_secret: &[u8], encryption_key: &'a [u8]) -> impl Iterator<Item = Password> + 'a
     {
         let data = self.data.as_ref().unwrap();
         let prefix = self.get_site_prefix(site, hmac_secret);
-        return data.keys().filter_map(move |key| if key.starts_with(&prefix)
+        data.keys().filter_map(move |key| if key.starts_with(&prefix)
         {
             self.get(key, encryption_key).ok()
-        } else { None });
+        } else { None })
     }
 
     pub fn list_sites<'a>(&'a self, encryption_key: &'a [u8]) -> impl Iterator<Item = Site> + 'a
     {
         let data = self.data.as_ref().unwrap();
-        return data.keys().filter_map(move |key| if key.find(":").is_none()
+        data.keys().filter_map(move |key| if key.find(':').is_none()
         {
             self.get(key, encryption_key).ok()
         } else { None })

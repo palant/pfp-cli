@@ -5,7 +5,6 @@
  */
 
 use aes_gcm::aead::{Aead, NewAead};
-use enumset;
 use hmac::Mac;
 use rand::Rng;
 use scrypt::scrypt;
@@ -24,17 +23,17 @@ const CHARS_SYMBOL: &[u8] = b"!#$%&()*+,-./:;<=>?@[]^_{|}~";
 #[derive(enumset::EnumSetType, Debug)]
 pub enum CharacterType
 {
-    LOWER,
-    UPPER,
-    DIGIT,
-    SYMBOL
+    Lower,
+    Upper,
+    Digit,
+    Symbol,
 }
 
 const CHARS_MAPPING: [(CharacterType, &[u8]); 4] = [
-    (CharacterType::LOWER, CHARS_LOWER),
-    (CharacterType::UPPER, CHARS_UPPER),
-    (CharacterType::DIGIT, CHARS_DIGIT),
-    (CharacterType::SYMBOL, CHARS_SYMBOL),
+    (CharacterType::Lower, CHARS_LOWER),
+    (CharacterType::Upper, CHARS_UPPER),
+    (CharacterType::Digit, CHARS_DIGIT),
+    (CharacterType::Symbol, CHARS_SYMBOL),
 ];
 
 // Our Base32 variant follows RFC 4648 but uses a custom alphabet to remove
@@ -43,7 +42,7 @@ pub const BASE32_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
 pub fn new_charset() -> enumset::EnumSet<CharacterType>
 {
-    return enumset::EnumSet::empty();
+    enumset::EnumSet::empty()
 }
 
 pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
@@ -52,13 +51,13 @@ pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
     let mut bytes: Vec<u8> = Vec::new();
     bytes.resize(size, 0);
     scrypt(password, salt, &params, bytes.as_mut_slice()).unwrap();
-    return bytes;
+    bytes
 }
 
 pub fn derive_password(master_password: &str, salt: &str, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
 {
     let bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
-    return to_password(&bytes, charset);
+    to_password(&bytes, charset)
 }
 
 fn to_password(bytes: &[u8], charset: enumset::EnumSet<CharacterType>) -> String
@@ -85,24 +84,24 @@ fn to_password(bytes: &[u8], charset: enumset::EnumSet<CharacterType>) -> String
             }
         }
     }
-    return result;
+    result
 }
 
 pub fn derive_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
-    return derive_bits(master_password.as_bytes(), salt, AES_KEY_SIZE / 8);
+    derive_bits(master_password.as_bytes(), salt, AES_KEY_SIZE / 8)
 }
 
 #[cfg(not(test))]
 pub fn get_rng() -> rand::rngs::ThreadRng
 {
-    return rand::thread_rng();
+    rand::thread_rng()
 }
 
 #[cfg(test)]
 pub fn get_rng() -> rand::rngs::mock::StepRng
 {
-    return rand::rngs::mock::StepRng::new(97, 1);
+    rand::rngs::mock::StepRng::new(97, 1)
 }
 
 pub fn encrypt_data(value: &[u8], encryption_key: &[u8]) -> String
@@ -112,9 +111,9 @@ pub fn encrypt_data(value: &[u8], encryption_key: &[u8]) -> String
     let nonce_data = get_rng().gen::<[u8; AES_NONCE_SIZE / 8]>();
     let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
     let mut result = base64::encode(nonce_data);
-    result.push_str("_");
+    result.push('_');
     result.push_str(&base64::encode(cipher.encrypt(nonce, value).unwrap()));
-    return result;
+    result
 }
 
 pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Result<String, Error>
@@ -128,11 +127,11 @@ pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Result<String, Error>
         return Err(Error::InvalidCiphertext);
     }
 
-    let nonce_data = base64::decode(&parts[0]).or_else(|error| Err(Error::InvalidBase64 { error }))?;
+    let nonce_data = base64::decode(&parts[0]).map_err(|error| Error::InvalidBase64 { error })?;
     let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
-    let ciphertext = base64::decode(&parts[1]).or_else(|error| Err(Error::InvalidBase64 { error }))?;
-    let decrypted = cipher.decrypt(&nonce, ciphertext.as_slice()).or(Err(Error::DecryptionFailure))?;
-    return String::from_utf8(decrypted).or_else(|error| Err(Error::InvalidUtf8 { error }));
+    let ciphertext = base64::decode(&parts[1]).map_err(|error| Error::InvalidBase64 { error })?;
+    let decrypted = cipher.decrypt(nonce, ciphertext.as_slice()).or(Err(Error::DecryptionFailure))?;
+    String::from_utf8(decrypted).map_err(|error| Error::InvalidUtf8 { error })
 }
 
 pub fn get_digest(hmac_secret: &[u8], data: &str) -> String
@@ -140,7 +139,7 @@ pub fn get_digest(hmac_secret: &[u8], data: &str) -> String
     let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(hmac_secret).unwrap();
     mac.update(data.as_bytes());
     let result = mac.finalize().into_bytes();
-    return base64::encode(result);
+    base64::encode(result)
 }
 
 pub fn base32_encode(input: &[u8]) -> Vec<u8>
@@ -165,7 +164,7 @@ pub fn base32_encode(input: &[u8]) -> Vec<u8>
         encoded.push(BASE32_ALPHABET[((extended[3] & 0x03) << 3 | extended[4] >> 5) as usize]);
         encoded.push(BASE32_ALPHABET[(extended[4] & 0x1F) as usize]);
     }
-    return encoded;
+    encoded
 }
 
 pub fn pearson_hash(input: &[u8], virtual_byte: u8) -> u8
@@ -187,7 +186,7 @@ pub fn pearson_hash(input: &[u8], virtual_byte: u8) -> u8
     {
         hash = PERMUTATIONS[(hash ^ byte) as usize];
     }
-    return hash;
+    hash
 }
 
 #[cfg(test)]

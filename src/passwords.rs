@@ -16,7 +16,7 @@ fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
     // Replicate salt being converted to UTF-8 as done by JS code
     let salt_str = String::from_iter(salt.iter().map(|byte| *byte as char));
-    return crypto::derive_key(master_password, salt_str.as_bytes());
+    crypto::derive_key(master_password, salt_str.as_bytes())
 }
 
 pub struct Passwords<IO>
@@ -31,9 +31,8 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 {
     pub fn new(storage: storage::Storage<IO>) -> Self
     {
-        return Self
-        {
-            storage: storage,
+        Self {
+            storage,
             key: None,
             hmac_secret: None,
             master_password: None,
@@ -42,16 +41,16 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     pub fn initialized(&self) -> Result<(), &Error>
     {
-        return self.storage.initialized();
+        self.storage.initialized()
     }
 
     pub fn unlocked(&self) -> Result<(), Error>
     {
-        return match self.key.as_ref()
+        match self.key.as_ref()
         {
             Some(_) => Ok(()),
             None => Err(Error::PasswordsLocked),
-        };
+        }
     }
 
     pub fn reset(&mut self, master_password: &str) -> Result<(), Error>
@@ -65,7 +64,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret.to_vec());
-        return Ok(());
+        Ok(())
     }
 
     pub fn unlock(&mut self, master_password: &str) -> Result<(), Error>
@@ -77,7 +76,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret);
         self.master_password = Some(master_password.to_string());
-        return Ok(());
+        Ok(())
     }
 
     #[allow(dead_code)]
@@ -101,7 +100,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         }
 
         self.storage.set_alias(&site_normalized, &alias_resolved, hmac_secret, key)?;
-        return self.storage.flush();
+        self.storage.flush()
     }
 
     pub fn remove_alias(&mut self, site: &str) -> Result<(), Error>
@@ -111,12 +110,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
         let site_normalized = self.storage.normalize_site(site);
         self.storage.remove_alias(&site_normalized, hmac_secret, key)?;
-        return self.storage.flush();
+        self.storage.flush()
     }
 
     pub fn remove_sites(&mut self, sites: &[String]) -> Result<(), Error>
     {
-        if sites.len() == 0
+        if sites.is_empty()
         {
             return Ok(());
         }
@@ -124,9 +123,9 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         for site in sites
         {
-            self.storage.remove_site(&site, hmac_secret)?;
+            self.storage.remove_site(site, hmac_secret)?;
         }
-        return self.storage.flush();
+        self.storage.flush()
     }
 
     pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Result<(), Error>
@@ -141,7 +140,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
             GeneratedPassword::new(&site_resolved, name, revision, length, charset),
             hmac_secret, key
         )?;
-        return self.storage.flush();
+        self.storage.flush()
     }
 
     pub fn set_stored(&mut self, site: &str, name: &str, revision: &str, password: &str) -> Result<(), Error>
@@ -156,7 +155,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
             StoredPassword::new(&site_resolved, name, revision, password),
             hmac_secret, key
         )?;
-        return self.storage.flush();
+        self.storage.flush()
     }
 
     pub fn has(&self, site: &str, name: &str, revision: &str) -> Result<bool, Error>
@@ -165,10 +164,10 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        return self.storage.has_password(
+        self.storage.has_password(
             &PasswordId::new(&site_resolved, name, revision),
             hmac_secret
-        );
+        )
     }
 
     pub fn get(&self, site: &str, name: &str, revision: &str) -> Result<String, Error>
@@ -187,11 +186,11 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         {
             Password::Generated {password} =>
             {
-                return Ok(crypto::derive_password(master_password, &password.salt(), password.length(), password.charset()));
+                Ok(crypto::derive_password(master_password, &password.salt(), password.length(), password.charset()))
             }
             Password::Stored {password} =>
             {
-                return Ok(password.password().to_string());
+                Ok(password.password().to_string())
             }
         }
     }
@@ -200,7 +199,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     {
         let salt = self.storage.get_salt()?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
-        return recovery_codes::generate(password.password(), &salt, key);
+        recovery_codes::generate(password.password(), &salt, key)
     }
 
     pub fn remove(&mut self, site: &str, name: &str, revision: &str) -> Result<(), Error>
@@ -210,7 +209,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         self.storage.remove_password(&PasswordId::new(&site_resolved, name, revision), hmac_secret)?;
-        return self.storage.flush();
+        self.storage.flush()
     }
 
     pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = Password> + '_
@@ -219,10 +218,10 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap());
         let matcher = wildmatch::WildMatch::new(name);
-        return self.storage.list_passwords(&site_resolved, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap()).filter(move |password|
+        self.storage.list_passwords(&site_resolved, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap()).filter(move |password|
         {
             return matcher.matches(password.id().name());
-        });
+        })
     }
 
     pub fn list_sites(&self, site: &str) -> impl Iterator<Item = Site> + '_
@@ -232,14 +231,14 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let key = self.key.as_ref().unwrap();
 
         let matcher = wildmatch::WildMatch::new(site);
-        return self.storage.list_sites(key).filter(move |site|
+        self.storage.list_sites(key).filter(move |site|
         {
             return match site.alias()
             {
                 Some(alias) => matcher.matches(alias),
                 None => false,
             } || matcher.matches(site.name());
-        });
+        })
     }
 }
 
@@ -255,19 +254,19 @@ mod tests
 
     fn empty_data() -> String
     {
-        return json::stringify(object!{
+        json::stringify(object!{
             "application": "pfp",
             "format": 3,
             "data": {
                 "salt": "Y2Jh",
                 "hmac-secret": "YWJjZGVmZ2hpamts_Nosk0g9vPYtLPn9QzyFXLQ/1ZuAHVw==",
             },
-        });
+        })
     }
 
     fn default_data() -> String
     {
-        return json::stringify(object!{
+        json::stringify(object!{
             "application": "pfp",
             "format": 3,
             "data": {
@@ -300,12 +299,12 @@ mod tests
                     // {"site":"example.org","alias":"example.com"} encrypted
                     "YWJjZGVmZ2hpamts_b/AA8REorsFjuwlGDYB+KVwzY6AHbySpsh0UJUDiWQp8VBKqAXsc55K/RRsY3NAIQzDdtK+4TrjLOu3X",
             },
-        });
+        })
     }
 
     fn password_name(password: Password) -> String
     {
-        return password.id().name().to_string();
+        password.id().name().to_string()
     }
 
     mod initialization
@@ -396,14 +395,14 @@ mod tests
         {
             let mut vec = passwords.list_sites(site).map(|site| site.name().to_string()).collect::<Vec<String>>();
             vec.sort();
-            return vec;
+            vec
         }
 
         fn list_passwords(passwords: &Passwords<MemoryIO>, site: &str, name: &str) -> Vec<String>
         {
             let mut vec = passwords.list(site, name).map(password_name).collect::<Vec<String>>();
             vec.sort();
-            return vec;
+            vec
         }
 
         #[test]
@@ -509,9 +508,9 @@ mod tests
             passwords.set_alias("www.example.org", "www.example.com").expect("Adding alias should succeed");
             assert!(matches!(passwords.set_alias("www.example.com", "example.org").expect_err("Adding alias should fail"), Error::AliasToSelf { .. }));
 
-            passwords.set_generated("example.com", "blubber", "", 16, crypto::CharacterType::LOWER | crypto::CharacterType::UPPER | crypto::CharacterType::DIGIT | crypto::CharacterType::SYMBOL).expect("Adding password should succeed");
+            passwords.set_generated("example.com", "blubber", "", 16, crypto::CharacterType::Lower | crypto::CharacterType::Upper | crypto::CharacterType::Digit | crypto::CharacterType::Symbol).expect("Adding password should succeed");
             passwords.set_stored("example.com", "blabber", "2", "asdf").expect("Adding password should succeed");
-            passwords.set_generated("example.info", "test", "yet another", 8, crypto::CharacterType::LOWER | crypto::CharacterType::DIGIT).expect("Adding password should succeed");
+            passwords.set_generated("example.info", "test", "yet another", 8, crypto::CharacterType::Lower | crypto::CharacterType::Digit).expect("Adding password should succeed");
 
             assert!(matches!(passwords.set_alias("www.example.com", "example.info").expect_err("Adding alias should fail"), Error::SiteHasPasswords { .. }));
 

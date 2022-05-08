@@ -12,10 +12,7 @@ mod storage;
 mod storage_io;
 mod storage_types;
 
-use app_dirs2;
 use clap::{Parser, Subcommand};
-use question;
-use rpassword;
 use std::fmt;
 use std::path;
 use std::process;
@@ -55,7 +52,7 @@ enum Commands
         #[clap(short = 'r', long, default_value = "1")]
         revision: String,
         /// Password length
-        #[clap(short = 'l', long, default_value_t = 16, parse(try_from_str = parse_length))]
+        #[clap(short = 'l', long, default_value_t = 16, validator = validate_length)]
         length: usize,
         /// Do not include lower-case letters
         #[clap(short = 'w', long)]
@@ -189,13 +186,13 @@ impl<T> HandleError<T> for Result<T, Error>
     {
         match self
         {
-            Ok(value) => return value,
+            Ok(value) => value,
             Err(error) =>
             {
                 eprintln!("{}", error);
                 process::exit(1);
             }
-        };
+        }
     }
 }
 
@@ -205,13 +202,13 @@ impl<T> HandleError<T> for Result<T, &Error>
     {
         match self
         {
-            Ok(value) => return value,
+            Ok(value) => value,
             Err(error) =>
             {
                 eprintln!("{}", *error);
                 process::exit(1);
             }
-        };
+        }
     }
 }
 
@@ -220,7 +217,7 @@ fn get_default_storage_path() -> path::PathBuf
     let app_info = app_dirs2::AppInfo {name: "PfP", author: "Wladimir Palant"};
     let mut path = app_dirs2::get_app_root(app_dirs2::AppDataType::UserConfig, &app_info).unwrap();
     path.push("storage.json");
-    return path;
+    path
 }
 
 fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(passwords: &mut passwords::Passwords<IO>)
@@ -241,22 +238,16 @@ fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(passwords: &mut password
     }
 }
 
-fn parse_length(arg: &str) -> Result<usize, String>
+fn validate_length(arg: &str) -> Result<(), String>
 {
-    let length = match arg.parse::<usize>()
+    if let Ok(length) = arg.parse::<usize>()
     {
-        Ok(length) => length,
-        Err(error) => match error.kind() {
-            std::num::IntErrorKind::InvalidDigit => return Err("invalid digit found in string".to_string()),
-            std::num::IntErrorKind::PosOverflow => return Err("number too large".to_string()),
-            _other_error => return Err(format!("Could not parse: {:?}", error)),
+        if !(4..=24).contains(&length)
+        {
+            return Err("Password length should be between 4 and 24 characters.".to_string());
         }
     };
-    if length >= 4 && length <= 24
-    {
-        return Ok(length);
-    }
-    return Err("Password length should be between 4 and 24 characters.".to_string());
+    Ok(())
 }
 
 fn main()
@@ -310,21 +301,21 @@ fn main()
             let mut charset = crypto::new_charset();
             if !no_lower
             {
-                charset.insert(crypto::CharacterType::LOWER);
+                charset.insert(crypto::CharacterType::Lower);
             }
             if !no_upper
             {
-                charset.insert(crypto::CharacterType::UPPER);
+                charset.insert(crypto::CharacterType::Upper);
             }
             if !no_digit
             {
-                charset.insert(crypto::CharacterType::DIGIT);
+                charset.insert(crypto::CharacterType::Digit);
             }
             if !no_symbol
             {
-                charset.insert(crypto::CharacterType::SYMBOL);
+                charset.insert(crypto::CharacterType::Symbol);
             }
-            if charset.len() == 0
+            if charset.is_empty()
             {
                 eprintln!("You need to allow at least one character set.");
                 process::exit(1);
@@ -405,17 +396,17 @@ fn main()
                             aliases.insert(alias.to_owned(), Vec::new());
                         }
                         aliases.get_mut(alias).unwrap().push(site.name().to_string());
-                        return false;
+                        false
                     },
-                    None => return true,
-                };
+                    None => true,
+                }
             });
 
             let mut found = false;
             for site in sites
             {
                 let mut list = passwords.list(site.name(), name).collect::<Vec<Password>>();
-                if list.len() == 0
+                if list.is_empty()
                 {
                     if name == "*"
                     {
@@ -451,7 +442,7 @@ fn main()
                             password_type = "stored";
                         }
                     }
-                    if revision != ""
+                    if !revision.is_empty()
                     {
                         println!("    {} ({}, revision: {})", name, password_type, revision);
                     }
@@ -470,7 +461,7 @@ fn main()
                         if let Password::Stored { password } = &password
                         {
                             println!("        Recovery code:");
-                            for line in passwords.get_recovery_code(&password).handle_error().split("\n")
+                            for line in passwords.get_recovery_code(password).handle_error().split('\n')
                             {
                                 println!("        {}", line);
                             }
@@ -484,19 +475,19 @@ fn main()
                             println!("        Length: {}", password.length());
 
                             let mut chars = Vec::new();
-                            if password.charset().contains(crypto::CharacterType::LOWER)
+                            if password.charset().contains(crypto::CharacterType::Lower)
                             {
                                 chars.push("abc");
                             }
-                            if password.charset().contains(crypto::CharacterType::UPPER)
+                            if password.charset().contains(crypto::CharacterType::Upper)
                             {
                                 chars.push("ABC");
                             }
-                            if password.charset().contains(crypto::CharacterType::DIGIT)
+                            if password.charset().contains(crypto::CharacterType::Digit)
                             {
                                 chars.push("789");
                             }
-                            if password.charset().contains(crypto::CharacterType::SYMBOL)
+                            if password.charset().contains(crypto::CharacterType::Symbol)
                             {
                                 chars.push("+^;");
                             }
@@ -518,7 +509,7 @@ fn main()
         {
             ensure_unlocked_passwords(&mut passwords);
 
-            passwords.set_alias(&domain, &alias).handle_error();
+            passwords.set_alias(domain, alias).handle_error();
             println!("Alias added.");
         }
 
@@ -526,7 +517,7 @@ fn main()
         {
             ensure_unlocked_passwords(&mut passwords);
 
-            passwords.remove_alias(&domain).handle_error();
+            passwords.remove_alias(domain).handle_error();
             println!("Alias removed.");
         }
     }

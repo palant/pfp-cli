@@ -22,9 +22,11 @@ pub struct FileIO
 
 impl FileIO
 {
-    pub fn new(path: &path::PathBuf) -> Self
+    pub fn new(path: &path::Path) -> Self
     {
-        return Self { path: path.clone() };
+        Self {
+            path: path.to_path_buf()
+        }
     }
 }
 
@@ -32,18 +34,17 @@ impl StorageIO for FileIO
 {
     fn load(&self) -> Result<String, Error>
     {
-        return fs::read_to_string(&self.path).or_else(|error| Err(Error::FileReadFailure { error }));
+        fs::read_to_string(&self.path).map_err(|error| Error::FileReadFailure { error })
     }
 
     fn save(&self, data: &str) -> Result<(), Error>
     {
         let parent = self.path.parent();
-        match parent
+        if let Some(parent) = parent
         {
-            Some(parent) => fs::create_dir_all(parent).or_else(|error| Err(Error::CreateDirFailure { error }))?,
-            None => {},
+            fs::create_dir_all(parent).map_err(|error| Error::CreateDirFailure { error })?;
         }
-        return fs::write(&self.path, data).or_else(|error| Err(Error::FileWriteFailure { error }));
+        fs::write(&self.path, data).map_err(|error| Error::FileWriteFailure { error })
     }
 }
 
@@ -57,7 +58,9 @@ impl MemoryIO
     #[cfg(test)]
     pub fn new(data: &str) -> Self
     {
-        return Self { data: Cell::new(data.to_string()) };
+        Self {
+            data: Cell::new(data.to_string())
+        }
     }
 }
 
@@ -67,12 +70,12 @@ impl StorageIO for MemoryIO
     {
         let data = self.data.take();
         self.data.set(data.clone());
-        return Ok(data);
+        Ok(data)
     }
 
     fn save(&self, data: &str) -> Result<(), Error>
     {
         self.data.set(data.to_string());
-        return Ok(());
+        Ok(())
     }
 }

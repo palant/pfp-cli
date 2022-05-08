@@ -29,27 +29,26 @@ impl PasswordId
 {
     pub fn new(site: &str, name: &str, revision: &str) -> PasswordId
     {
-        return PasswordId
-        {
+        PasswordId {
             site: site.to_string(),
             name: name.to_string(),
             revision: if revision != "1" { revision.to_string() } else { "".to_string() },
-        };
+        }
     }
 
     pub fn site(&self) -> &str
     {
-        return &self.site;
+        &self.site
     }
 
     pub fn name(&self) -> &str
     {
-        return &self.name;
+        &self.name
     }
 
     pub fn revision(&self) -> &str
     {
-        return &self.revision;
+        &self.revision
     }
 }
 
@@ -73,7 +72,7 @@ impl ToJson for PasswordId
         obj.insert("site", self.site().into());
         obj.insert("name", self.name().into());
         obj.insert("revision", self.revision().into());
-        return obj;
+        obj
     }
 }
 
@@ -89,40 +88,39 @@ impl GeneratedPassword
 {
     pub fn new(site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> GeneratedPassword
     {
-        return GeneratedPassword
-        {
+        GeneratedPassword {
             id: PasswordId::new(site, name, revision),
-            length: length,
-            charset: charset,
-        };
+            length,
+            charset,
+        }
     }
 
     pub fn id(&self) -> &PasswordId
     {
-        return &self.id;
+        &self.id
     }
 
     pub fn length(&self) -> usize
     {
-        return self.length;
+        self.length
     }
 
     pub fn charset(&self) -> enumset::EnumSet<crypto::CharacterType>
     {
-        return self.charset;
+        self.charset
     }
 
     pub fn salt(&self) -> String
     {
         let mut salt = self.id.site().to_string();
-        salt.push_str("\0");
-        salt.push_str(&self.id.name());
-        if self.id.revision() != ""
+        salt.push('\0');
+        salt.push_str(self.id.name());
+        if !self.id.revision().is_empty()
         {
-            salt.push_str("\0");
-            salt.push_str(&self.id.revision());
+            salt.push('\0');
+            salt.push_str(self.id.revision());
         }
-        return salt;
+        salt
     }
 }
 
@@ -135,26 +133,26 @@ impl FromJson for GeneratedPassword
         let mut charset = crypto::new_charset();
         if value["lower"].as_bool().unwrap_or(false)
         {
-            charset.insert(crypto::CharacterType::LOWER);
+            charset.insert(crypto::CharacterType::Lower);
         }
         if value["upper"].as_bool().unwrap_or(false)
         {
-            charset.insert(crypto::CharacterType::UPPER);
+            charset.insert(crypto::CharacterType::Upper);
         }
         if value["number"].as_bool().unwrap_or(false)
         {
-            charset.insert(crypto::CharacterType::DIGIT);
+            charset.insert(crypto::CharacterType::Digit);
         }
         if value["symbol"].as_bool().unwrap_or(false)
         {
-            charset.insert(crypto::CharacterType::SYMBOL);
+            charset.insert(crypto::CharacterType::Symbol);
         }
 
-        return Ok(GeneratedPassword {
-            id: id,
+        Ok(GeneratedPassword {
+            id,
             length: value["length"].as_usize().ok_or(Error::PasswordMissingLength)?,
-            charset: charset,
-        });
+            charset,
+        })
     }
 }
 
@@ -164,11 +162,11 @@ impl ToJson for GeneratedPassword
     {
         let mut obj = self.id.to_json();
         obj.insert("length", self.length().into());
-        obj.insert("lower", self.charset().contains(crypto::CharacterType::LOWER).into());
-        obj.insert("upper", self.charset().contains(crypto::CharacterType::UPPER).into());
-        obj.insert("number", self.charset().contains(crypto::CharacterType::DIGIT).into());
-        obj.insert("symbol", self.charset().contains(crypto::CharacterType::SYMBOL).into());
-        return obj;
+        obj.insert("lower", self.charset().contains(crypto::CharacterType::Lower).into());
+        obj.insert("upper", self.charset().contains(crypto::CharacterType::Upper).into());
+        obj.insert("number", self.charset().contains(crypto::CharacterType::Digit).into());
+        obj.insert("symbol", self.charset().contains(crypto::CharacterType::Symbol).into());
+        obj
     }
 }
 
@@ -183,21 +181,20 @@ impl StoredPassword
 {
     pub fn new(site: &str, name: &str, revision: &str, password: &str) -> StoredPassword
     {
-        return StoredPassword
-        {
+        StoredPassword {
             id: PasswordId::new(site, name, revision),
             password: password.to_string(),
-        };
+        }
     }
 
     pub fn id(&self) -> &PasswordId
     {
-        return &self.id;
+        &self.id
     }
 
     pub fn password(&self) -> &str
     {
-        return &self.password;
+        &self.password
     }
 }
 
@@ -207,10 +204,10 @@ impl FromJson for StoredPassword
     {
         let id = PasswordId::from_json(value)?;
         let password = value["password"].as_str().ok_or(Error::PasswordMissingValue)?;
-        return Ok(StoredPassword {
-            id: id,
+        Ok(StoredPassword {
+            id,
             password: password.to_string(),
-        });
+        })
     }
 }
 
@@ -220,7 +217,7 @@ impl ToJson for StoredPassword
     {
         let mut obj = self.id.to_json();
         obj.insert("password", self.password().into());
-        return obj;
+        obj
     }
 }
 
@@ -256,13 +253,16 @@ impl FromJson for Password
         let password_type = value["type"].as_str().ok_or(Error::PasswordMissingType)?;
         if password_type == "generated2"
         {
-            return Ok(Password::Generated { password: GeneratedPassword::from_json(value)? });
+            Ok(Password::Generated { password: GeneratedPassword::from_json(value)? })
         }
         else if password_type == "stored"
         {
-            return Ok(Password::Stored { password: StoredPassword::from_json(value)? });
+            Ok(Password::Stored { password: StoredPassword::from_json(value)? })
         }
-        return Err(Error::PasswordUnknownType);
+        else
+        {
+            Err(Error::PasswordUnknownType)
+        }
     }
 }
 
@@ -276,15 +276,15 @@ impl ToJson for Password
             {
                 let mut value = password.to_json();
                 value.insert("type", "generated2".into());
-                return value;
+                value
             },
             Password::Stored {password} =>
             {
                 let mut value = password.to_json();
                 value.insert("type", "stored".into());
-                return value;
+                value
             }
-        };
+        }
     }
 }
 
@@ -299,29 +299,25 @@ impl Site
 {
     pub fn new(name: &str, alias: Option<&str>) -> Site
     {
-        return Site
+        Site
         {
             name: name.to_string(),
-            alias: match alias
-            {
-                Some(value) => Some(value.to_string()),
-                None => None,
-            },
-        };
+            alias: alias.map(|alias| alias.to_string()),
+        }
     }
 
     pub fn name(&self) -> &str
     {
-        return &self.name;
+        &self.name
     }
 
     pub fn alias(&self) -> Option<&str>
     {
-        return match &self.alias
+        match &self.alias
         {
             Some(value) => Some(value),
             None => None,
-        };
+        }
     }
 }
 
@@ -342,11 +338,10 @@ impl ToJson for Site
     {
         let mut obj = json::object::Object::new();
         obj.insert("site", self.name().into());
-        match self.alias()
+        if let Some(value) = self.alias()
         {
-            Some(value) => obj.insert("alias", value.into()),
-            None => {},
+            obj.insert("alias", value.into());
         }
-        return obj;
+        obj
     }
 }

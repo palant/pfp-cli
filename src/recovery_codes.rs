@@ -36,13 +36,13 @@ pub fn generate(password: &str, salt: &[u8], encryption_key: &[u8]) -> Result<St
         return Err(Error::InvalidCiphertext);
     }
 
-    let nonce = base64::decode(&parts[0]).or_else(|error| Err(Error::InvalidBase64 { error }))?;
+    let nonce = base64::decode(&parts[0]).map_err(|error| Error::InvalidBase64 { error })?;
     if nonce.len() != NONCE_SIZE
     {
         return Err(Error::UnexpectedData);
     }
 
-    let ciphertext = base64::decode(&parts[1]).or_else(|error| Err(Error::InvalidBase64 { error }))?;
+    let ciphertext = base64::decode(&parts[1]).map_err(|error| Error::InvalidBase64 { error })?;
     if ciphertext.len() != password_vec.len() + TAG_SIZE
     {
         return Err(Error::UnexpectedData);
@@ -69,7 +69,7 @@ pub fn generate(password: &str, salt: &[u8], encryption_key: &[u8]) -> Result<St
         }
     }
 
-    return format_code(&crypto::base32_encode(&output));
+    format_code(&crypto::base32_encode(&output))
 }
 
 fn format_code(code: &[u8]) -> Result<String, Error>
@@ -105,7 +105,7 @@ fn format_code(code: &[u8]) -> Result<String, Error>
         }
     }
     result.pop();
-    return Ok(result);
+    Ok(result)
 }
 
 #[cfg(test)]
