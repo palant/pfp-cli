@@ -200,12 +200,24 @@ mod tests
     }
 
     #[test]
-    fn base32()
+    fn test_base32_encode()
     {
         assert_eq!(encode("0000000000"), "AAAAAAAA");
         assert_eq!(encode("0842108421"), "BBBBBBBB");
         assert_eq!(encode("ffffffffff"), "99999999");
         assert_eq!(encode("0000000000ffffffffff"), "AAAAAAAA99999999");
         assert_eq!(encode("00443214C74254B635CF84653A56D7C675BE77DF"), "ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
+    }
+
+    #[test]
+    fn test_pearson_hash()
+    {
+        assert_eq!(pearson_hash(b"", b'\x00'), b'\x61');
+        assert_eq!(pearson_hash(b"", b'\x61'), b'\x54');
+        assert_eq!(pearson_hash(b"", b'\x54'), b'\x9D');
+        assert_eq!(pearson_hash(b"", b'\x9D'), b'\xC8');
+        assert_eq!(pearson_hash(b"", b'\xC8'), b'\x39');
+        assert_eq!(pearson_hash(&[b'\x61' ^ b'\x54', b'\x9D' ^ b'\xC8'], b'\x00'), b'\x39');
+        assert_eq!(pearson_hash(b"0123456789", 123), 43);
     }
 }
