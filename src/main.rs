@@ -4,20 +4,12 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-mod crypto;
-mod error;
-mod passwords;
-mod recovery_codes;
-mod storage;
-mod storage_io;
-mod storage_types;
-
 use clap::{Parser, Subcommand};
-use std::fmt;
+use pfp_cli::{crypto, passwords, storage, storage_io};
+use pfp_cli::error::Error;
+use pfp_cli::storage_types::{Password, Site};
 use std::path;
 use std::process;
-use storage_types::{Password, Site};
-use error::Error;
 
 /// PfP: Pain-free Passwords, command line edition
 #[derive(Parser)]
@@ -141,37 +133,34 @@ enum Commands
     },
 }
 
-impl fmt::Display for Error
+fn format_error(error: &Error) -> String
 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result
+    match error
     {
-        match self
-        {
-            Error::CreateDirFailure { error } => write!(f, "Failed creating directory for storage ({}).", *error),
-            Error::FileReadFailure { error } => write!(f, "Failed reading storage file ({}). Maybe use set-master subcommand first?", *error),
-            Error::FileWriteFailure { error } => write!(f, "Failed writing storage file ({}).", *error),
-            Error::StorageNotInitialized => write!(f, "Unexpected: Storage is being accessed before initialization."),
-            Error::UnexpectedStorageFormat => write!(f, "Unexpected storage file format."),
-            Error::PasswordsLocked => write!(f, "Passwords are locked."),
-            Error::KeyMissing => write!(f, "No such value in storage."),
-            Error::UnexpectedData => write!(f, "Unexpected JSON data in storage."),
-            Error::InvalidCiphertext => write!(f, "Corrupt ciphertext data in storage."),
-            Error::InvalidBase64 { error } => write!(f, "Corrupt Base64 data in storage ({}).", error),
-            Error::InvalidJson { error } => write!(f, "Corrupt JSON data in storage ({}).", error),
-            Error::InvalidUtf8 { error } => write!(f, "Corrupt UTF-8 data in storage ({}).", error),
-            Error::DecryptionFailure => write!(f, "Decryption failure, wrong master password?"),
-            Error::PasswordMissingType => write!(f, "Corrupt data, missing password type."),
-            Error::PasswordUnknownType => write!(f, "Unknown password type."),
-            Error::PasswordMissingSite => write!(f, "Corrupt data, missing password site."),
-            Error::PasswordMissingName => write!(f, "Corrupt data, missing password name."),
-            Error::PasswordMissingRevision => write!(f, "Corrupt data, missing password revision."),
-            Error::PasswordMissingLength => write!(f, "Corrupt data, missing password length."),
-            Error::PasswordMissingValue => write!(f, "Corrupt data, missing password value."),
-            Error::SiteMissingName => write!(f, "Corrupt data, missing site name."),
-            Error::NoSuchAlias => write!(f, "Site is not an alias."),
-            Error::AliasToSelf => write!(f, "Cannot make a site an alias for itself."),
-            Error::SiteHasPasswords => write!(f, "Site has passwords, remove before making it an alias."),
-        }
+        Error::CreateDirFailure { error } => format!("Failed creating directory for storage ({}).", *error),
+        Error::FileReadFailure { error } => format!("Failed reading storage file ({}). Maybe use set-master subcommand first?", *error),
+        Error::FileWriteFailure { error } => format!("Failed writing storage file ({}).", *error),
+        Error::StorageNotInitialized => "Unexpected: Storage is being accessed before initialization.".to_string(),
+        Error::UnexpectedStorageFormat => "Unexpected storage file format.".to_string(),
+        Error::PasswordsLocked => "Passwords are locked.".to_string(),
+        Error::KeyMissing => "No such value in storage.".to_string(),
+        Error::UnexpectedData => "Unexpected JSON data in storage.".to_string(),
+        Error::InvalidCiphertext => "Corrupt ciphertext data in storage.".to_string(),
+        Error::InvalidBase64 { error } => format!("Corrupt Base64 data in storage ({}).", error),
+        Error::InvalidJson { error } => format!("Corrupt JSON data in storage ({}).", error),
+        Error::InvalidUtf8 { error } => format!("Corrupt UTF-8 data in storage ({}).", error),
+        Error::DecryptionFailure => "Decryption failure, wrong master password?".to_string(),
+        Error::PasswordMissingType => "Corrupt data, missing password type.".to_string(),
+        Error::PasswordUnknownType => "Unknown password type.".to_string(),
+        Error::PasswordMissingSite => "Corrupt data, missing password site.".to_string(),
+        Error::PasswordMissingName => "Corrupt data, missing password name.".to_string(),
+        Error::PasswordMissingRevision => "Corrupt data, missing password revision.".to_string(),
+        Error::PasswordMissingLength => "Corrupt data, missing password length.".to_string(),
+        Error::PasswordMissingValue => "Corrupt data, missing password value.".to_string(),
+        Error::SiteMissingName => "Corrupt data, missing site name.".to_string(),
+        Error::NoSuchAlias => "Site is not an alias.".to_string(),
+        Error::AliasToSelf => "Cannot make a site an alias for itself.".to_string(),
+        Error::SiteHasPasswords => "Site has passwords, remove before making it an alias.".to_string(),
     }
 }
 
@@ -189,7 +178,7 @@ impl<T> HandleError<T> for Result<T, Error>
             Ok(value) => value,
             Err(error) =>
             {
-                eprintln!("{}", error);
+                eprintln!("{}", format_error(&error));
                 process::exit(1);
             }
         }
@@ -205,7 +194,7 @@ impl<T> HandleError<T> for Result<T, &Error>
             Ok(value) => value,
             Err(error) =>
             {
-                eprintln!("{}", *error);
+                eprintln!("{}", format_error(error));
                 process::exit(1);
             }
         }
@@ -233,7 +222,7 @@ fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(passwords: &mut password
         }
         else
         {
-            passwords.unlock(&master_password).unwrap_or_else(|error| eprintln!("{}", error));
+            passwords.unlock(&master_password).unwrap_or_else(|error| eprintln!("{}", format_error(&error)));
         }
     }
 }
