@@ -119,7 +119,7 @@ pub fn decode(code: &str, master_password: &str) -> Result<String, Error>
             .filter_map(|(i, byte)| if i % (BLOCK_SIZE + 1) == BLOCK_SIZE { None } else { Some(byte) })
             .copied()
             .collect::<Vec<u8>>();
-    if without_checksums.len() < 1 || without_checksums[0] != VERSION
+    if !without_checksums.is_empty() && without_checksums[0] != VERSION
     {
         return Err(Error::RecoveryCodeWrongVersion);
     }
@@ -181,9 +181,9 @@ fn validate(code: &str) -> Result<Vec<u8>, Error>
     }
     else if extra_row.is_some() || extra_data
     {
-        return Err(Error::RecoveryCodeExtraData {
+        Err(Error::RecoveryCodeExtraData {
             line: if let Some(row) = extra_row { row } else { formatted.len() / LINE_SIZE },
-        });
+        })
     }
     else
     {

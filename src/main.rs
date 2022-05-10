@@ -253,64 +253,61 @@ fn prompt_recovery_code<IO: storage_io::StorageIO>(passwords: &passwords::Passwo
     let mut accepted = String::new();
     loop
     {
-        if let Some(response) = question::Question::new("Next line of your recovery code (empty line to abort):").ask()
+        if let Some(question::Answer::RESPONSE(line)) = question::Question::new("Next line of your recovery code (empty line to abort):").ask()
         {
-            if let question::Answer::RESPONSE(line) = response
+            if line.is_empty()
             {
-                if line.is_empty()
-                {
-                    process::exit(0);
-                }
+                process::exit(0);
+            }
 
-                let code = String::from(&accepted) + &line;
-                let formatted = recovery_codes::format_code(code.as_bytes(), true);
-                match passwords.decode_recovery_code(&code)
+            let code = String::from(&accepted) + &line;
+            let formatted = recovery_codes::format_code(code.as_bytes(), true);
+            match passwords.decode_recovery_code(&code)
+            {
+                Ok(value) => return value,
+                Err(error) =>
                 {
-                    Ok(value) => return value,
-                    Err(error) =>
+                    match error
                     {
-                        match error
+                        Error::RecoveryCodeExtraData { line } =>
                         {
-                            Error::RecoveryCodeExtraData { line } =>
-                            {
-                                accepted = formatted.split('\n').collect::<Vec<&str>>()[..line].join("\n");
+                            accepted = formatted.split('\n').collect::<Vec<&str>>()[..line].join("\n");
 
-                                let query = format!("The following seems to be a valid recovery code:\n{}\nYou entered some additional data however. Ignore the extra data and decode the recovery code?", &accepted);
-                                let accept = question::Question::new(&query)
-                                        .default(question::Answer::YES)
-                                        .show_defaults()
-                                        .confirm();
-                                if accept == question::Answer::YES
-                                {
-                                    return passwords.decode_recovery_code(&accepted).handle_error();
-                                }
-                                else
-                                {
-                                    process::exit(0);
-                                }
-                            },
-                            Error::RecoveryCodeChecksumMismatch { line } =>
+                            let query = format!("The following seems to be a valid recovery code:\n{}\nYou entered some additional data however. Ignore the extra data and decode the recovery code?", &accepted);
+                            let accept = question::Question::new(&query)
+                                    .default(question::Answer::YES)
+                                    .show_defaults()
+                                    .confirm();
+                            if accept == question::Answer::YES
                             {
-                                accepted = formatted.split('\n').collect::<Vec<&str>>()[..line].join("\n");
-                                if accepted.is_empty()
-                                {
-                                    eprintln!("The data you entered doesn't seem valid, please try again.\n");
-                                }
-                                else
-                                {
-                                    eprintln!("The following lines were accepted:\n{}\nThe line after that doesn't seem valid, a typo maybe?\n", &accepted);
-                                }
-                            },
-                            Error::RecoveryCodeIncomplete =>
-                            {
-                                accepted = formatted;
-                                eprintln!("Line accepted. The recovery code is still incomplete, please enter more data.\n");
-                            },
-                            unknown_error =>
-                            {
-                                eprintln!("{}", format_error(&unknown_error));
-                                process::exit(1);
+                                return passwords.decode_recovery_code(&accepted).handle_error();
                             }
+                            else
+                            {
+                                process::exit(0);
+                            }
+                        },
+                        Error::RecoveryCodeChecksumMismatch { line } =>
+                        {
+                            accepted = formatted.split('\n').collect::<Vec<&str>>()[..line].join("\n");
+                            if accepted.is_empty()
+                            {
+                                eprintln!("The data you entered doesn't seem valid, please try again.\n");
+                            }
+                            else
+                            {
+                                eprintln!("The following lines were accepted:\n{}\nThe line after that doesn't seem valid, a typo maybe?\n", &accepted);
+                            }
+                        },
+                        Error::RecoveryCodeIncomplete =>
+                        {
+                            accepted = formatted;
+                            eprintln!("Line accepted. The recovery code is still incomplete, please enter more data.\n");
+                        },
+                        unknown_error =>
+                        {
+                            eprintln!("{}", format_error(&unknown_error));
+                            process::exit(1);
                         }
                     }
                 }
