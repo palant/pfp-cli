@@ -101,6 +101,9 @@ enum Commands
         /// Password revision
         #[clap(short = 'r', long, default_value = "1")]
         revision: String,
+        /// Output the password as a QR code
+        #[clap(short = 'q', long)]
+        qrcode: bool,
     },
     /// Lists passwords for a website
     List
@@ -439,13 +442,41 @@ fn main()
             println!("Password removed.");
         }
 
-        Commands::Show {domain, name, revision} =>
+        Commands::Show {domain, name, revision, qrcode} =>
         {
             ensure_unlocked_passwords(&mut passwords);
 
             let password = passwords.get(domain, name, revision).handle_error();
             println!("Password retrieved.");
-            println!("{}", password);
+            if *qrcode
+            {
+                const BLOCKS: [char; 4] = [' ', '\u{2580}', '\u{2584}', '\u{2588}'];
+
+                match qrcodegen::QrCode::encode_text(&password, qrcodegen::QrCodeEcc::Low)
+                {
+                    Ok(qr) =>
+                    {
+                        for y in (0 .. qr.size()).step_by(2)
+                        {
+                            for x in 0 .. qr.size()
+                            {
+                                let index = if qr.get_module(x, y) { 1 } else { 0 } | if qr.get_module(x, y + 1) { 2 } else { 0 };
+                                print!("{}", BLOCKS[index]);
+                            }
+                            println!("");
+                        }
+                    },
+                    Err(error) =>
+                    {
+                        eprintln!("Error generating QR code: {}", error);
+                        process::exit(1);
+                    }
+                }
+            }
+            else
+            {
+                println!("{}", password);
+            }
         }
 
         Commands::List {domain, name, show, recovery, verbose} =>
