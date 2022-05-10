@@ -137,29 +137,73 @@ pub fn get_digest(hmac_secret: &[u8], data: &str) -> String
     base64::encode(result)
 }
 
-pub fn base32_encode(input: &[u8]) -> Vec<u8>
+pub fn base32_encode(input: &[u8]) -> Result<Vec<u8>, Error>
 {
-    let mut encoded = Vec::with_capacity((input.len() + 3) / 4 * 5);
+    if input.len() % 5 != 0
+    {
+        return Err(Error::UnexpectedData);
+    }
+
+    let mut encoded = Vec::with_capacity(input.len() / 5 * 8);
 
     for chunk in input.chunks(5)
     {
-        let extended =
-        {
-            let mut result = [0u8; 5];
-            result[..chunk.len()].copy_from_slice(chunk);
-            result
-        };
-
-        encoded.push(BASE32_ALPHABET[(extended[0] >> 3) as usize]);
-        encoded.push(BASE32_ALPHABET[((extended[0] & 0x07) << 2 | extended[1] >> 6) as usize]);
-        encoded.push(BASE32_ALPHABET[(extended[1] >> 1 & 0x1F) as usize]);
-        encoded.push(BASE32_ALPHABET[((extended[1] & 0x01) << 4 | extended[2] >> 4) as usize]);
-        encoded.push(BASE32_ALPHABET[((extended[2] & 0x0F) << 1 | extended[3] >> 7) as usize]);
-        encoded.push(BASE32_ALPHABET[(extended[3] >> 2 & 0x1F) as usize]);
-        encoded.push(BASE32_ALPHABET[((extended[3] & 0x03) << 3 | extended[4] >> 5) as usize]);
-        encoded.push(BASE32_ALPHABET[(extended[4] & 0x1F) as usize]);
+        encoded.push(BASE32_ALPHABET[(chunk[0] >> 3) as usize]);
+        encoded.push(BASE32_ALPHABET[((chunk[0] & 0x07) << 2 | chunk[1] >> 6) as usize]);
+        encoded.push(BASE32_ALPHABET[(chunk[1] >> 1 & 0x1F) as usize]);
+        encoded.push(BASE32_ALPHABET[((chunk[1] & 0x01) << 4 | chunk[2] >> 4) as usize]);
+        encoded.push(BASE32_ALPHABET[((chunk[2] & 0x0F) << 1 | chunk[3] >> 7) as usize]);
+        encoded.push(BASE32_ALPHABET[(chunk[3] >> 2 & 0x1F) as usize]);
+        encoded.push(BASE32_ALPHABET[((chunk[3] & 0x03) << 3 | chunk[4] >> 5) as usize]);
+        encoded.push(BASE32_ALPHABET[(chunk[4] & 0x1F) as usize]);
     }
-    encoded
+    Ok(encoded)
+}
+
+pub fn base32_decode(input: &[u8]) -> Result<Vec<u8>, Error>
+{
+    static LOOKUP: [u8; 256] =
+    {
+        let mut array = [255u8; 256];
+        let mut i = 0;
+        while i < BASE32_ALPHABET.len()
+        {
+            array[BASE32_ALPHABET[i] as usize] = i as u8;
+            i += 1;
+        }
+        array
+    };
+
+    if input.len() % 8 != 0
+    {
+        return Err(Error::UnexpectedData);
+    }
+
+    let mut encoded = Vec::with_capacity(input.len() / 8 * 5);
+
+    let mut invalid_bytes = false;
+    let input_converted = input.iter().map(|byte|
+    {
+        if LOOKUP[*byte as usize] >= 32
+        {
+            invalid_bytes = true;
+        }
+        LOOKUP[*byte as usize]
+    }).collect::<Vec<u8>>();
+    if invalid_bytes
+    {
+        return Err(Error::UnexpectedData);
+    }
+
+    for chunk in input_converted.chunks(8)
+    {
+        encoded.push(chunk[0] << 3 | chunk[1] >> 2);
+        encoded.push((chunk[1] & 0x03) << 6 | chunk[2] << 1 | chunk[3] >> 4);
+        encoded.push((chunk[3] & 0x0F) << 4 | chunk[4] >> 1);
+        encoded.push((chunk[4] & 0x01) << 7 | chunk[5] << 2 | chunk[6] >> 3);
+        encoded.push((chunk[6] & 0x07) << 5 | chunk[7]);
+    }
+    Ok(encoded)
 }
 
 pub fn pearson_hash(input: &[u8], virtual_byte: u8) -> u8
@@ -187,6 +231,7 @@ pub fn pearson_hash(input: &[u8], virtual_byte: u8) -> u8
 #[cfg(test)]
 mod tests
 {
+    use std::fmt::Write;
     use super::*;
 
     fn encode(value: &str) -> String
@@ -196,7 +241,17 @@ mod tests
                          .chunks(2)
                          .map(|chunk| u8::from_str_radix(&chunk.iter().collect::<String>(), 16).expect("Should be a valid hex string"))
                          .collect::<Vec<u8>>();
-        return String::from_utf8(base32_encode(&bytes)).expect("Base32 result should decode to UTF-8");
+        return String::from_utf8(base32_encode(&bytes).expect("Base32 encoding should succeed")).expect("Base32 result should decode to UTF-8");
+    }
+
+    fn decode(value: &str) -> String
+    {
+        let mut result = String::new();
+        for byte in base32_decode(value.as_bytes()).expect("Base32 decoding should succeed")
+        {
+            write!(&mut result, "{:02x}", byte).expect("Converting bytes to hex should succeed");
+        }
+        return result;
     }
 
     #[test]
@@ -206,7 +261,17 @@ mod tests
         assert_eq!(encode("0842108421"), "BBBBBBBB");
         assert_eq!(encode("ffffffffff"), "99999999");
         assert_eq!(encode("0000000000ffffffffff"), "AAAAAAAA99999999");
-        assert_eq!(encode("00443214C74254B635CF84653A56D7C675BE77DF"), "ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
+        assert_eq!(encode("00443214c74254b635cf84653a56d7c675be77df"), "ABCDEFGHJKLMNPQRSTUVWXYZ23456789");
+    }
+
+    #[test]
+    fn test_base32_decode()
+    {
+        assert_eq!(decode("AAAAAAAA"), "0000000000");
+        assert_eq!(decode("BBBBBBBB"), "0842108421");
+        assert_eq!(decode("99999999"), "ffffffffff");
+        assert_eq!(decode("AAAAAAAA99999999"), "0000000000ffffffffff");
+        assert_eq!(decode("ABCDEFGHJKLMNPQRSTUVWXYZ23456789"), "00443214c74254b635cf84653a56d7c675be77df");
     }
 
     #[test]

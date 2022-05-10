@@ -12,7 +12,7 @@ use super::storage;
 use super::storage_io;
 use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
 
-fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
+pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
     // Replicate salt being converted to UTF-8 as done by JS code
     let salt_str = String::from_iter(salt.iter().map(|byte| *byte as char));
@@ -200,6 +200,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let salt = self.storage.get_salt()?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
         recovery_codes::generate(password.password(), &salt, key)
+    }
+
+    pub fn decode_recovery_code(&self, code: &str) -> Result<String, Error>
+    {
+        let master_password = self.master_password.as_ref().ok_or(Error::PasswordsLocked)?;
+        recovery_codes::decode(code, master_password)
     }
 
     pub fn remove(&mut self, site: &str, name: &str, revision: &str) -> Result<(), Error>

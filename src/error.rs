@@ -31,4 +31,9 @@ pub enum Error
     NoSuchAlias,
     AliasToSelf,
     SiteHasPasswords,
+    RecoveryCodeExtraData { line: usize },
+    RecoveryCodeChecksumMismatch { line: usize },
+    RecoveryCodeIncomplete,
+    RecoveryCodeWrongVersion,
+    RecoveryCodeInsufficientData,
 }
