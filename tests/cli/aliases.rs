@@ -19,6 +19,7 @@ fn uninitialized()
     session.expect("Failed reading storage file").expect("App should error out on missing file");
 }
 
+/*
 #[test]
 fn add_remove()
 {
@@ -49,3 +50,4 @@ fn add_remove()
     session = setup.run(&["show", "example.net", "blubber"], Some(MASTER_PASSWORD));
     session.expect("Password retrieved").expect("Password retrieval should succeed");
 }
+*/
