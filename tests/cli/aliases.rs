@@ -16,7 +16,10 @@ fn uninitialized()
     session.expect("Failed reading storage file").expect("App should error out on missing file");
 
     session = setup.run(&["remove-alias", "example.info"], None);
-    session.expect("Failed reading storage file").expect("App should error out on missing file");
+    let output = crate::common::read_to_eof(&mut session);
+    eprintln!("{}", output);
+    assert!(output.contains("Failed reading storage file"));
+    //session.expect("Failed reading storage file").expect("App should error out on missing file");
 }
 
 #[test]
