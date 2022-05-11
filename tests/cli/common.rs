@@ -4,6 +4,18 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+#[cfg(unix)]
+fn get_command(binary: &str) -> std::process::Command
+{
+    std::process::Command::new(binary)
+}
+
+#[cfg(windows)]
+fn get_command(binary: &str) -> conpty::ProcAttr
+{
+    conpty::ProcAttr::cmd(binary)
+}
+
 pub struct Setup
 {
     storage_file: tempfile::TempPath,
@@ -26,7 +38,7 @@ impl Setup
     pub fn run(&self, args: &[&str], master_password: Option<&str>) -> expectrl::session::Session
     {
         let binary = env!("CARGO_BIN_EXE_pfp-cli");
-        let mut command = std::process::Command::new(binary);
+        let mut command = get_command(binary);
         command.args(["-c", self.storage_file.to_str().expect("Temporary file path should be valid Unicode")]);
         command.args(args);
 
