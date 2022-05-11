@@ -45,4 +45,4 @@ jobs:
         name: ${{ matrix.target_name }} ${{ matrix.os }}
         path: target/release/${{ matrix.target_name }}
     - name: Run tests
-      run: cargo test --lib --verbose
+      run: cargo test aliases --verbose

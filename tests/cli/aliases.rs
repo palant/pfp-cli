@@ -14,9 +14,11 @@ fn uninitialized()
     let setup = Setup::new();
     let mut session = setup.run(&["set-alias", "example.info", "example.com"], None);
     session.expect("Failed reading storage file").expect("App should error out on missing file");
+    crate::common::read_to_eof(&mut session);
 
     session = setup.run(&["remove-alias", "example.info"], None);
     session.expect("Failed reading storage file").expect("App should error out on missing file");
+    crate::common::read_to_eof(&mut session);
 }
 
 /*
