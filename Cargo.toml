@@ -24,6 +24,9 @@ wildmatch = "2.1.0"
 expectrl = "0.3.0"
 tempfile = "3.3.0"
 
+[target.'cfg(windows)'.dev-dependencies]
+conpty = "0.3.0"
+
 [profile.dev]
 opt-level = 3
 

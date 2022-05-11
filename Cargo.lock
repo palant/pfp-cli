@@ -571,6 +571,7 @@ dependencies = [
  "app_dirs2",
  "base64",
  "clap",
+ "conpty",
  "directories",
  "enumset",
  "expectrl",
