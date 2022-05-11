@@ -4,7 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::common::Setup;
+use crate::common::{Setup, read_to_eof};
 
 const MASTER_PASSWORD: &str = "foobar";
 
@@ -14,14 +14,13 @@ fn uninitialized()
     let setup = Setup::new();
     let mut session = setup.run(&["set-alias", "example.info", "example.com"], None);
     session.expect("Failed reading storage file").expect("App should error out on missing file");
-    crate::common::read_to_eof(&mut session);
+    read_to_eof(&mut session);
 
     session = setup.run(&["remove-alias", "example.info"], None);
     session.expect("Failed reading storage file").expect("App should error out on missing file");
-    crate::common::read_to_eof(&mut session);
+    read_to_eof(&mut session);
 }
 
-/*
 #[test]
 fn add_remove()
 {
@@ -52,4 +51,3 @@ fn add_remove()
     session = setup.run(&["show", "example.net", "blubber"], Some(MASTER_PASSWORD));
     session.expect("Password retrieved").expect("Password retrieval should succeed");
 }
-*/

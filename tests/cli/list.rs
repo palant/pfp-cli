@@ -16,6 +16,7 @@ fn uninitialized()
     let setup = Setup::new();
     let mut session = setup.run(&["list"], None);
     session.expect("Failed reading storage file").expect("App should error out on missing file");
+    read_to_eof(&mut session);
 }
 
 #[test]

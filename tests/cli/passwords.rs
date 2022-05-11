@@ -16,12 +16,15 @@ fn uninitialized()
     let setup = Setup::new();
     let mut session = setup.run(&["add", "example.com", "blubber"], None);
     session.expect("Failed reading storage file").expect("App should error out on missing file");
+    read_to_eof(&mut session);
 
     session = setup.run(&["add-stored", "example.com", "blubber"], None);
     session.expect("Failed reading storage file").expect("App should error out on missing file");
+    read_to_eof(&mut session);
 
     session = setup.run(&["show", "example.com", "blubber"], None);
     session.expect("Failed reading storage file").expect("App should error out on missing file");
+    read_to_eof(&mut session);
 }
 
 #[test]

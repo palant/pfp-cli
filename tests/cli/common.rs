@@ -9,16 +9,6 @@ pub struct Setup
     storage_file: tempfile::TempPath,
 }
 
-#[cfg(unix)]
-type Proc = expectrl::process::unix::UnixProcess;
-#[cfg(unix)]
-type Stream = expectrl::process::unix::PtyStream;
-
-#[cfg(windows)]
-type Proc = expectrl::process::windows::WinProcess;
-#[cfg(windows)]
-type Stream = expectrl::process::windows::ProcessStream;
-
 impl Setup
 {
     pub fn new() -> Self
@@ -33,14 +23,14 @@ impl Setup
         setup
     }
 
-    pub fn run(&self, args: &[&str], master_password: Option<&str>) -> expectrl::session::Session<Proc, expectrl::stream::log::LoggedStream<Stream, std::io::Stderr>>
+    pub fn run(&self, args: &[&str], master_password: Option<&str>) -> expectrl::session::Session
     {
         let binary = env!("CARGO_BIN_EXE_pfp-cli");
         let mut command = std::process::Command::new(binary);
         command.args(["-c", self.storage_file.to_str().expect("Temporary file path should be valid Unicode")]);
         command.args(args);
 
-        let mut session = expectrl::session::Session::spawn(command).expect("Running binary should succeed").with_log(std::io::stderr()).unwrap();
+        let mut session = expectrl::session::Session::spawn(command).expect("Running binary should succeed");
         session.set_expect_timeout(Some(std::time::Duration::from_secs(10)));
 
         if let Some(master_password) = master_password
@@ -64,7 +54,7 @@ impl Setup
     }
 }
 
-pub fn read_to_eof(session: &mut expectrl::session::Session<Proc, expectrl::stream::log::LoggedStream<Stream, std::io::Stderr>>) -> String
+pub fn read_to_eof(session: &mut expectrl::session::Session) -> String
 {
     let capture = session.expect(expectrl::Eof).expect("App should terminate");
     String::from_utf8_lossy(capture.as_bytes()).into_owned()
