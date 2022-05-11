@@ -39,7 +39,12 @@ impl Setup
     {
         let binary = env!("CARGO_BIN_EXE_pfp-cli");
         let mut command = get_command(binary);
-        command.args([&["-c", self.storage_file.to_str().expect("Temporary file path should be valid Unicode")], args].concat().to_vec());
+        command.args(
+            [&["-c", self.storage_file.to_str().expect("Temporary file path should be valid Unicode")], args]
+                .concat()
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<String>>());
 
         let mut session = expectrl::session::Session::spawn(command).expect("Running binary should succeed");
         session.set_expect_timeout(Some(std::time::Duration::from_secs(10)));
