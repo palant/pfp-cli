@@ -463,7 +463,7 @@ fn main()
                                 let index = if qr.get_module(x, y) { 1 } else { 0 } | if qr.get_module(x, y + 1) { 2 } else { 0 };
                                 print!("{}", BLOCKS[index]);
                             }
-                            println!("");
+                            println!();
                         }
                     },
                     Err(error) =>
