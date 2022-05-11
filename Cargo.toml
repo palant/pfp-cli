@@ -20,6 +20,10 @@ scrypt = { version = "0.10.0", default-features = false }
 sha2 = "0.10.2"
 wildmatch = "2.1.0"
 
+[dev-dependencies]
+expectrl = "0.3.0"
+tempfile = "3.3.0"
+
 [profile.dev]
 opt-level = 3
 

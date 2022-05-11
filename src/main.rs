@@ -486,7 +486,17 @@ fn main()
             let mut empty_sites = Vec::new();
 
             let mut sites = passwords.list_sites(domain).collect::<Vec<Site>>();
+            let mut additions = Vec::new();
+            for site in sites.iter()
+            {
+                if let Some(alias) = site.alias()
+                {
+                    additions.push(Site::new(alias, None));
+                }
+            }
+            sites.append(&mut additions);
             sites.sort_by_key(|site| site.name().to_owned());
+            sites.dedup_by_key(|site| site.name().to_owned());
 
             let mut aliases = std::collections::HashMap::new();
             sites.retain(|site|
