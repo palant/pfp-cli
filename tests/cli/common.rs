@@ -5,15 +5,17 @@
  */
 
 #[cfg(unix)]
-fn get_command(binary: &str) -> std::process::Command
+fn get_command(binary: &str, args: &[&str]) -> std::process::Command
 {
-    std::process::Command::new(binary)
+    let mut command = std::process::Command::new(binary);
+    command.args(args);
+    command
 }
 
 #[cfg(windows)]
-fn get_command(binary: &str) -> conpty::ProcAttr
+fn get_command(binary: &str, args: &[&str]) -> conpty::ProcAttr
 {
-    conpty::ProcAttr::cmd(binary)
+    conpty::ProcAttr::cmd(binary).args(args.iter().map(|s| s.to_string()).collect::<Vec<String>>())
 }
 
 pub struct Setup
@@ -38,13 +40,7 @@ impl Setup
     pub fn run(&self, args: &[&str], master_password: Option<&str>) -> expectrl::session::Session
     {
         let binary = env!("CARGO_BIN_EXE_pfp-cli");
-        let mut command = get_command(binary);
-        command.args(
-            [&["-c", self.storage_file.to_str().expect("Temporary file path should be valid Unicode")], args]
-                .concat()
-                .iter()
-                .map(|s| s.to_string())
-                .collect::<Vec<String>>());
+        let command = get_command(binary, &[&["-c", self.storage_file.to_str().expect("Temporary file path should be valid Unicode")], args].concat());
 
         let mut session = expectrl::session::Session::spawn(command).expect("Running binary should succeed");
         session.set_expect_timeout(Some(std::time::Duration::from_secs(10)));
