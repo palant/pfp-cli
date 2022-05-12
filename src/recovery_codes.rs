@@ -24,9 +24,9 @@ const TAG_SIZE: usize = 16;
 /// The ciphertext and auxiliary data are encoded via Base32 with additional characters added
 /// to simplify human entry from printout or the like.
 ///
-/// `password` is the password to be encoded in the recovery code. `salt` is the salt used to
-/// derive `encryption_key` from the master password and will be stored unencrypted in the
-/// recovery code.
+/// `password` is the password to be encoded in the recovery code. `salt` is a random salt used to
+/// derive `encryption_key` from the secret master password using
+/// [get_encryption_key() function](../passwords/fn.get_encryption_key.html).
 ///
 /// ```
 /// use pfp::recovery_codes;

@@ -35,6 +35,11 @@ use crate::storage;
 use crate::storage_io;
 use crate::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site, CharacterSet};
 
+/// Generates the storage data encryption key.
+///
+/// The encryption key is always derived from a particular secret master password. Salt should be a
+/// random value to prevent rainbow table attacks. The salt is not considered a secret and is
+/// stored as plain text in the storage file.
 pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
     // Replicate salt being converted to UTF-8 as done by JS code
