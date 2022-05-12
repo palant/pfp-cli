@@ -5,10 +5,10 @@
  */
 
 use clap::{Parser, Subcommand};
-use pfp_cli::{crypto, passwords, storage, storage_io};
-use pfp_cli::error::Error;
-use pfp_cli::recovery_codes;
-use pfp_cli::storage_types::{Password, Site};
+use pfp::{crypto, passwords, storage, storage_io};
+use pfp::error::Error;
+use pfp::recovery_codes;
+use pfp::storage_types::{Password, Site};
 use std::path;
 use std::process;
 

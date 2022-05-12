@@ -3,6 +3,9 @@ name = "pfp-cli"
 version = "0.1.0"
 edition = "2021"
 
+[lib]
+name = "pfp"
+
 [dependencies]
 aes-gcm = "0.9.4"
 app_dirs2 = "2.4"
