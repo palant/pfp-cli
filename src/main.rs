@@ -149,7 +149,7 @@ fn prompt_password(prompt: &str, stdin_passwords: bool) -> String
     {
         use std::io::Write;
         let mut input = String::new();
-        std::io::stdout().write(prompt.as_bytes()).unwrap();
+        std::io::stdout().write_all(prompt.as_bytes()).unwrap();
         std::io::stdout().flush().unwrap();
         std::io::stdin().read_line(&mut input).unwrap();
         input.trim().to_string()
