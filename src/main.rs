@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 use pfp::{passwords, storage_io};
 use pfp::error::Error;
 use pfp::recovery_codes;
-use pfp::storage_types::{Password, Site, CharacterType, new_charset};
+use pfp::storage_types::{Password, Site, CharacterType, CharacterSet};
 use std::path;
 use std::process;
 
@@ -386,7 +386,7 @@ fn main()
         {
             ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
-            let mut charset = new_charset();
+            let mut charset = CharacterSet::empty();
             if !no_lower
             {
                 charset.insert(CharacterType::Lower);

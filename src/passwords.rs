@@ -4,6 +4,29 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+//! Holds the `Passwords` type encapsulating most of the crate's functionality.
+//!
+//! Typically, you will create a new `Passwords` instance using File I/O:
+//!
+//! ```no_run
+//! use pfp::passwords::Passwords;
+//! use pfp::storage_io::FileIO;
+//! use pfp::storage_types::CharacterSet;
+//! use std::path::Path;
+//!
+//! let io = FileIO::new(Path::new("test.json"));
+//! let mut passwords = Passwords::new(io);
+//!
+//! // Initialize password storage with a new master password
+//! passwords.reset("my master password").unwrap();
+//!
+//! // Add a generated password for example.com
+//! passwords.set_generated("example.com", "me", "1", 16, CharacterSet::all()).unwrap();
+//!
+//! // Get generated password
+//! assert_eq!(passwords.get("example.com", "me", "1").unwrap(), "sWEdAx<E<Gd_kaa2");
+//! ```
+
 use rand::Rng;
 use crate::crypto;
 use crate::error::Error;
@@ -64,6 +87,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret.to_vec());
+        self.master_password = Some(master_password.to_string());
         Ok(())
     }
 
@@ -364,11 +388,13 @@ mod tests
 
             assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
             assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
+            assert_eq!(passwords.master_password.as_ref().expect("Master password should be present"), MASTER_PASSWORD);
 
             passwords.lock();
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
             assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
             assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
+            assert_eq!(passwords.master_password.as_ref().expect("Master password should be present"), MASTER_PASSWORD);
         }
 
         #[test]
@@ -384,11 +410,13 @@ mod tests
 
             assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
             assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
+            assert_eq!(passwords.master_password.as_ref().expect("Master password should be present"), MASTER_PASSWORD);
 
             passwords.lock();
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
             assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
             assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
+            assert_eq!(passwords.master_password.as_ref().expect("Master password should be present"), MASTER_PASSWORD);
         }
     }
 

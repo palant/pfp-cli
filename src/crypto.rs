@@ -6,7 +6,7 @@
 
 use aes_gcm::aead::{Aead, NewAead};
 use crate::error::Error;
-use crate::storage_types::{CharacterType, CharacterSet, new_charset};
+use crate::storage_types::{CharacterType, CharacterSet};
 use hmac::Mac;
 use rand::Rng;
 use scrypt::scrypt;
@@ -50,7 +50,7 @@ pub fn derive_password(master_password: &str, salt: &str, length: usize, charset
 fn to_password(bytes: &[u8], charset: CharacterSet) -> String
 {
     let mut result = String::with_capacity(bytes.len());
-    let mut seen = new_charset();
+    let mut seen = CharacterSet::empty();
     for (i, byte) in bytes.iter().enumerate()
     {
         let allowed = if charset.len() - seen.len() >= bytes.len() - i { charset - seen } else { charset };

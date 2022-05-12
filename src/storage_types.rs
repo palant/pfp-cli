@@ -27,11 +27,6 @@ pub enum CharacterType
 
 pub type CharacterSet = enumset::EnumSet<CharacterType>;
 
-pub fn new_charset() -> CharacterSet
-{
-    enumset::EnumSet::empty()
-}
-
 #[derive(Debug)]
 pub struct PasswordId
 {
@@ -145,7 +140,7 @@ impl FromJson for GeneratedPassword
     {
         let id = PasswordId::from_json(value)?;
 
-        let mut charset = new_charset();
+        let mut charset = CharacterSet::empty();
         if value["lower"].as_bool().unwrap_or(false)
         {
             charset.insert(CharacterType::Lower);
