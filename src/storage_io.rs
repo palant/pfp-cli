@@ -4,17 +4,35 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+//! I/O abstraction layer
+//!
+//! The types defined here are used by the the
+//! [Passwords type](../passwords/struct.Passwords.html).
+//!
+//! ```
+//! use pfp::passwords::Passwords;
+//! use pfp::storage_io::FileIO;
+//! use std::path::Path;
+//!
+//! let io = FileIO::new(Path::new("test.json"));
+//! let passwords = Passwords::new(io);
+//! ```
+
 use std::cell::Cell;
 use std::fs;
 use std::path;
 use super::error::Error;
 
+/// Methods to be exposed by the type wrapping access to the storage file.
 pub trait StorageIO
 {
+    /// Reads storage file into a string.
     fn load(&self) -> Result<String, Error>;
+    /// Saves the storage data back into the file.
     fn save(&self, data: &str) -> Result<(), Error>;
 }
 
+/// File-based I/O implementation
 pub struct FileIO
 {
     path: path::PathBuf,
@@ -22,6 +40,7 @@ pub struct FileIO
 
 impl FileIO
 {
+    /// Creates a new `FileIO` instance from a file path on disk.
     pub fn new(path: &path::Path) -> Self
     {
         Self {
@@ -48,6 +67,7 @@ impl StorageIO for FileIO
     }
 }
 
+/// In-memory I/O implementation (for tests)
 pub struct MemoryIO
 {
     data: Cell<String>,
@@ -56,6 +76,7 @@ pub struct MemoryIO
 impl MemoryIO
 {
     #[cfg(test)]
+    /// Creates a new `MemoryIO` instance with given "file" data.
     pub fn new(data: &str) -> Self
     {
         Self {
