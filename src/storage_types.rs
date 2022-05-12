@@ -4,19 +4,22 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+//! Various types processed by storage functions.
+
 use crate::error::Error;
 
-pub trait FromJson
+pub(crate) trait FromJson
 {
     fn from_json(value: &json::object::Object) -> Result<Self, Error> where Self: Sized;
 }
 
-pub trait ToJson
+pub(crate) trait ToJson
 {
     fn to_json(&self) -> json::object::Object;
 }
 
 #[derive(enumset::EnumSetType, Debug)]
+/// Possible character types that a password is generated from.
 pub enum CharacterType
 {
     Lower,
@@ -25,9 +28,11 @@ pub enum CharacterType
     Symbol,
 }
 
+/// A set of character types to generate a password from.
 pub type CharacterSet = enumset::EnumSet<CharacterType>;
 
 #[derive(Debug)]
+/// A password identifier, no two passwords with identical identifiers are allowed in storage.
 pub struct PasswordId
 {
     site: String,
@@ -37,6 +42,10 @@ pub struct PasswordId
 
 impl PasswordId
 {
+    /// Creates a new password identifier from site name, password name and password revision.
+    ///
+    /// Password revision is usually numerical but does not have to be. Revision `"1"` is treated
+    /// like an empty string (no revision).
     pub fn new(site: &str, name: &str, revision: &str) -> PasswordId
     {
         PasswordId {
@@ -46,16 +55,19 @@ impl PasswordId
         }
     }
 
+    /// Retrieves the site name associated with the password identifier.
     pub fn site(&self) -> &str
     {
         &self.site
     }
 
+    /// Retrieves the password name associated with the password identifier.
     pub fn name(&self) -> &str
     {
         &self.name
     }
 
+    /// Retrieves the password revision associated with the password identifier.
     pub fn revision(&self) -> &str
     {
         &self.revision
@@ -87,6 +99,8 @@ impl ToJson for PasswordId
 }
 
 #[derive(Debug)]
+/// A generated password, generated from master password and various password parameters when
+/// needed.
 pub struct GeneratedPassword
 {
     id: PasswordId,
@@ -96,6 +110,8 @@ pub struct GeneratedPassword
 
 impl GeneratedPassword
 {
+    /// Creates a password with given password generation parameters: site name, password name,
+    /// password revision, password length and character types to be used.
     pub fn new(site: &str, name: &str, revision: &str, length: usize, charset: CharacterSet) -> GeneratedPassword
     {
         GeneratedPassword {
@@ -105,21 +121,26 @@ impl GeneratedPassword
         }
     }
 
+    /// Retrieves the password's identifier.
     pub fn id(&self) -> &PasswordId
     {
         &self.id
     }
 
+    /// Retrieves the password's length.
     pub fn length(&self) -> usize
     {
         self.length
     }
 
+    /// Retrieves the character types used when generating password.
     pub fn charset(&self) -> CharacterSet
     {
         self.charset
     }
 
+    /// Retrieves the password-specific salt used when deriving data from the master password for
+    /// password generation.
     pub fn salt(&self) -> String
     {
         let mut salt = self.id.site().to_string();
@@ -181,6 +202,7 @@ impl ToJson for GeneratedPassword
 }
 
 #[derive(Debug)]
+/// A stored password, with the password value stored verbatim in storage.
 pub struct StoredPassword
 {
     id: PasswordId,
@@ -189,6 +211,8 @@ pub struct StoredPassword
 
 impl StoredPassword
 {
+    /// Creates a password with given site name, password name, password revision and actual
+    /// password value.
     pub fn new(site: &str, name: &str, revision: &str, password: &str) -> StoredPassword
     {
         StoredPassword {
@@ -197,11 +221,13 @@ impl StoredPassword
         }
     }
 
+    /// Retrieves the password's identifier.
     pub fn id(&self) -> &PasswordId
     {
         &self.id
     }
 
+    /// Retrieves the password's value.
     pub fn password(&self) -> &str
     {
         &self.password
@@ -232,6 +258,7 @@ impl ToJson for StoredPassword
 }
 
 #[derive(Debug)]
+/// The type used by functions that can handle both generated and stored passwords.
 pub enum Password
 {
     Generated
@@ -246,6 +273,7 @@ pub enum Password
 
 impl Password
 {
+    /// Retrieves the password's identifier.
     pub fn id(&self) -> &PasswordId
     {
         return match self
@@ -299,6 +327,7 @@ impl ToJson for Password
 }
 
 #[derive(Debug)]
+/// A website entry in storage.
 pub struct Site
 {
     name: String,
@@ -307,6 +336,7 @@ pub struct Site
 
 impl Site
 {
+    /// Creates a new website entry from name and optionally name of the site it is aliased to.
     pub fn new(name: &str, alias: Option<&str>) -> Site
     {
         Site
@@ -316,11 +346,13 @@ impl Site
         }
     }
 
+    /// Retrieves the website's name.
     pub fn name(&self) -> &str
     {
         &self.name
     }
 
+    /// Retrieves the name of the website this site is aliased to if any.
     pub fn alias(&self) -> Option<&str>
     {
         match &self.alias
