@@ -10,13 +10,11 @@
 //!
 //! ```
 //! use pfp::passwords::Passwords;
-//! use pfp::storage::Storage;
 //! use pfp::storage_io::FileIO;
 //! use std::path::Path;
 //!
 //! let io = FileIO::new(Path::new("test.json"));
-//! let storage = Storage::new(io);
-//! let passwords = Passwords::new(storage);
+//! let passwords = Passwords::new(io);
 //!
 //! // Password storage will be uninitialized because the file doesn't exist yet.
 //! assert!(passwords.initialized().is_err());
@@ -29,6 +27,6 @@ pub mod crypto;
 pub mod error;
 pub mod passwords;
 pub mod recovery_codes;
-pub mod storage;
+mod storage;
 pub mod storage_io;
 pub mod storage_types;

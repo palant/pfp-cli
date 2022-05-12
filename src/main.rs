@@ -5,7 +5,7 @@
  */
 
 use clap::{Parser, Subcommand};
-use pfp::{crypto, passwords, storage, storage_io};
+use pfp::{crypto, passwords, storage_io};
 use pfp::error::Error;
 use pfp::recovery_codes;
 use pfp::storage_types::{Password, Site};
@@ -346,8 +346,7 @@ fn main()
         Some(value) => value,
         None => get_default_storage_path(),
     };
-    let storage = storage::Storage::new(storage_io::FileIO::new(&storage_path));
-    let mut passwords = passwords::Passwords::new(storage);
+    let mut passwords = passwords::Passwords::new(storage_io::FileIO::new(&storage_path));
 
     match &args.command
     {
