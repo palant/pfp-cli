@@ -4,7 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::common::{Setup, read_to_eof};
+use crate::common::Setup;
 
 const MASTER_PASSWORD: &str = "foobar";
 
@@ -13,12 +13,12 @@ fn uninitialized()
 {
     let setup = Setup::new();
     let mut session = setup.run(&["set-alias", "example.info", "example.com"], None);
-    session.expect("Failed reading storage file").expect("App should error out on missing file");
-    read_to_eof(&mut session);
+    session.expect_str("Failed reading storage file");
+    session.read_to_eof();
 
     session = setup.run(&["remove-alias", "example.info"], None);
-    session.expect("Failed reading storage file").expect("App should error out on missing file");
-    read_to_eof(&mut session);
+    session.expect_str("Failed reading storage file");
+    session.read_to_eof();
 }
 
 #[test]
@@ -28,26 +28,26 @@ fn add_remove()
     setup.initialize(MASTER_PASSWORD);
 
     let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
-    session.expect("Password added").expect("Call should succeed");
+    session.expect_str("Password added");
 
     session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
-    session.expect("No such value").expect("Password retrieval should fail");
+    session.expect_str("No such value");
 
     session = setup.run(&["set-alias", "example.info", "example.com"], Some(MASTER_PASSWORD));
-    session.expect("Alias added").expect("Call should succeed");
+    session.expect_str("Alias added");
 
     session = setup.run(&["set-alias", "example.net", "example.com"], Some(MASTER_PASSWORD));
-    session.expect("Alias added").expect("Call should succeed");
+    session.expect_str("Alias added");
 
     session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
-    session.expect("Password retrieved").expect("Password retrieval should succeed");
+    session.expect_str("Password retrieved");
 
     session = setup.run(&["remove-alias", "example.info"], Some(MASTER_PASSWORD));
-    session.expect("Alias removed").expect("Call should succeed");
+    session.expect_str("Alias removed");
 
     session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
-    session.expect("No such value").expect("Password retrieval should fail");
+    session.expect_str("No such value");
 
     session = setup.run(&["show", "example.net", "blubber"], Some(MASTER_PASSWORD));
-    session.expect("Password retrieved").expect("Password retrieval should succeed");
+    session.expect_str("Password retrieved");
 }

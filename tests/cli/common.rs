@@ -4,19 +4,8 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-#[cfg(unix)]
-fn get_command(binary: &str, args: &[&str]) -> std::process::Command
-{
-    let mut command = std::process::Command::new(binary);
-    command.args(args);
-    command
-}
-
-#[cfg(windows)]
-fn get_command(binary: &str, args: &[&str]) -> conpty::ProcAttr
-{
-    conpty::ProcAttr::cmd(binary).args(args.iter().map(|s| s.to_string()).collect::<Vec<String>>())
-}
+use std::io::Read;
+use std::io::Write;
 
 pub struct Setup
 {
@@ -37,18 +26,25 @@ impl Setup
         setup
     }
 
-    pub fn run(&self, args: &[&str], master_password: Option<&str>) -> expectrl::session::Session
+    pub fn run(&self, args: &[&str], master_password: Option<&str>) -> Session
     {
         let binary = env!("CARGO_BIN_EXE_pfp-cli");
-        let command = get_command(binary, &[&["-c", self.storage_file.to_str().expect("Temporary file path should be valid Unicode")], args].concat());
 
-        let mut session = expectrl::session::Session::spawn(command).expect("Running binary should succeed");
-        session.set_expect_timeout(Some(std::time::Duration::from_secs(10)));
+        let process =
+            subprocess::Exec::cmd(binary)
+                .args(&["--stdin-passwords".as_ref(), "-c".as_ref(), self.storage_file.as_os_str()])
+                .args(args)
+                .stdin(subprocess::Redirection::Pipe)
+                .stdout(subprocess::Redirection::Pipe)
+                .stderr(subprocess::Redirection::Merge)
+                .popen()
+                .expect("Running binary should succeed");
+        let mut session = Session::new(process);
 
         if let Some(master_password) = master_password
         {
-            session.expect("Your master password:").expect("App should request master password");
-            session.send_line(master_password).unwrap();
+            session.expect_str("Your master password:");
+            session.send_line(master_password);
         }
 
         session
@@ -58,16 +54,82 @@ impl Setup
     {
         let mut session = self.run(&["set-master"], None);
 
-        session.expect("New master password:").expect("App should request master password");
-        session.send_line(master_password).unwrap();
-        session.expect("Repeat master password:").expect("App should request master password to be repeated");
-        session.send_line(master_password).unwrap();
-        session.expect("master password set").expect("App should accept master password");
+        session.expect_str("New master password:");
+        session.send_line(master_password);
+        session.expect_str("Repeat master password:");
+        session.send_line(master_password);
+        session.expect_str("master password set");
     }
 }
 
-pub fn read_to_eof(session: &mut expectrl::session::Session) -> String
+pub struct Session
 {
-    let capture = session.expect(expectrl::Eof).expect("App should terminate");
-    String::from_utf8_lossy(capture.as_bytes()).into_owned()
+    process: subprocess::Popen,
+}
+
+impl Session
+{
+    const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+    fn new(process: subprocess::Popen) -> Self
+    {
+        Self { process }
+    }
+
+    pub fn expect_str(&mut self, pattern: &str)
+    {
+        let start = std::time::Instant::now();
+        let mut stdout = self.process.stdout.as_ref().expect("Process should have stdout");
+        let mut contents = Vec::new();
+        let mut buffer = [0u8; 1];
+        while !contents.ends_with(pattern.as_bytes())
+        {
+            assert!(start.elapsed() < Self::TIMEOUT, "Timed out waiting for string {} in process output", pattern);
+            let n = stdout.read(&mut buffer).expect(&format!("Failed waiting for string {} in process output", pattern));
+            contents.extend_from_slice(&buffer[0 .. n]);
+        }
+    }
+
+    pub fn send_line(&mut self, line: &str)
+    {
+        let mut stdin = self.process.stdin.as_ref().expect("Process should have stdin");
+        stdin.write_all(line.as_bytes()).expect(&format!("Failed sending the string {} to process input", line));
+        stdin.write_all(b"\n").expect("Failed sending terminating newline to process input");
+    }
+
+    pub fn read_to_eof(&mut self) -> String
+    {
+        let start = std::time::Instant::now();
+        let mut stdout = self.process.stdout.as_ref().expect("Process should have stdout");
+        let mut contents = Vec::new();
+        let mut buffer = [0u8; 1000];
+        loop
+        {
+            assert!(start.elapsed() < Self::TIMEOUT, "Timed out waiting for EOF");
+            match stdout.read(&mut buffer)
+            {
+                Ok(n) => if n == 0
+                {
+                    break;
+                }
+                else
+                {
+                    contents.extend_from_slice(&buffer[0 .. n]);
+                },
+                Err(error) => if error.kind() == std::io::ErrorKind::UnexpectedEof
+                {
+                    break;
+                }
+                else if error.kind() == std::io::ErrorKind::Interrupted
+                {
+                    continue;
+                }
+                else
+                {
+                    panic!("Unexpected error waiting for EOF: {}", error);
+                },
+            }
+        }
+        String::from_utf8(contents).expect("App output should be valid UTF-8").replace('\r', "")
+    }
 }

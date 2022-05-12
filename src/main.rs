@@ -20,6 +20,9 @@ struct Args
     /// Data storage file path
     #[clap(parse(from_os_str), short = 'c', long)]
     storage: Option<path::PathBuf>,
+    /// Integration tests only: read passwords from stdin
+    #[clap(long, hide = true)]
+    stdin_passwords: bool,
     #[clap(subcommand)]
     command: Commands,
 }
@@ -140,6 +143,23 @@ enum Commands
     },
 }
 
+fn prompt_password(prompt: &str, stdin_passwords: bool) -> String
+{
+    if stdin_passwords
+    {
+        use std::io::Write;
+        let mut input = String::new();
+        std::io::stdout().write(prompt.as_bytes()).unwrap();
+        std::io::stdout().flush().unwrap();
+        std::io::stdin().read_line(&mut input).unwrap();
+        input.trim().to_string()
+    }
+    else
+    {
+        rpassword::prompt_password(prompt).unwrap()
+    }
+}
+
 fn format_error(error: &Error) -> String
 {
     match error
@@ -221,13 +241,13 @@ fn get_default_storage_path() -> path::PathBuf
     path
 }
 
-fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(passwords: &mut passwords::Passwords<IO>)
+fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(passwords: &mut passwords::Passwords<IO>, stdin_passwords: bool)
 {
     passwords.initialized().handle_error();
 
     while passwords.unlocked().is_err()
     {
-        let master_password = rpassword::prompt_password("Your master password: ").unwrap();
+        let master_password = prompt_password("Your master password: ", stdin_passwords);
         if master_password.len() < 6
         {
             eprintln!("Master password length should be at least 6 characters.");
@@ -345,14 +365,14 @@ fn main()
                 }
             }
 
-            let master_password = rpassword::prompt_password("New master password: ").unwrap();
+            let master_password = prompt_password("New master password: ", args.stdin_passwords);
             if master_password.len() < 6
             {
                 eprintln!("Master password length should be at least 6 characters.");
                 process::exit(1);
             }
 
-            let master_password2 = rpassword::prompt_password("Repeat master password: ").unwrap();
+            let master_password2 = prompt_password("Repeat master password: ", args.stdin_passwords);
             if master_password != master_password2
             {
                 eprintln!("Master passwords don't match.");
@@ -365,7 +385,7 @@ fn main()
 
         Commands::Add {domain, name, revision, length, no_lower, no_upper, no_digit, no_symbol, assume_yes} =>
         {
-            ensure_unlocked_passwords(&mut passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
             let mut charset = crypto::new_charset();
             if !no_lower
@@ -408,7 +428,7 @@ fn main()
 
         Commands::AddStored {domain, name, revision, recovery, assume_yes} =>
         {
-            ensure_unlocked_passwords(&mut passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
             if !assume_yes && passwords.has(domain, name, revision).unwrap_or(false)
             {
@@ -428,7 +448,7 @@ fn main()
             }
             else
             {
-                rpassword::prompt_password("Password to be stored: ").unwrap()
+                prompt_password("Password to be stored: ", args.stdin_passwords)
             };
             passwords.set_stored(domain, name, revision, &password).handle_error();
             println!("Password added.");
@@ -436,7 +456,7 @@ fn main()
 
         Commands::Remove {domain, name, revision} =>
         {
-            ensure_unlocked_passwords(&mut passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
             passwords.remove(domain, name, revision).handle_error();
             println!("Password removed.");
@@ -444,7 +464,7 @@ fn main()
 
         Commands::Show {domain, name, revision, qrcode} =>
         {
-            ensure_unlocked_passwords(&mut passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
             let password = passwords.get(domain, name, revision).handle_error();
             println!("Password retrieved.");
@@ -481,7 +501,7 @@ fn main()
 
         Commands::List {domain, name, show, recovery, verbose} =>
         {
-            ensure_unlocked_passwords(&mut passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
             let mut empty_sites = Vec::new();
 
@@ -621,7 +641,7 @@ fn main()
 
         Commands::SetAlias {domain, alias} =>
         {
-            ensure_unlocked_passwords(&mut passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
             passwords.set_alias(domain, alias).handle_error();
             println!("Alias added.");
@@ -629,7 +649,7 @@ fn main()
 
         Commands::RemoveAlias {domain} =>
         {
-            ensure_unlocked_passwords(&mut passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
             passwords.remove_alias(domain).handle_error();
             println!("Alias removed.");

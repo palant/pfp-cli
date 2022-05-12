@@ -15,9 +15,9 @@ fn short_password()
     let setup = Setup::new();
     let mut session = setup.run(&["set-master"], None);
 
-    session.expect("New master password").expect("App should request master password");
-    session.send_line("asdf").unwrap();
-    session.expect("at least 6 characters").expect("App should reject master password");
+    session.expect_str("New master password");
+    session.send_line("asdf");
+    session.expect_str("at least 6 characters");
 }
 
 #[test]
@@ -26,11 +26,11 @@ fn mismatch()
     let setup = Setup::new();
     let mut session = setup.run(&["set-master"], None);
 
-    session.expect("New master password").expect("App should request master password");
-    session.send_line(MASTER_PASSWORD).unwrap();
-    session.expect("Repeat master password").expect("App should request master password to be repeated");
-    session.send_line(ANOTHER_MASTER_PASSWORD).unwrap();
-    session.expect("don't match").expect("App should reject repeated master password");
+    session.expect_str("New master password");
+    session.send_line(MASTER_PASSWORD);
+    session.expect_str("Repeat master password");
+    session.send_line(ANOTHER_MASTER_PASSWORD);
+    session.expect_str("don't match");
 }
 
 #[test]
@@ -40,10 +40,10 @@ fn success()
     setup.initialize(MASTER_PASSWORD);
 
     let mut session = setup.run(&["list"], Some(ANOTHER_MASTER_PASSWORD));
-    session.expect("Decryption failure").expect("App should reject wrong master password");
-    session.expect("Your master password").expect("App should request master password again");
-    session.send_line(MASTER_PASSWORD).unwrap();
-    session.expect("No matching passwords").expect("App should accept correct master password");
+    session.expect_str("Decryption failure");
+    session.expect_str("Your master password");
+    session.send_line(MASTER_PASSWORD);
+    session.expect_str("No matching passwords");
 }
 
 #[test]
@@ -53,9 +53,9 @@ fn reinitialization_aborted()
     setup.initialize(MASTER_PASSWORD);
 
     let mut session = setup.run(&["set-master"], None);
-    session.expect("remove all existing data").expect("App should warn about removing existing data");
-    session.send_line("n").unwrap();
-    session.expect(expectrl::Eof).expect("App show terminate");
+    session.expect_str("remove all existing data");
+    session.send_line("n");
+    session.read_to_eof();
 }
 
 #[test]
@@ -65,20 +65,20 @@ fn reinitialization_accepted()
     setup.initialize(MASTER_PASSWORD);
 
     let mut session = setup.run(&["set-master"], None);
-    session.expect("remove all existing data").expect("App should warn about removing existing data");
-    session.send_line("y").unwrap();
+    session.expect_str("remove all existing data");
+    session.send_line("y");
 
-    session.expect("New master password").expect("App should request master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD).unwrap();
-    session.expect("Repeat master password").expect("App should request master password to be repeated");
-    session.send_line(ANOTHER_MASTER_PASSWORD).unwrap();
-    session.expect("master password set").expect("App should accept master password");
+    session.expect_str("New master password");
+    session.send_line(ANOTHER_MASTER_PASSWORD);
+    session.expect_str("Repeat master password");
+    session.send_line(ANOTHER_MASTER_PASSWORD);
+    session.expect_str("master password set");
 
     session = setup.run(&["list"], Some(MASTER_PASSWORD));
-    session.expect("Decryption failure").expect("App should reject wrong master password");
-    session.expect("Your master password").expect("App should request master password again");
-    session.send_line(ANOTHER_MASTER_PASSWORD).unwrap();
-    session.expect("No matching passwords").expect("App should accept correct master password");
+    session.expect_str("Decryption failure");
+    session.expect_str("Your master password");
+    session.send_line(ANOTHER_MASTER_PASSWORD);
+    session.expect_str("No matching passwords");
 }
 
 #[test]
@@ -88,15 +88,15 @@ fn reinitialization_noninteractive()
     setup.initialize(MASTER_PASSWORD);
 
     let mut session = setup.run(&["set-master", "-y"], None);
-    session.expect("New master password").expect("App should request master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD).unwrap();
-    session.expect("Repeat master password").expect("App should request master password to be repeated");
-    session.send_line(ANOTHER_MASTER_PASSWORD).unwrap();
-    session.expect("master password set").expect("App should accept master password");
+    session.expect_str("New master password");
+    session.send_line(ANOTHER_MASTER_PASSWORD);
+    session.expect_str("Repeat master password");
+    session.send_line(ANOTHER_MASTER_PASSWORD);
+    session.expect_str("master password set");
 
     session = setup.run(&["list"], Some(MASTER_PASSWORD));
-    session.expect("Decryption failure").expect("App should reject wrong master password");
-    session.expect("Your master password").expect("App should request master password again");
-    session.send_line(ANOTHER_MASTER_PASSWORD).unwrap();
-    session.expect("No matching passwords").expect("App should accept correct master password");
+    session.expect_str("Decryption failure");
+    session.expect_str("Your master password");
+    session.send_line(ANOTHER_MASTER_PASSWORD);
+    session.expect_str("No matching passwords");
 }
