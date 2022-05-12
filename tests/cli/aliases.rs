@@ -14,11 +14,9 @@ fn uninitialized()
     let setup = Setup::new();
     let mut session = setup.run(&["set-alias", "example.info", "example.com"], None);
     session.expect_str("Failed reading storage file");
-    session.read_to_eof();
 
     session = setup.run(&["remove-alias", "example.info"], None);
     session.expect_str("Failed reading storage file");
-    session.read_to_eof();
 }
 
 #[test]

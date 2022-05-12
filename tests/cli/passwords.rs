@@ -16,15 +16,12 @@ fn uninitialized()
     let setup = Setup::new();
     let mut session = setup.run(&["add", "example.com", "blubber"], None);
     session.expect_str("Failed reading storage file");
-    session.read_to_eof();
 
     session = setup.run(&["add-stored", "example.com", "blubber"], None);
     session.expect_str("Failed reading storage file");
-    session.read_to_eof();
 
     session = setup.run(&["show", "example.com", "blubber"], None);
     session.expect_str("Failed reading storage file");
-    session.read_to_eof();
 }
 
 #[test]
