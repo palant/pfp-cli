@@ -4,6 +4,8 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+//! Contains some helper functions to work with password recovery codes.
+
 use super::crypto;
 use super::passwords;
 use super::error::Error;
@@ -16,6 +18,32 @@ const SALT_SIZE: usize = 16;
 const NONCE_SIZE: usize = 12;
 const TAG_SIZE: usize = 16;
 
+/// Generates a new recovery code for the password.
+///
+/// The password is encrypted and can only be decrypted if the right master password is known.
+/// The ciphertext and auxiliary data are encoded via Base32 with additional characters added
+/// to simplify human entry from printout or the like.
+///
+/// `password` is the password to be encoded in the recovery code. `salt` is the salt used to
+/// derive `encryption_key` from the master password and will be stored unencrypted in the
+/// recovery code.
+///
+/// ```
+/// use pfp::recovery_codes;
+///
+/// let code = recovery_codes::generate(
+///     "asdf",
+///     b"abcdefghijklmnop",
+///     b"abcdefghijklmnopqrstuvwxyz123456"
+/// ).unwrap();
+///
+/// // Will produce something like (actual output depends on a random nonce):
+/// // AFSY-E25E-NXVG:Q4DK-PKXY-25KP
+/// // P3ZZ-A2MC-NPUG:L3VH-PBWY-W48F
+/// // PTST-72NZ-ENV2:8U57-4DJQ-XDFB
+/// // GK6N-MXKF-GTMT:MKLU-CNZE-ES85
+/// println!("{}", code);
+/// ```
 pub fn generate(password: &str, salt: &[u8], encryption_key: &[u8]) -> Result<String, Error>
 {
     if salt.len() != SALT_SIZE
@@ -70,6 +98,21 @@ pub fn generate(password: &str, salt: &[u8], encryption_key: &[u8]) -> Result<St
     Ok(format_code(&crypto::base32_encode(&output)?, true))
 }
 
+/// Brings a recovery code into the canonical format.
+///
+/// Converts the data to uppercase letters and remove any invalid characters from it. Incomplete
+/// recovery codes are supported. Punctuation and line breaks will only be inserted if the
+/// `insert_punctuation` parameter is `true`.
+///
+/// ```
+/// use pfp::recovery_codes;
+///
+/// assert_eq!(recovery_codes::format_code(b"<abcd+efgh>", false), "ABCDEFGH");
+/// assert_eq!(recovery_codes::format_code(b"<abcd+efgh>", true), "ABCD-EFGH");
+///
+/// assert_eq!(recovery_codes::format_code(b"<abcd+efgh>123456789", false), "ABCDEFGH23456789");
+/// assert_eq!(recovery_codes::format_code(b"<abcd+efgh>123456789", true), "ABCD-EFGH-2345:6789");
+/// ```
 pub fn format_code(code: &[u8], insert_punctuation: bool) -> String
 {
     let mut result = String::new();
@@ -108,6 +151,23 @@ pub fn format_code(code: &[u8], insert_punctuation: bool) -> String
     result
 }
 
+/// Tries to decode a recovery code using the specified master password.
+///
+/// This might produce a number of errors, most importantly
+/// [Error::RecoveryCodeIncomplete](../error/enum.Error.html#variant.RecoveryCodeIncomplete) for
+/// recovery codes that are missing part of their data.
+///
+/// ```
+/// use pfp::recovery_codes;
+/// use pfp::error::Error;
+///
+/// let master_password = "my master password";
+/// let result = recovery_codes::decode("ABCD-EFGH", master_password);
+/// if let Err(Error::RecoveryCodeIncomplete) = result
+/// {
+///     eprintln!("Please enter more recovery code lines.");
+/// }
+/// ```
 pub fn decode(code: &str, master_password: &str) -> Result<String, Error>
 {
     let decoded = validate(code)?;
