@@ -23,7 +23,7 @@
 //! assert!(passwords.unlocked().is_err());
 //! ```
 
-pub mod crypto;
+mod crypto;
 pub mod error;
 pub mod passwords;
 pub mod recovery_codes;

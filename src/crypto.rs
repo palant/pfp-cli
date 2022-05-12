@@ -5,10 +5,11 @@
  */
 
 use aes_gcm::aead::{Aead, NewAead};
+use crate::error::Error;
+use crate::storage_types::{CharacterType, CharacterSet, new_charset};
 use hmac::Mac;
 use rand::Rng;
 use scrypt::scrypt;
-use super::error::Error;
 
 const AES_KEY_SIZE: usize = 256;
 const AES_NONCE_SIZE: usize = 96;
@@ -19,15 +20,6 @@ const CHARS_LOWER: &[u8] = b"abcdefghjkmnpqrstuvwxyz";
 const CHARS_UPPER: &[u8] = b"ABCDEFGHJKMNPQRSTUVWXYZ";
 const CHARS_DIGIT: &[u8] = b"23456789";
 const CHARS_SYMBOL: &[u8] = b"!#$%&()*+,-./:;<=>?@[]^_{|}~";
-
-#[derive(enumset::EnumSetType, Debug)]
-pub enum CharacterType
-{
-    Lower,
-    Upper,
-    Digit,
-    Symbol,
-}
 
 const CHARS_MAPPING: [(CharacterType, &[u8]); 4] = [
     (CharacterType::Lower, CHARS_LOWER),
@@ -40,11 +32,6 @@ const CHARS_MAPPING: [(CharacterType, &[u8]); 4] = [
 // ambiguous characters: 0, 1, O, I.
 pub const BASE32_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-pub fn new_charset() -> enumset::EnumSet<CharacterType>
-{
-    enumset::EnumSet::empty()
-}
-
 pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
 {
     let params = scrypt::Params::new(15, 8, 1).unwrap();
@@ -54,13 +41,13 @@ pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8>
     bytes
 }
 
-pub fn derive_password(master_password: &str, salt: &str, length: usize, charset: enumset::EnumSet<CharacterType>) -> String
+pub fn derive_password(master_password: &str, salt: &str, length: usize, charset: CharacterSet) -> String
 {
     let bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
     to_password(&bytes, charset)
 }
 
-fn to_password(bytes: &[u8], charset: enumset::EnumSet<CharacterType>) -> String
+fn to_password(bytes: &[u8], charset: CharacterSet) -> String
 {
     let mut result = String::with_capacity(bytes.len());
     let mut seen = new_charset();

@@ -5,10 +5,10 @@
  */
 
 use clap::{Parser, Subcommand};
-use pfp::{crypto, passwords, storage_io};
+use pfp::{passwords, storage_io};
 use pfp::error::Error;
 use pfp::recovery_codes;
-use pfp::storage_types::{Password, Site};
+use pfp::storage_types::{Password, Site, CharacterType, new_charset};
 use std::path;
 use std::process;
 
@@ -386,22 +386,22 @@ fn main()
         {
             ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
 
-            let mut charset = crypto::new_charset();
+            let mut charset = new_charset();
             if !no_lower
             {
-                charset.insert(crypto::CharacterType::Lower);
+                charset.insert(CharacterType::Lower);
             }
             if !no_upper
             {
-                charset.insert(crypto::CharacterType::Upper);
+                charset.insert(CharacterType::Upper);
             }
             if !no_digit
             {
-                charset.insert(crypto::CharacterType::Digit);
+                charset.insert(CharacterType::Digit);
             }
             if !no_symbol
             {
-                charset.insert(crypto::CharacterType::Symbol);
+                charset.insert(CharacterType::Symbol);
             }
             if charset.is_empty()
             {
@@ -608,19 +608,19 @@ fn main()
                             println!("        Length: {}", password.length());
 
                             let mut chars = Vec::new();
-                            if password.charset().contains(crypto::CharacterType::Lower)
+                            if password.charset().contains(CharacterType::Lower)
                             {
                                 chars.push("abc");
                             }
-                            if password.charset().contains(crypto::CharacterType::Upper)
+                            if password.charset().contains(CharacterType::Upper)
                             {
                                 chars.push("ABC");
                             }
-                            if password.charset().contains(crypto::CharacterType::Digit)
+                            if password.charset().contains(CharacterType::Digit)
                             {
                                 chars.push("789");
                             }
-                            if password.charset().contains(crypto::CharacterType::Symbol)
+                            if password.charset().contains(CharacterType::Symbol)
                             {
                                 chars.push("+^;");
                             }

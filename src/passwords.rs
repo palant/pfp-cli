@@ -5,12 +5,12 @@
  */
 
 use rand::Rng;
-use super::crypto;
-use super::error::Error;
-use super::recovery_codes;
-use super::storage;
-use super::storage_io;
-use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
+use crate::crypto;
+use crate::error::Error;
+use crate::recovery_codes;
+use crate::storage;
+use crate::storage_io;
+use crate::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site, CharacterSet};
 
 pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 {
@@ -128,7 +128,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.storage.flush()
     }
 
-    pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> Result<(), Error>
+    pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: CharacterSet) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -501,6 +501,7 @@ mod tests
     mod addition
     {
         use super::*;
+        use crate::storage_types::CharacterType;
 
         #[test]
         fn add_passwords()
@@ -513,9 +514,9 @@ mod tests
             passwords.set_alias("www.example.org", "www.example.com").expect("Adding alias should succeed");
             assert!(matches!(passwords.set_alias("www.example.com", "example.org").expect_err("Adding alias should fail"), Error::AliasToSelf { .. }));
 
-            passwords.set_generated("example.com", "blubber", "", 16, crypto::CharacterType::Lower | crypto::CharacterType::Upper | crypto::CharacterType::Digit | crypto::CharacterType::Symbol).expect("Adding password should succeed");
+            passwords.set_generated("example.com", "blubber", "", 16, CharacterType::Lower | CharacterType::Upper | CharacterType::Digit | CharacterType::Symbol).expect("Adding password should succeed");
             passwords.set_stored("example.com", "blabber", "2", "asdf").expect("Adding password should succeed");
-            passwords.set_generated("example.info", "test", "yet another", 8, crypto::CharacterType::Lower | crypto::CharacterType::Digit).expect("Adding password should succeed");
+            passwords.set_generated("example.info", "test", "yet another", 8, CharacterType::Lower | CharacterType::Digit).expect("Adding password should succeed");
 
             assert!(matches!(passwords.set_alias("www.example.com", "example.info").expect_err("Adding alias should fail"), Error::SiteHasPasswords { .. }));
 

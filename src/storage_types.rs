@@ -4,8 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use super::crypto;
-use super::error::Error;
+use crate::error::Error;
 
 pub trait FromJson
 {
@@ -15,6 +14,22 @@ pub trait FromJson
 pub trait ToJson
 {
     fn to_json(&self) -> json::object::Object;
+}
+
+#[derive(enumset::EnumSetType, Debug)]
+pub enum CharacterType
+{
+    Lower,
+    Upper,
+    Digit,
+    Symbol,
+}
+
+pub type CharacterSet = enumset::EnumSet<CharacterType>;
+
+pub fn new_charset() -> CharacterSet
+{
+    enumset::EnumSet::empty()
 }
 
 #[derive(Debug)]
@@ -81,12 +96,12 @@ pub struct GeneratedPassword
 {
     id: PasswordId,
     length: usize,
-    charset: enumset::EnumSet<crypto::CharacterType>
+    charset: CharacterSet
 }
 
 impl GeneratedPassword
 {
-    pub fn new(site: &str, name: &str, revision: &str, length: usize, charset: enumset::EnumSet<crypto::CharacterType>) -> GeneratedPassword
+    pub fn new(site: &str, name: &str, revision: &str, length: usize, charset: CharacterSet) -> GeneratedPassword
     {
         GeneratedPassword {
             id: PasswordId::new(site, name, revision),
@@ -105,7 +120,7 @@ impl GeneratedPassword
         self.length
     }
 
-    pub fn charset(&self) -> enumset::EnumSet<crypto::CharacterType>
+    pub fn charset(&self) -> CharacterSet
     {
         self.charset
     }
@@ -130,22 +145,22 @@ impl FromJson for GeneratedPassword
     {
         let id = PasswordId::from_json(value)?;
 
-        let mut charset = crypto::new_charset();
+        let mut charset = new_charset();
         if value["lower"].as_bool().unwrap_or(false)
         {
-            charset.insert(crypto::CharacterType::Lower);
+            charset.insert(CharacterType::Lower);
         }
         if value["upper"].as_bool().unwrap_or(false)
         {
-            charset.insert(crypto::CharacterType::Upper);
+            charset.insert(CharacterType::Upper);
         }
         if value["number"].as_bool().unwrap_or(false)
         {
-            charset.insert(crypto::CharacterType::Digit);
+            charset.insert(CharacterType::Digit);
         }
         if value["symbol"].as_bool().unwrap_or(false)
         {
-            charset.insert(crypto::CharacterType::Symbol);
+            charset.insert(CharacterType::Symbol);
         }
 
         Ok(GeneratedPassword {
@@ -162,10 +177,10 @@ impl ToJson for GeneratedPassword
     {
         let mut obj = self.id.to_json();
         obj.insert("length", self.length().into());
-        obj.insert("lower", self.charset().contains(crypto::CharacterType::Lower).into());
-        obj.insert("upper", self.charset().contains(crypto::CharacterType::Upper).into());
-        obj.insert("number", self.charset().contains(crypto::CharacterType::Digit).into());
-        obj.insert("symbol", self.charset().contains(crypto::CharacterType::Symbol).into());
+        obj.insert("lower", self.charset().contains(CharacterType::Lower).into());
+        obj.insert("upper", self.charset().contains(CharacterType::Upper).into());
+        obj.insert("number", self.charset().contains(CharacterType::Digit).into());
+        obj.insert("symbol", self.charset().contains(CharacterType::Symbol).into());
         obj
     }
 }
