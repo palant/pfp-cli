@@ -5,27 +5,6 @@
  */
 
 //! Holds the `Passwords` type encapsulating most of the crate's functionality.
-//!
-//! Typically, you will create a new `Passwords` instance using File I/O:
-//!
-//! ```no_run
-//! use pfp::passwords::Passwords;
-//! use pfp::storage_io::FileIO;
-//! use pfp::storage_types::CharacterSet;
-//! use std::path::Path;
-//!
-//! let io = FileIO::new(Path::new("test.json"));
-//! let mut passwords = Passwords::new(io);
-//!
-//! // Initialize password storage with a new master password
-//! passwords.reset("my master password").unwrap();
-//!
-//! // Add a generated password for example.com
-//! passwords.set_generated("example.com", "me", "1", 16, CharacterSet::all()).unwrap();
-//!
-//! // Get generated password
-//! assert_eq!(passwords.get("example.com", "me", "1").unwrap(), "sWEdAx<E<Gd_kaa2");
-//! ```
 
 use rand::Rng;
 use crate::crypto;
@@ -47,6 +26,28 @@ pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
     crypto::derive_key(master_password, salt_str.as_bytes())
 }
 
+/// The type providing access to the passwords storage, allowing to retrieve and manipulate its
+/// data.
+///
+/// Typically, you will create a new `Passwords` instance using File I/O:
+///
+/// ```no_run
+/// use pfp::passwords::Passwords;
+/// use pfp::storage_io::FileIO;
+/// use pfp::storage_types::CharacterSet;
+/// use std::path::Path;
+///
+/// let io = FileIO::new(Path::new("test.json"));
+/// let mut passwords = Passwords::new(io);
+///
+/// // Initialize password storage with a new master password
+/// passwords.reset("my master password").unwrap();
+///
+/// // Add a generated password for example.com
+/// passwords.set_generated("example.com", "me", "1", 16, CharacterSet::all()).unwrap();
+///
+/// // Get generated password
+/// assert_eq!(passwords.get("example.com", "me", "1").unwrap(), "sWEdAx<E<Gd_kaa2");
 pub struct Passwords<IO>
 {
     storage: storage::Storage<IO>,
@@ -57,6 +58,8 @@ pub struct Passwords<IO>
 
 impl<IO: storage_io::StorageIO> Passwords<IO>
 {
+    /// Creates a new `Passwords` instance. The storage file access is encapsulated in the `io`
+    /// instance, `Passwords` itself is unaware of the file's path or location.
     pub fn new(io: IO) -> Self
     {
         Self {
@@ -67,11 +70,27 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         }
     }
 
+    /// Checks whether storage data is present.
+    ///
+    /// This method succeeds if the passwords storage is initialized: it was either read from disk
+    /// successfully or reset using [reset() method](#method.reset). Otherwise calling it will
+    /// produce the error that reading the storage file resulted in.
+    ///
+    /// Note that this call succeeding doesn't mean that passwords can be accessed. This requires
+    /// the data to be unlocked with the right master password as well.
     pub fn initialized(&self) -> Result<(), &Error>
     {
         self.storage.initialized()
     }
 
+    /// Checks whether storage data is unlocked.
+    ///
+    /// This method succeeds if the master password is known and passwords can be accessed.
+    /// Otherwise it will result in
+    /// [Error::PasswordsLocked error](../error/enum.Error.html#variant.PasswordsLocked).
+    ///
+    /// Passwords can be unlocked through calling either [unlock()](#method.unlock) or
+    /// [reset()](#method.reset).
     pub fn unlocked(&self) -> Result<(), Error>
     {
         match self.key.as_ref()
@@ -81,6 +100,13 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         }
     }
 
+    /// Clears the passwords storage and sets a new master password.
+    ///
+    /// This method will succeed on both initialized and uninitialized storage. If storage is
+    /// already initialized, all existing data will be removed. On success, passwords storage will
+    /// be unlocked implicitly, calling `unlock()` isn't required.
+    ///
+    /// This only produces errors related to writing out the storage data to disk.
     pub fn reset(&mut self, master_password: &str) -> Result<(), Error>
     {
         let salt = crypto::get_rng().gen::<[u8; 16]>();
@@ -96,6 +122,13 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         Ok(())
     }
 
+    /// Unlocks the passwords storage with a given master password.
+    ///
+    /// If successful, it will be possible to access and manipulate passwords data after this call.
+    /// Calling this method on uninitialized storage will result in
+    /// [Error::StorageNotInitialized](../error/enum.Error.html#variant.StorageNotInitialized).
+    /// Calling this method with a wrong master password will result in
+    /// [Error::DecryptionFailure](../error/enum.Error.html#variant.DecryptionFailure).
     pub fn unlock(&mut self, master_password: &str) -> Result<(), Error>
     {
         let salt = self.storage.get_salt()?;
@@ -109,6 +142,10 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     }
 
     #[allow(dead_code)]
+    /// Locks the passwords storage, forgetting anything it knows about the master password.
+    ///
+    /// After this call, passwords will no longer be accessible until [unlock()](#method.unlock)
+    /// is called again.
     pub fn lock(&mut self)
     {
         self.key = None;
@@ -116,6 +153,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.master_password = None;
     }
 
+    /// Marks `site` and an alias for `alias`.
+    ///
+    /// This will normalize `site` parameter (remove `www.` prefix). If `alias` is itself marked as
+    /// an alias for another site, `site` will become an alias for that site. Attempting to mark a
+    /// site as an alias which already has passwords will result in
+    /// [Error::SiteHasPasswords](../error/enum.Error.html#variant.SiteHasPasswords).
     pub fn set_alias(&mut self, site: &str, alias: &str) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -132,6 +175,11 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.storage.flush()
     }
 
+    /// Turns `site` into a regular site, not an alias for another site any more.
+    ///
+    /// This will normalize `site` parameter (remove `www.` prefix). If `site` isn't marked as an
+    /// alias, this call will result in
+    /// [Error::NoSuchAlias](../error/enum.Error.html#variant.NoSuchAlias).
     pub fn remove_alias(&mut self, site: &str) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -142,6 +190,11 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.storage.flush()
     }
 
+    /// Removes a number of site entries.
+    ///
+    /// *Important*: This does not remove the passwords belonging to the sites, and this method
+    /// will not check whether such passwords exist. It should only be called for sites known to
+    /// have no passwords.
     pub fn remove_sites(&mut self, sites: &[String]) -> Result<(), Error>
     {
         if sites.is_empty()
@@ -157,6 +210,18 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.storage.flush()
     }
 
+    /// Adds a generated password or replaces an existing password.
+    ///
+    /// The `site` (site name), `name` (password name) and `revision` (password revision)
+    /// parameters identify a password, if a password with the same combination of these parameters
+    /// exists it will be replaced. While revisions are usually numerical, any string can be used.
+    /// The value `"1"` for revision is treated like an empty string.
+    ///
+    /// The `site` parameter will be normalized (`www.` prefix removed). If the site in question is
+    /// an alias, the password will be associated with the site it is an alias for.
+    ///
+    /// When the password is generated, it will have the length `length` and use the character sets
+    /// as determined by the `charset` parameter.
     pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: CharacterSet) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -172,6 +237,18 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.storage.flush()
     }
 
+    /// Adds a stored password or replaces an existing password.
+    ///
+    /// The `site` (site name), `name` (password name) and `revision` (password revision)
+    /// parameters identify a password, if a password with the same combination of these parameters
+    /// exists it will be replaced. While revisions are usually numerical, any string can be used.
+    /// The value `"1"` for revision is treated like an empty string.
+    ///
+    /// The `site` parameter will be normalized (`www.` prefix removed). If the site in question is
+    /// an alias, the password will be associated with the site it is an alias for.
+    ///
+    /// The actual password value is supplied in the `password` parameter and will be encrypted
+    /// along with all other data.
     pub fn set_stored(&mut self, site: &str, name: &str, revision: &str, password: &str) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -187,6 +264,11 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.storage.flush()
     }
 
+    /// Checks whether the password storage has a password with the given `site`, `name` and
+    /// `revision` combination. The value `"1"` for revision is treated like an empty string.
+    ///
+    /// The `site` parameter will be normalized (`www.` prefix removed). If the site in question is
+    /// an alias, the password will be associated with the site it is an alias for.
     pub fn has(&self, site: &str, name: &str, revision: &str) -> Result<bool, Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -199,6 +281,14 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         )
     }
 
+    /// Retrieves the value for the password with the given `site`, `name` and `revision`
+    /// combination. The value `"1"` for revision is treated like an empty string.
+    ///
+    /// The `site` parameter will be normalized (`www.` prefix removed). If the site in question is
+    /// an alias, the password will be associated with the site it is an alias for.
+    ///
+    /// If the password does not exist, the call will result in
+    /// [Error::KeyMissing error](../error/enum.Error.html#variant.KeyMissing).
     pub fn get(&self, site: &str, name: &str, revision: &str) -> Result<String, Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -224,6 +314,8 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         }
     }
 
+    /// Generates a human-readable recovery code for a stored password. With the correct master
+    /// password, the password can be decoded back from the recovery code.
     pub fn get_recovery_code(&self, password: &StoredPassword) -> Result<String, Error>
     {
         let salt = self.storage.get_salt()?;
@@ -231,12 +323,25 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         recovery_codes::generate(password.password(), &salt, key)
     }
 
+    /// Decodes a recovery code into a password value. Any invalid characters in the recovery code
+    /// will be ignored.
+    ///
+    /// This will produce the same errors as
+    /// [recovery_codes::decode()](../recovery_codes/fn.decode.html).
     pub fn decode_recovery_code(&self, code: &str) -> Result<String, Error>
     {
         let master_password = self.master_password.as_ref().ok_or(Error::PasswordsLocked)?;
         recovery_codes::decode(code, master_password)
     }
 
+    /// Removes the password with the given `site`, `name` and `revision` combination. The value
+    /// `"1"` for revision is treated like an empty string.
+    ///
+    /// The `site` parameter will be normalized (`www.` prefix removed). If the site in question is
+    /// an alias, the password will be associated with the site it is an alias for.
+    ///
+    /// If the password does not exist, the call will result in
+    /// [Error::KeyMissing error](../error/enum.Error.html#variant.KeyMissing).
     pub fn remove(&mut self, site: &str, name: &str, revision: &str) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -247,6 +352,10 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         self.storage.flush()
     }
 
+    /// Iterates over the passwords for a given site (site aliases will be resolved). The `name`
+    /// parameter is a password name filter and can contain wildcards (see
+    /// [wildmatch crate](https://docs.rs/wildmatch/latest/wildmatch/)). Passing `"*"` for `name`
+    /// will list all passwords for the site.
     pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = Password> + '_
     {
         assert!(self.unlocked().is_ok());
@@ -259,6 +368,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         })
     }
 
+    /// Iterates over existing site entries. The `site` parameter is a site name filter and can
+    /// contain wildcards (see [wildmatch crate](https://docs.rs/wildmatch/latest/wildmatch/)).
+    /// Passing `"*"` for `site` will list all known sites.
+    ///
+    /// This function will also return aliased sites, both if the site name matches the filter and
+    /// if the name of the site they are aliases for matches it.
     pub fn list_sites(&self, site: &str) -> impl Iterator<Item = Site> + '_
     {
         assert!(self.unlocked().is_ok());

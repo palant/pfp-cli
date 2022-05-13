@@ -155,7 +155,9 @@ pub fn format_code(code: &[u8], insert_punctuation: bool) -> String
 ///
 /// This might produce a number of errors, most importantly
 /// [Error::RecoveryCodeIncomplete](../error/enum.Error.html#variant.RecoveryCodeIncomplete) for
-/// recovery codes that are missing part of their data.
+/// recovery codes that are missing part of their data and
+/// [Error::DecryptionFailure](../error/enum.Error.html#variant.DecryptionFailure) in case of a
+/// wrong master password.
 ///
 /// ```
 /// use pfp::recovery_codes;
