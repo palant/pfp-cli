@@ -49,6 +49,12 @@ fn list()
     session = setup.run(&["set-alias", "example.org", "example.com"], Some(MASTER_PASSWORD));
     session.expect_str("Alias added");
 
+    session = setup.run(&["notes", "www.example.com", "blubber", "-r", "8", "-s"], Some(MASTER_PASSWORD));
+    session.expect_str("no notes are stored");
+    session.expect_str("enter new notes");
+    session.send_line("Now some notes stored here");
+    session.expect_str("Notes stored");
+
     session = setup.run(&["list", "-v", "foo.example.com"], Some(MASTER_PASSWORD));
     session.expect_str("No matching passwords");
 
@@ -72,6 +78,7 @@ Passwords for example.com:
         Allowed characters: ABC +^;
     blubber (generated, revision: 8)
         8svhxq86pwfc87qwvx9g
+        Notes: Now some notes stored here
         Length: 20
         Allowed characters: abc 789
 Passwords for example.net:
@@ -97,6 +104,7 @@ Passwords for example.com:
         Length: 5
         Allowed characters: ABC +^;
     blubber (generated, revision: 8)
+        Notes: Now some notes stored here
         Length: 20
         Allowed characters: abc 789
 ".trim());

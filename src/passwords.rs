@@ -347,6 +347,34 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         recovery_codes::decode(code, master_password)
     }
 
+    pub fn get_notes(&self, site: &str, name: &str, revision: &str) -> Result<String, Error>
+    {
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
+
+        let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
+        let password = self.storage.get_password(
+            &PasswordId::new(&site_resolved, name, revision),
+            hmac_secret, key
+        )?;
+        Ok(password.notes().to_string())
+    }
+
+    pub fn set_notes(&mut self, site: &str, name: &str, revision: &str, notes: &str) -> Result<(), Error>
+    {
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
+
+        let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
+        let mut password = self.storage.get_password(
+            &PasswordId::new(&site_resolved, name, revision),
+            hmac_secret, key
+        )?;
+        password.set_notes(notes);
+        self.storage.set_password(password, hmac_secret, key);
+        self.storage.flush()
+    }
+
     /// Removes the password with the given `site`, `name` and `revision` combination. The value
     /// `"1"` for revision is treated like an empty string.
     ///
@@ -441,16 +469,16 @@ mod tests
                 "YWJjZGVmZ2hpamts_b/AH4RUorsFjuRRJBYJzOBc4I+UJYXWhqhFXbEC9Aw5pRRO/Q31d6d/+RQhdj8wH0SWpEXk/ZkVXSAjSqpbqKsEek2JzzOetQNutMR4tblZGzTsPxWZogaKazYGFvg+J43L9ugBf7PjDfk+Rx3QbGdWaScEdCdciXlv6z/drMjyK0b8+kKgrdjdaIT7NuJwpEiZxzMngRiqPqZI="),
             // example.com\x00blabber\x002 (hmac-sha256)
             ("site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:h2pnx6RFyNbAUBLcuQYz9w79/vnf4fgJlY/c+EP44d8=",
-                // {"type":"stored","site":"example.com","name":"blabber","revision":"2","password":"asdf"} encrypted
-                "YWJjZGVmZ2hpamts_b/AH4RUorsFjrQVIEpV2bl5+Yq5RJiTy/BENNw+oFwoqVhC3TzIQ6py/AkQGwMtJimWpGH5/KAJXD1KZq5rzLZBN3j5z2uf/DYqyIx84fhxe1WtKjSImk92FeghEDLDNbwijfAnncDw="),
+                // {"type":"stored","site":"example.com","name":"blabber","revision":"2","password":"asdf","notes":"hi there!"} encrypted
+                "YWJjZGVmZ2hpamts_b/AH4RUorsFjrQVIEpV2bl5+Yq5RJiTy/BENNw+oFwoqVhC3TzIQ6py/AkQGwMtJimWpGH5/KAJXD1KZq5rzLZBN3j5z2uf/DYqyIx84fhxe1WtKjSImwveR0NfauV/GpDa27wRH7PiEZRmeoJNQ8MV3Bopr61xNEWK0ew=="),
             // example.info (hmac-sha256)
             ("site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=",
                 // {"site":"example.info"} encrypted
                 "YWJjZGVmZ2hpamts_b/AA8REorsFjuwlGDYB+KVw1f6FKYXsPR37ZtYXddpCecTwncBIM"),
             // example.info\x00test\x00yet another (hmac-sha256)
             ("site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:BSjLwWY3MLEPQdG1f/jwKOtJRKCxwXpRH5qkMrUnVsI=",
-                // {"type":"generated2","site":"example.info","name":"test","revision":"yet another","length":8,"lower":true,"upper":false,"number":true,"symbol":false} encrypted
-                "YWJjZGVmZ2hpamts_b/AH4RUorsFjuRRJBYJzOBc4I+UJYXWhqhFXbEC9Aw5pRRO/Q3dc4pLwS0RSg8RAyT3pCWkucAIJSFaVrprvKt0Z3jZzj6D7TJivOwQif0xG2yhVjCpjmr3dhZuT6BGT8Tut7Upb+/+EaBmWwmFSSZnVQsIUCJA0CEf6x7ksM2fdx6In1759dztSPv4LAx+oMQrVGzjFO4a3iuk8bTSFjmb4jtH+"),
+                // {"type":"generated2","site":"example.info","name":"test","revision":"yet another","length":8,"lower":true,"upper":false,"number":true,"symbol":false,"notes":"nothing here"} encrypted
+                "YWJjZGVmZ2hpamts_b/AH4RUorsFjuRRJBYJzOBc4I+UJYXWhqhFXbEC9Aw5pRRO/Q3dc4pLwS0RSg8RAyT3pCWkucAIJSFaVrprvKt0Z3jZzj6D7TJivOwQif0xG2yhVjCpjmr3dhZuT6BGT8Tut7Upb+/+EaBmWwmFSSZnVQsIUCJA0CEf6x7ksM2fdx6In1759dztSPv4LAx+oMQrVG2lMD14TzIctWTOQysV+9JdUWXZRkyZDOtnHHTfVanjSaON/wEY2P5w="),
             // example.org (hmac-sha256)
             ("site:5IS/IdH3aaMwyzRv0fwy+2oh5OsXZ2emV8991dFWrko=",
                 // {"site":"example.org","alias":"example.com"} encrypted
@@ -681,6 +709,34 @@ mod tests
 
             assert_eq!(passwords.get("example.info", "test", "yet another").expect("Retrieval should succeed"), "rjtfxqf4");
             assert!(matches!(passwords.get("example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
+        }
+    }
+
+    mod notes
+    {
+        use super::*;
+
+        #[test]
+        fn notes()
+        {
+            let io = MemoryIO::new(default_data());
+            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
+            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+
+            assert_eq!(passwords.get_notes("www.example.com", "blubber", "").expect("Getting notes should succeed"), "");
+            assert_eq!(passwords.get_notes("www.example.com", "blabber", "2").expect("Getting notes should succeed"), "hi there!");
+            assert_eq!(passwords.get_notes("example.info", "test", "yet another").expect("Getting notes should succeed"), "nothing here");
+            assert!(matches!(passwords.get_notes("example.info", "blubber", "").expect_err("Getting notes should fail"), Error::KeyMissing { .. }));
+
+            passwords.set_notes("example.com", "blubber", "", "hey!").expect("Setting notes should succeed");
+            passwords.set_notes("example.com", "blabber", "2", "").expect("Setting notes should succeed");
+            passwords.set_notes("www.example.info", "test", "yet another", "something here").expect("Setting notes should succeed");
+            assert!(matches!(passwords.set_notes("example.info", "blubber", "", "").expect_err("Getting notes should fail"), Error::KeyMissing { .. }));
+
+            assert_eq!(passwords.get_notes("www.example.com", "blubber", "").expect("Getting notes should succeed"), "hey!");
+            assert_eq!(passwords.get_notes("www.example.com", "blabber", "2").expect("Getting notes should succeed"), "");
+            assert_eq!(passwords.get_notes("example.info", "test", "yet another").expect("Getting notes should succeed"), "something here");
+            assert!(matches!(passwords.get_notes("example.info", "blubber", "").expect_err("Getting notes should fail"), Error::KeyMissing { .. }));
         }
     }
 

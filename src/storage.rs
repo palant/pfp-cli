@@ -245,6 +245,12 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         self.get(&key, encryption_key)
     }
 
+    pub fn set_password(&mut self, password: Password, hmac_secret: &[u8], encryption_key: &[u8])
+    {
+        let key = self.get_password_key(password.id(), hmac_secret);
+        self.set(&key, &password, encryption_key);
+    }
+
     pub fn remove_password(&mut self, id: &PasswordId, hmac_secret: &[u8]) -> Result<(), Error>
     {
         let key = self.get_password_key(id, hmac_secret);
@@ -304,16 +310,16 @@ mod tests
                 "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8AQBt60o0dplkj0d85WabgV46VFsKYTYFREBpwu0V2UXOYtfLQs57L0+RhGX8DLb6mfNMvwdeQ6tYPZdSNhdrqVOBlYbdeOA1HTq+OcNoPb4MDZ+TJeVX2kK+88Hj0mn4QSrloOrHS7WRBuHsAJM4DOPrxOLF00="),
             // example.com\x00blabber\x002 (hmac-sha256)
             ("site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:h2pnx6RFyNbAUBLcuQYz9w79/vnf4fgJlY/c+EP44d8=",
-                // {"type":"stored","site":"example.com","name":"blabber","revision":"2","password":"asdf"} encrypted
-                "YWJjZGVmZ2hpamts_e0/xiFNCrXFfo6QS4fFiGF6URlEBwON0VbSrmlg0kBtyJkOH/EtMtO5plpY+3TpTqNWaZwI4pxZsbt6TFB0YoFrnGjkXL4sNYFom/rwrVluP6GKeoiODIKEGZcC+lKGefkKz97EFdEM="),
+                // {"type":"stored","site":"example.com","name":"blabber","revision":"2","password":"asdf","notes":"hi there!"} encrypted
+                "YWJjZGVmZ2hpamts_e0/xiFNCrXFfo6QS4fFiGF6URlEBwON0VbSrmlg0kBtyJkOH/EtMtO5plpY+3TpTqNWaZwI4pxZsbt6TFB0YoFrnGjkXL4sNYFom/rwrVluP6GKeoiODcakWZFjyZ6YSD5wW+6FWBlZcbrWPk+fjsf0XL5/BV5QzwcVsSA=="),
             // example.info (hmac-sha256)
             ("site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=",
                 // {"site":"example.info"} encrypted
                 "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zfW14ah7y+PC4vvSZR2oUnodSsOmi/"),
             // example.info\x00test\x00yet another (hmac-sha256)
             ("site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:BSjLwWY3MLEPQdG1f/jwKOtJRKCxwXpRH5qkMrUnVsI=",
-                // {"type":"generated2","site":"example.info","name":"test","revision":"yet another","length":8,"lower":true,"upper":false,"number":true,"symbol":false} encrypted
-                "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8A4AvOAm35ZqnjVa643adhVp/xYyKdqfER0EpxezGjEXeswJIUg75qcxVwuX5iGBoyvGKeNaMRS7NuhHWpEN+e9KEVFcY7WH0WGjqKtCq/XxMXFoGouVVydN+pRQmVS+phL9l4+jAu/UlX6+yWgvwdxujw6gg3PFRIUACUVMB+vd"),
+                // {"type":"generated2","site":"example.info","name":"test","revision":"yet another","length":8,"lower":true,"upper":false,"number":true,"symbol":false,"notes":"nothing here"} encrypted
+                "YWJjZGVmZ2hpamts_e0/xiFNCrXFft7UT9uZnThfSBxpZh7InA7TxwRchhB8xNUCP8A4AvOAm35ZqnjVa643adhVp/xYyKdqfER0EpxezGjEXeswJIUg75qcxVwuX5iGBoyvGKeNaMRS7NuhHWpEN+e9KEVFcY7WH0WGjqKtCq/XxMXFoGouVVydN+pRQmVS+phL9l4+jAu/UlX6+yWgvwY0cwJrMJPhEFv7deuVtWnHNzEuJ22zSEY0cYQ9Q6M7GC7W4pP5Uiww="),
             // example.org (hmac-sha256)
             ("site:5IS/IdH3aaMwyzRv0fwy+2oh5OsXZ2emV8991dFWrko=",
                 // {"site":"example.org","alias":"example.com"} encrypted
@@ -457,7 +463,8 @@ mod tests
                 "site": "example.com",
                 "name": "blabber",
                 "revision": "2",
-                "password": "asdf"
+                "password": "asdf",
+                "notes": "hi there!",
             };
             let password2 = object!{
                 "type": "generated2",
@@ -480,6 +487,7 @@ mod tests
                 "upper": false,
                 "number": true,
                 "symbol": false,
+                "notes": "nothing here",
             };
             assert_eq!(list_passwords(&storage, "example.com"), vec![password1, password2]);
             assert_eq!(list_passwords(&storage, "example.info"), vec![password3]);
@@ -515,7 +523,8 @@ mod tests
                 "site": "example.com",
                 "name": "blabber",
                 "revision": "2",
-                "password": "asdf"
+                "password": "asdf",
+                "notes": "hi there!",
             });
 
             assert!(storage.has_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET));
@@ -544,6 +553,7 @@ mod tests
                 "upper": false,
                 "number": true,
                 "symbol": false,
+                "notes": "nothing here",
             });
 
             assert!(!storage.has_password(&PasswordId::new("example.org", "blubber", ""), HMAC_SECRET));
@@ -607,15 +617,25 @@ mod tests
                 "lower": true,
                 "upper": true,
                 "number": true,
-                "symbol": true
+                "symbol": true,
+                "notes": "whatever"
             }"#).unwrap()).unwrap(), HMAC_SECRET, ENCRYPTION_KEY);
+
+            let mut password = storage.get_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
+            password.set_notes("");
+            storage.set_password(password, HMAC_SECRET, ENCRYPTION_KEY);
 
             storage.set_stored(StoredPassword::from_json(&parse_json_object(r#"{
                 "site": "example.com",
                 "name": "blabber",
                 "revision": "2",
-                "password": "asdf"
+                "password": "asdf",
+                "notes": "hi!"
             }"#).unwrap()).unwrap(), HMAC_SECRET, ENCRYPTION_KEY);
+
+            let mut password = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
+            password.set_notes("hi there!");
+            storage.set_password(password, HMAC_SECRET, ENCRYPTION_KEY);
 
             storage.ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY);
             storage.ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY);
@@ -630,6 +650,10 @@ mod tests
                 "number": true,
                 "symbol": false
             }"#).unwrap()).unwrap(), HMAC_SECRET, ENCRYPTION_KEY);
+
+            let mut password = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
+            password.set_notes("nothing here");
+            storage.set_password(password, HMAC_SECRET, ENCRYPTION_KEY);
 
             let result = storage.set_alias("example.com", "example.com", HMAC_SECRET, ENCRYPTION_KEY);
             assert!(matches!(result.expect_err("Setting an alias to itself should fail"), Error::AliasToSelf { .. }));

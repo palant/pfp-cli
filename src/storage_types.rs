@@ -105,7 +105,8 @@ pub struct GeneratedPassword
 {
     id: PasswordId,
     length: usize,
-    charset: CharacterSet
+    charset: CharacterSet,
+    notes: String,
 }
 
 impl GeneratedPassword
@@ -118,6 +119,7 @@ impl GeneratedPassword
             id: PasswordId::new(site, name, revision),
             length,
             charset,
+            notes: String::new(),
         }
     }
 
@@ -153,6 +155,18 @@ impl GeneratedPassword
         }
         salt
     }
+
+    /// Retrieves the notes stored with the password if any.
+    pub fn notes(&self) -> &str
+    {
+        &self.notes
+    }
+
+    /// Sets the notes for the password.
+    pub fn set_notes(&mut self, notes: &str)
+    {
+        self.notes = notes.to_string();
+    }
 }
 
 impl FromJson for GeneratedPassword
@@ -183,6 +197,7 @@ impl FromJson for GeneratedPassword
             id,
             length: value["length"].as_usize().ok_or(Error::PasswordMissingLength)?,
             charset,
+            notes: value["notes"].as_str().unwrap_or("").to_string(),
         })
     }
 }
@@ -197,6 +212,10 @@ impl ToJson for GeneratedPassword
         obj.insert("upper", self.charset().contains(CharacterType::Upper).into());
         obj.insert("number", self.charset().contains(CharacterType::Digit).into());
         obj.insert("symbol", self.charset().contains(CharacterType::Symbol).into());
+        if !self.notes.is_empty()
+        {
+            obj.insert("notes", self.notes().into());
+        }
         obj
     }
 }
@@ -207,6 +226,7 @@ pub struct StoredPassword
 {
     id: PasswordId,
     password: String,
+    notes: String,
 }
 
 impl StoredPassword
@@ -218,6 +238,7 @@ impl StoredPassword
         StoredPassword {
             id: PasswordId::new(site, name, revision),
             password: password.to_string(),
+            notes: String::new(),
         }
     }
 
@@ -232,6 +253,18 @@ impl StoredPassword
     {
         &self.password
     }
+
+    /// Retrieves the notes stored with the password if any.
+    pub fn notes(&self) -> &str
+    {
+        &self.notes
+    }
+
+    /// Sets the notes for the password.
+    pub fn set_notes(&mut self, notes: &str)
+    {
+        self.notes = notes.to_string();
+    }
 }
 
 impl FromJson for StoredPassword
@@ -243,6 +276,7 @@ impl FromJson for StoredPassword
         Ok(StoredPassword {
             id,
             password: password.to_string(),
+            notes: value["notes"].as_str().unwrap_or("").to_string(),
         })
     }
 }
@@ -253,6 +287,10 @@ impl ToJson for StoredPassword
     {
         let mut obj = self.id.to_json();
         obj.insert("password", self.password().into());
+        if !self.notes.is_empty()
+        {
+            obj.insert("notes", self.notes().into());
+        }
         obj
     }
 }
@@ -276,11 +314,31 @@ impl Password
     /// Retrieves the password's identifier.
     pub fn id(&self) -> &PasswordId
     {
-        return match self
+        match self
         {
             Self::Generated { password } => password.id(),
             Self::Stored { password } => password.id(),
-        };
+        }
+    }
+
+    /// Retrieves the notes stored with the password if any.
+    pub fn notes(&self) -> &str
+    {
+        match self
+        {
+            Self::Generated { password } => password.notes(),
+            Self::Stored { password } => password.notes(),
+        }
+    }
+
+    /// Sets the notes for the password.
+    pub fn set_notes(&mut self, notes: &str)
+    {
+        match self
+        {
+            Self::Generated { password } => password.set_notes(notes),
+            Self::Stored { password } => password.set_notes(notes),
+        }
     }
 }
 

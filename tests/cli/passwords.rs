@@ -22,6 +22,9 @@ fn uninitialized()
 
     session = setup.run(&["show", "example.com", "blubber"], None);
     session.expect_str("Failed reading storage file");
+
+    session = setup.run(&["notes", "example.com", "blubber"], None);
+    session.expect_str("Failed reading storage file");
 }
 
 #[test]
@@ -301,4 +304,35 @@ fn show_qrcode()
 █ ▀▀▀ █ ▀▀▄ █▄█▄█ ▄  \n
 ▀▀▀▀▀▀▀     ▀ ▀ ▀ ▀▀ \n
 ".replace("\n\n", "\n").trim());
+}
+
+#[test]
+fn notes()
+{
+    let setup = Setup::new();
+    setup.initialize(MASTER_PASSWORD);
+
+    let mut session = setup.run(&["add", "example.com", "blubber", "-r", "2", "--no-lower", "--no-digit", "--length", "5"], Some(MASTER_PASSWORD));
+    session.expect_str("Password added");
+
+    session = setup.run(&["notes", "example.com", "blubber", "-r", "2"], Some(MASTER_PASSWORD));
+    session.expect_str("no notes are stored");
+
+    session = setup.run(&["notes", "example.com", "blubber", "-r", "2", "-s"], Some(MASTER_PASSWORD));
+    session.expect_str("no notes are stored");
+    session.expect_str("enter new notes");
+    session.send_line("hi there!");
+    session.expect_str("Notes stored");
+
+    session = setup.run(&["notes", "example.com", "blubber", "-r", "2"], Some(MASTER_PASSWORD));
+    session.expect_str("Notes for this password: hi there!");
+
+    session = setup.run(&["notes", "example.com", "blubber", "-r", "2", "-s"], Some(MASTER_PASSWORD));
+    session.expect_str("Notes for this password: hi there!");
+    session.expect_str("enter new notes");
+    session.send_line("");
+    session.expect_str("Notes removed");
+
+    session = setup.run(&["notes", "example.com", "blubber", "-r", "2"], Some(MASTER_PASSWORD));
+    session.expect_str("no notes are stored");
 }

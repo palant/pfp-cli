@@ -108,6 +108,20 @@ enum Commands
         #[clap(short = 'q', long)]
         qrcode: bool,
     },
+    /// Shows or sets the notes for a password
+    Notes
+    {
+        /// Website name to generate password for
+        domain: String,
+        /// User name associated with the account
+        name: String,
+        /// Password revision
+        #[clap(short = 'r', long, default_value = "1")]
+        revision: String,
+        /// Set notes for this password
+        #[clap(short = 's', long)]
+        set: bool,
+    },
     /// Lists passwords for a website
     List
     {
@@ -493,6 +507,37 @@ fn main()
             }
         }
 
+        Commands::Notes {domain, name, revision, set} =>
+        {
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+
+            let notes = passwords.get_notes(domain, name, revision).handle_error();
+            if notes.is_empty()
+            {
+                println!("Currently no notes are stored for this password.");
+            }
+            else
+            {
+                println!("Notes for this password: {}", notes);
+            }
+
+            if *set
+            {
+                if let Some(question::Answer::RESPONSE(notes)) = question::Question::new("Please enter new notes to be stored:").ask()
+                {
+                    passwords.set_notes(domain, name, revision, &notes).handle_error();
+                    if notes.is_empty()
+                    {
+                        println!("Notes removed.");
+                    }
+                    else
+                    {
+                        println!("Notes stored.");
+                    }
+                }
+            }
+        }
+
         Commands::List {domain, name, show, recovery, verbose} =>
         {
             ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
@@ -598,6 +643,12 @@ fn main()
 
                     if *verbose
                     {
+                        let notes = password.notes();
+                        if !notes.is_empty()
+                        {
+                            println!("        Notes: {}", notes);
+                        }
+
                         if let Password::Generated { password } = &password
                         {
                             println!("        Length: {}", password.length());
