@@ -371,9 +371,11 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     {
         assert!(self.unlocked());
 
-        let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap());
+        let hmac_secret = self.hmac_secret.as_ref().unwrap();
+        let key = self.key.as_ref().unwrap();
+        let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         let matcher = wildmatch::WildMatch::new(name);
-        self.storage.list_passwords(&site_resolved, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap()).filter(move |password|
+        self.storage.list_passwords(&site_resolved, hmac_secret, key).filter(move |password|
         {
             return matcher.matches(password.id().name());
         })
