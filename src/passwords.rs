@@ -38,9 +38,11 @@ pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 /// use pfp::storage_types::CharacterSet;
 /// use std::path::Path;
 ///
+/// // Attempt to read passwords from a file
 /// let io = FileIO::new(Path::new("test.json"));
 /// Passwords::new(io).expect_err("Will error out with Error::FileReadFailure for missing file");
 ///
+/// // Create an uninitialized Passwords instance
 /// let io = FileIO::new(Path::new("test.json"));
 /// let mut passwords = Passwords::uninitialized(io);
 ///
