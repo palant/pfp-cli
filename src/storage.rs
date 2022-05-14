@@ -23,9 +23,9 @@ fn parse_json_object(input: &str) -> Result<json::object::Object, Error>
     }
 }
 
+#[derive(Debug)]
 pub struct Storage<IO>
 {
-    error: Option<Error>,
     io: IO,
 }
 
@@ -44,24 +44,23 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         }
     }
 
-    pub fn new(mut io: IO) -> Self
+    pub fn new(mut io: IO) -> Result<Self, Error>
     {
-        match Self::load_storage(&mut io)
-        {
-            Ok(()) => Self {
-                error: None,
-                io,
-            },
-            Err(error) => Self {
-                error: Some(error),
-                io,
-            },
+        Self::load_storage(&mut io)?;
+        Ok(Self {
+            io,
+        })
+    }
+
+    pub fn uninitialized(io: IO) -> Self
+    {
+        Self {
+            io,
         }
     }
 
     pub fn clear(&mut self, salt: &[u8], hmac_secret: &[u8], encryption_key: &[u8])
     {
-        self.error = None;
         self.io.clear();
         self.set_salt(salt);
         self.set_hmac_secret(hmac_secret, encryption_key);
@@ -72,13 +71,9 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         self.io.flush()
     }
 
-    pub fn initialized(&self) -> Result<(), &Error>
+    pub fn initialized(&self) -> bool
     {
-        match &self.error
-        {
-            Some(error) => Err(error),
-            None => Ok(()),
-        }
+        self.io.contains_key(SALT_KEY) && self.io.contains_key(HMAC_SECRET_KEY)
     }
 
     fn contains(&self, key: &str) -> bool
@@ -353,8 +348,7 @@ mod tests
         fn read_empty_data()
         {
             let io = MemoryIO::new(HashMap::new());
-            let storage = Storage::new(io);
-            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from empty data should fail"), Error::UnexpectedData { .. }));
         }
 
         #[test]
@@ -363,8 +357,7 @@ mod tests
             let io = MemoryIO::new(HashMap::from([
                 ("salt".to_string(), "asdf".to_string()),
             ]));
-            let storage = Storage::new(io);
-            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
+            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from incomplete data should fail"), Error::UnexpectedData { .. }));
         }
 
         #[test]
@@ -373,18 +366,15 @@ mod tests
             let io = MemoryIO::new(HashMap::from([
                 ("hmac-secret".to_string(), "fdsa".to_string()),
             ]));
-            let storage = Storage::new(io);
-            assert!(matches!(storage.initialized().expect_err("Storage should be uninitialized"), Error::UnexpectedData { .. }));
-            assert!(matches!(storage.get_salt().expect_err("Storage should be uninitialized"), Error::StorageNotInitialized { ..}));
-            assert!(matches!(storage.get_hmac_secret(ENCRYPTION_KEY).expect_err("Decrypting HMAC secret should fail"), Error::InvalidCiphertext { ..}));
+            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from incomplete data should fail"), Error::UnexpectedData { .. }));
         }
 
         #[test]
         fn read_success()
         {
             let io = MemoryIO::new(default_data());
-            let storage = Storage::new(io);
-            storage.initialized().expect("Storage should be initialized");
+            let storage = Storage::new(io).expect("Creating Storage instance should succeed");
+            assert_eq!(storage.initialized(), true);
             assert_eq!(storage.get_salt().expect("Storage should be initialized"), b"cba");
             assert_eq!(storage.get_hmac_secret(ENCRYPTION_KEY).expect("Storage should be initialized"), HMAC_SECRET);
         }
@@ -398,10 +388,11 @@ mod tests
         fn clear_uninitialized()
         {
             let io = MemoryIO::new(HashMap::new());
-            let mut storage = Storage::new(io);
+            let mut storage = Storage::uninitialized(io);
+            assert_eq!(storage.initialized(), false);
 
             storage.clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY);
-            storage.initialized().expect("Storage should be initialized");
+            assert_eq!(storage.initialized(), true);
             assert_eq!(storage.list_sites(ENCRYPTION_KEY).count(), 0);
 
             storage.flush().expect("Flush should succeed");
@@ -413,10 +404,10 @@ mod tests
         fn clear_initialized()
         {
             let io = MemoryIO::new(default_data());
-            let mut storage = Storage::new(io);
+            let mut storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
             storage.clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY);
-            storage.initialized().expect("Storage should be initialized");
+            assert_eq!(storage.initialized(), true);
             assert_eq!(storage.list_sites(ENCRYPTION_KEY).count(), 0);
 
             storage.flush().expect("Flush should succeed");
@@ -448,7 +439,7 @@ mod tests
         fn list_empty()
         {
             let io = MemoryIO::new(empty_data());
-            let storage = Storage::new(io);
+            let storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
             assert_eq!(list_sites(&storage).len(), 0);
             assert_eq!(list_passwords(&storage, "example.com").len(), 0);
@@ -458,7 +449,7 @@ mod tests
         fn list_non_empty()
         {
             let io = MemoryIO::new(default_data());
-            let storage = Storage::new(io);
+            let storage = Storage::new(io).expect("Creating Storage instance should succeed");
             assert_eq!(list_sites(&storage), vec!["example.com", "example.info", "example.org"]);
 
             let password1 = object!{
@@ -500,7 +491,7 @@ mod tests
         fn get_password()
         {
             let io = MemoryIO::new(default_data());
-            let storage = Storage::new(io);
+            let storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
             let site1 = storage.get_site("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Site should be present");
             assert_eq!(site1.to_json(), object!{
@@ -563,7 +554,7 @@ mod tests
         fn get_alias()
         {
             let io = MemoryIO::new(default_data());
-            let storage = Storage::new(io);
+            let storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
             assert!(matches!(storage.get_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Alias shouldn't be present"), Error::NoSuchAlias { .. }));
             assert_eq!(storage.get_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Alias should be present"), "example.com");
@@ -573,7 +564,7 @@ mod tests
         fn resolve_site()
         {
             let io = MemoryIO::new(default_data());
-            let storage = Storage::new(io);
+            let storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
             assert_eq!(storage.normalize_site("example.com"), "example.com");
             assert_eq!(storage.resolve_site("example.com", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
@@ -603,7 +594,7 @@ mod tests
         fn add_passwords()
         {
             let io = MemoryIO::new(empty_data());
-            let mut storage = Storage::new(io);
+            let mut storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
             storage.ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY);
             storage.ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY);
@@ -660,7 +651,7 @@ mod tests
         fn remove_passwords()
         {
             let io = MemoryIO::new(default_data());
-            let mut storage = Storage::new(io);
+            let mut storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
             assert!(matches!(storage.remove_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));
             assert!(matches!(storage.remove_alias("example.net", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));

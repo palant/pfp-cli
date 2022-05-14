@@ -46,6 +46,7 @@ pub trait StorageIO
     fn flush(&mut self) -> Result<(), Error>;
 }
 
+#[derive(Debug)]
 /// File-based I/O implementation
 pub struct FileIO
 {
@@ -171,6 +172,7 @@ impl StorageIO for FileIO
     }
 }
 
+#[derive(Debug)]
 /// In-memory I/O implementation (for tests)
 pub struct MemoryIO
 {

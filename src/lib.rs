@@ -8,19 +8,21 @@
 //! PfP: Pain-free Passwords browser extension. Usually, you will use the high-level functionality
 //! provided by the `passwords` module:
 //!
-//! ```
+//! ```no_run
 //! use pfp::passwords::Passwords;
 //! use pfp::storage_io::FileIO;
 //! use std::path::Path;
 //!
 //! let io = FileIO::new(Path::new("test.json"));
-//! let passwords = Passwords::new(io);
+//! Passwords::new(io).expect_err("Will error out with Error::FileReadFailure for missing file");
 //!
-//! // Password storage will be uninitialized because the file doesn't exist yet.
-//! assert!(passwords.initialized().is_err());
+//! let io = FileIO::new(Path::new("test.json"));
+//! let mut passwords = Passwords::uninitialized(io);
 //!
-//! // Password storage will be locked because we didn't set the master password yet.
-//! assert!(passwords.unlocked().is_err());
+//! // Initialize password storage with a new master password
+//! passwords.reset("my master password").unwrap();
+//!
+//! // At this point test.json file should exist.
 //! ```
 
 mod crypto;

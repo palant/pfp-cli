@@ -26,6 +26,7 @@ pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
     crypto::derive_key(master_password, salt_str.as_bytes())
 }
 
+#[derive(Debug)]
 /// The type providing access to the passwords storage, allowing to retrieve and manipulate its
 /// data.
 ///
@@ -38,11 +39,15 @@ pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 /// use std::path::Path;
 ///
 /// let io = FileIO::new(Path::new("test.json"));
-/// let mut passwords = Passwords::new(io);
+/// Passwords::new(io).expect_err("Will error out with Error::FileReadFailure for missing file");
+///
+/// let io = FileIO::new(Path::new("test.json"));
+/// let mut passwords = Passwords::uninitialized(io);
 ///
 /// // Initialize password storage with a new master password
 /// passwords.reset("my master password").unwrap();
 ///
+/// // At this point test.json file should exist.
 /// // Add a generated password for example.com
 /// passwords.set_generated("example.com", "me", "1", 16, CharacterSet::all()).unwrap();
 ///
@@ -58,12 +63,25 @@ pub struct Passwords<IO>
 
 impl<IO: storage_io::StorageIO> Passwords<IO>
 {
-    /// Creates a new `Passwords` instance. The storage file access is encapsulated in the `io`
-    /// instance, `Passwords` itself is unaware of the file's path or location.
-    pub fn new(io: IO) -> Self
+    /// Creates a new `Passwords` instance and loads data from `io`. Any errors produced by `io`
+    /// when loading the data such as `Error::FileReadFailure` will be returned. Also, this will
+    /// result in `Error::UnexpectedData` if salt or HMAC secret aren't present in the data.
+    pub fn new(io: IO) -> Result<Self, Error>
+    {
+        Ok(Self {
+            storage: storage::Storage::new(io)?,
+            key: None,
+            hmac_secret: None,
+            master_password: None,
+        })
+    }
+
+    /// Creates a new `Passwords` instance without initializing it by loading data from `io`.
+    /// Calling [reset() method](#method.reset) will be necessary to use this instance.
+    pub fn uninitialized(io: IO) -> Self
     {
         Self {
-            storage: storage::Storage::new(io),
+            storage: storage::Storage::uninitialized(io),
             key: None,
             hmac_secret: None,
             master_password: None,
@@ -72,13 +90,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     /// Checks whether storage data is present.
     ///
-    /// This method succeeds if the passwords storage is initialized: it was either read from disk
-    /// successfully or reset using [reset() method](#method.reset). Otherwise calling it will
-    /// produce the error that reading the storage file resulted in.
+    /// This method returns `true` if the passwords storage is initialized: it was either read from
+    /// disk successfully or reset using [reset() method](#method.reset).
     ///
-    /// Note that this call succeeding doesn't mean that passwords can be accessed. This requires
-    /// the data to be unlocked with the right master password as well.
-    pub fn initialized(&self) -> Result<(), &Error>
+    /// Note that this call returning `true` doesn't mean that passwords can be accessed. Password
+    /// data also needs to be unlocked with the right master password.
+    pub fn initialized(&self) -> bool
     {
         self.storage.initialized()
     }
@@ -453,22 +470,19 @@ mod tests
         use super::*;
 
         #[test]
-        fn read_empty_file()
+        fn read_empty_data()
         {
             let io = MemoryIO::new(HashMap::new());
-            let passwords = Passwords::new(io);
-
-            assert!(matches!(passwords.initialized().expect_err("Passwords should be uninitialized"), Error::UnexpectedData { .. }));
-            assert!(matches!(passwords.unlocked().expect_err("Passwords should locked"), Error::PasswordsLocked { .. }));
+            assert!(matches!(Passwords::new(io).expect_err("Creating Passwords instance from empty data should fail"), Error::UnexpectedData { .. }));
         }
 
         #[test]
         fn read_success()
         {
             let io = MemoryIO::new(empty_data());
-            let passwords = Passwords::new(io);
+            let passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
 
-            passwords.initialized().expect("Passwords should be initialized");
+            assert_eq!(passwords.initialized(), true);
             assert!(matches!(passwords.unlocked().expect_err("Passwords should locked"), Error::PasswordsLocked { .. }));
         }
 
@@ -476,7 +490,7 @@ mod tests
         fn unlock()
         {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io);
+            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
 
             assert!(matches!(passwords.unlock("asdfyxcv").expect_err("Passwords shouldn't unlock"), Error::DecryptionFailure { .. }));
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
@@ -491,10 +505,11 @@ mod tests
         fn reset_uninitialized()
         {
             let io = MemoryIO::new(HashMap::new());
-            let mut passwords = Passwords::new(io);
-            passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
+            let mut passwords = Passwords::uninitialized(io);
+            assert_eq!(passwords.initialized(), false);
 
-            passwords.initialized().expect("Passwords should be initialized");
+            passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
+            assert_eq!(passwords.initialized(), true);
             passwords.unlocked().expect("Passwords should be unlocked");
             assert_eq!(passwords.list_sites("*").count(), 0);
 
@@ -513,10 +528,10 @@ mod tests
         fn reset_initialized()
         {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io);
+            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
             passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
 
-            passwords.initialized().expect("Passwords should be initialized");
+            assert_eq!(passwords.initialized(), true);
             passwords.unlocked().expect("Passwords should be unlocked");
             assert_eq!(passwords.list_sites("*").count(), 0);
 
@@ -554,7 +569,7 @@ mod tests
         fn list_sites_wildcards()
         {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io);
+            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
             assert_eq!(list_sites(&passwords, "*"), vec!["example.com", "example.info", "example.org"]);
@@ -570,7 +585,7 @@ mod tests
         fn list_passwords_wildcards()
         {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io);
+            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
             assert_eq!(list_passwords(&passwords, "example.com", "*"), vec!["blabber", "blubber"]);
@@ -606,7 +621,7 @@ mod tests
         fn query_passwords()
         {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io);
+            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
             assert!(passwords.has("example.com", "blubber", "").expect("Check should succeed"));
@@ -647,7 +662,7 @@ mod tests
         fn add_passwords()
         {
             let io = MemoryIO::new(empty_data());
-            let mut passwords = Passwords::new(io);
+            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
             assert!(matches!(passwords.set_alias("www.example.org", "example.org").expect_err("Adding alias should fail"), Error::AliasToSelf { .. }));
@@ -679,7 +694,7 @@ mod tests
         fn remove_passwords()
         {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io);
+            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
             assert!(matches!(passwords.remove_alias("example.net").expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));

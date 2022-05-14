@@ -243,8 +243,6 @@ fn get_default_storage_path() -> path::PathBuf
 
 fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(passwords: &mut passwords::Passwords<IO>, stdin_passwords: bool)
 {
-    passwords.initialized().handle_error();
-
     while passwords.unlocked().is_err()
     {
         let master_password = prompt_password("Your master password: ", stdin_passwords);
@@ -346,24 +344,37 @@ fn main()
         Some(value) => value,
         None => get_default_storage_path(),
     };
-    let mut passwords = passwords::Passwords::new(storage_io::FileIO::new(&storage_path));
+    let mut passwords = if let Commands::SetMaster { assume_yes } = &args.command
+    {
+        match passwords::Passwords::new(storage_io::FileIO::new(&storage_path))
+        {
+            Ok(passwords) =>
+            {
+                if !assume_yes
+                {
+                    let allow = question::Question::new("Changing master password will remove all existing data. Continue?")
+                            .default(question::Answer::NO)
+                            .show_defaults()
+                            .confirm();
+                    if allow == question::Answer::NO
+                    {
+                        process::exit(0);
+                    }
+                }
+                passwords
+            },
+            Err(_) => passwords::Passwords::uninitialized(storage_io::FileIO::new(&storage_path)),
+        }
+    }
+    else
+    {
+        passwords::Passwords::new(storage_io::FileIO::new(&storage_path)).handle_error()
+    };
 
     match &args.command
     {
-        Commands::SetMaster {assume_yes} =>
+        Commands::SetMaster {..} =>
         {
-            if !assume_yes && passwords.initialized().is_ok()
-            {
-                let allow = question::Question::new("Changing master password will remove all existing data. Continue?")
-                        .default(question::Answer::NO)
-                        .show_defaults()
-                        .confirm();
-                if allow == question::Answer::NO
-                {
-                    process::exit(0);
-                }
-            }
-
             let master_password = prompt_password("New master password: ", args.stdin_passwords);
             if master_password.len() < 6
             {
