@@ -102,19 +102,13 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     /// Checks whether storage data is unlocked.
     ///
-    /// This method succeeds if the master password is known and passwords can be accessed.
-    /// Otherwise it will result in
-    /// [Error::PasswordsLocked error](../error/enum.Error.html#variant.PasswordsLocked).
+    /// This method returns `true` if the master password is known and passwords can be accessed.
     ///
     /// Passwords can be unlocked through calling either [unlock()](#method.unlock) or
     /// [reset()](#method.reset).
-    pub fn unlocked(&self) -> Result<(), Error>
+    pub fn unlocked(&self) -> bool
     {
-        match self.key.as_ref()
-        {
-            Some(_) => Ok(()),
-            None => Err(Error::PasswordsLocked),
-        }
+        self.key.is_some()
     }
 
     /// Clears the passwords storage and sets a new master password.
@@ -375,7 +369,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// will list all passwords for the site.
     pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = Password> + '_
     {
-        assert!(self.unlocked().is_ok());
+        assert!(self.unlocked());
 
         let site_resolved = self.storage.resolve_site(site, self.hmac_secret.as_ref().unwrap(), self.key.as_ref().unwrap());
         let matcher = wildmatch::WildMatch::new(name);
@@ -393,7 +387,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// if the name of the site they are aliases for matches it.
     pub fn list_sites(&self, site: &str) -> impl Iterator<Item = Site> + '_
     {
-        assert!(self.unlocked().is_ok());
+        assert!(self.unlocked());
 
         let key = self.key.as_ref().unwrap();
 
@@ -483,7 +477,7 @@ mod tests
             let passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
 
             assert_eq!(passwords.initialized(), true);
-            assert!(matches!(passwords.unlocked().expect_err("Passwords should locked"), Error::PasswordsLocked { .. }));
+            assert_eq!(passwords.unlocked(), false);
         }
 
         #[test]
@@ -510,7 +504,7 @@ mod tests
 
             passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
             assert_eq!(passwords.initialized(), true);
-            passwords.unlocked().expect("Passwords should be unlocked");
+            assert_eq!(passwords.unlocked(), true);
             assert_eq!(passwords.list_sites("*").count(), 0);
 
             assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
@@ -532,7 +526,7 @@ mod tests
             passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
 
             assert_eq!(passwords.initialized(), true);
-            passwords.unlocked().expect("Passwords should be unlocked");
+            assert_eq!(passwords.unlocked(), true);
             assert_eq!(passwords.list_sites("*").count(), 0);
 
             assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");

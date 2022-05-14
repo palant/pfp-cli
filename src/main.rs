@@ -227,7 +227,7 @@ fn get_default_storage_path() -> path::PathBuf
 
 fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(passwords: &mut passwords::Passwords<IO>, stdin_passwords: bool)
 {
-    while passwords.unlocked().is_err()
+    while !passwords.unlocked()
     {
         let master_password = prompt_password("Your master password: ", stdin_passwords);
         if master_password.len() < 6
