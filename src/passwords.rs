@@ -228,12 +228,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        self.storage.ensure_site_data(&site_resolved, hmac_secret, key)?;
+        self.storage.ensure_site_data(&site_resolved, hmac_secret, key);
 
         self.storage.set_generated(
             GeneratedPassword::new(&site_resolved, name, revision, length, charset),
             hmac_secret, key
-        )?;
+        );
         self.storage.flush()
     }
 
@@ -255,12 +255,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        self.storage.ensure_site_data(&site_resolved, hmac_secret, key)?;
+        self.storage.ensure_site_data(&site_resolved, hmac_secret, key);
 
         self.storage.set_stored(
             StoredPassword::new(&site_resolved, name, revision, password),
             hmac_secret, key
-        )?;
+        );
         self.storage.flush()
     }
 
@@ -275,10 +275,10 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        self.storage.has_password(
+        Ok(self.storage.has_password(
             &PasswordId::new(&site_resolved, name, revision),
             hmac_secret
-        )
+        ))
     }
 
     /// Retrieves the value for the password with the given `site`, `name` and `revision`
@@ -395,60 +395,52 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 #[cfg(test)]
 mod tests
 {
-    use json::object;
+    use std::collections::HashMap;
     use storage_io::MemoryIO;
     use super::*;
 
     const MASTER_PASSWORD: &str = "foobar";
 
-    fn empty_data() -> String
+    fn empty_data() -> HashMap<String, String>
     {
-        json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {
-                "salt": "Y2Jh",
-                "hmac-secret": "YWJjZGVmZ2hpamts_Nosk0g9vPYtLPn9QzyFXLQ/1ZuAHVw==",
-            },
-        })
+        HashMap::from([
+            ("salt", "Y2Jh"),
+            ("hmac-secret", "YWJjZGVmZ2hpamts_Nosk0g9vPYtLPn9QzyFXLQ/1ZuAHVw=="),
+        ]).iter().map(|(key, value)| (key.to_string(), value.to_string())).collect()
     }
 
-    fn default_data() -> String
+    fn default_data() -> HashMap<String, String>
     {
-        json::stringify(object!{
-            "application": "pfp",
-            "format": 3,
-            "data": {
-                // cba as base64
-                "salt": "Y2Jh",
-                // abc encrypted (nonce abcdefghijkl, encryption key \x9b\x4f\x2d\x17\x37\xb6\xc2\x57\xf7\x50\x49\x51\x8c\x84\x49\x87\xb5\xde\x40\x1b\x3a\x87\x04\x8b\x26\x2d\x9b\x40\xae\xf8\xb0\xe2)
-                "hmac-secret": "YWJjZGVmZ2hpamts_Nosk0g9vPYtLPn9QzyFXLQ/1ZuAHVw==",
-                // example.com (hmac-sha256)
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=":
-                    // {"site":"example.com"} encrypted
-                    "YWJjZGVmZ2hpamts_b/AA8REorsFjuwlGDYB+KVw/fqoHPv2Ehc7sBIYqhR+ygcsd/t4=",
-                // example.com\x00blubber\x00 (hmac-sha256)
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:/uudghlPp4TDZPtfZFPj6nJs/zMDAE2AqVfz6Hu8N9I=":
-                    // {"type":"generated2","site":"example.com","name":"blubber","revision":"","length":16,"lower":true,"upper":true,"number":true,"symbol":true} encrypted
-                    "YWJjZGVmZ2hpamts_b/AH4RUorsFjuRRJBYJzOBc4I+UJYXWhqhFXbEC9Aw5pRRO/Q31d6d/+RQhdj8wH0SWpEXk/ZkVXSAjSqpbqKsEek2JzzOetQNutMR4tblZGzTsPxWZogaKazYGFvg+J43L9ugBf7PjDfk+Rx3QbGdWaScEdCdciXlv6z/drMjyK0b8+kKgrdjdaIT7NuJwpEiZxzMngRiqPqZI=",
-                // example.com\x00blabber\x002 (hmac-sha256)
-                "site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:h2pnx6RFyNbAUBLcuQYz9w79/vnf4fgJlY/c+EP44d8=":
-                    // {"type":"stored","site":"example.com","name":"blabber","revision":"2","password":"asdf"} encrypted
-                    "YWJjZGVmZ2hpamts_b/AH4RUorsFjrQVIEpV2bl5+Yq5RJiTy/BENNw+oFwoqVhC3TzIQ6py/AkQGwMtJimWpGH5/KAJXD1KZq5rzLZBN3j5z2uf/DYqyIx84fhxe1WtKjSImk92FeghEDLDNbwijfAnncDw=",
-                // example.info (hmac-sha256)
-                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=":
-                    // {"site":"example.info"} encrypted
-                    "YWJjZGVmZ2hpamts_b/AA8REorsFjuwlGDYB+KVw1f6FKYXsPR37ZtYXddpCecTwncBIM",
-                // example.info\x00test\x00yet another (hmac-sha256)
-                "site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:BSjLwWY3MLEPQdG1f/jwKOtJRKCxwXpRH5qkMrUnVsI=":
-                    // {"type":"generated2","site":"example.info","name":"test","revision":"yet another","length":8,"lower":true,"upper":false,"number":true,"symbol":false} encrypted
-                    "YWJjZGVmZ2hpamts_b/AH4RUorsFjuRRJBYJzOBc4I+UJYXWhqhFXbEC9Aw5pRRO/Q3dc4pLwS0RSg8RAyT3pCWkucAIJSFaVrprvKt0Z3jZzj6D7TJivOwQif0xG2yhVjCpjmr3dhZuT6BGT8Tut7Upb+/+EaBmWwmFSSZnVQsIUCJA0CEf6x7ksM2fdx6In1759dztSPv4LAx+oMQrVGzjFO4a3iuk8bTSFjmb4jtH+",
-                // example.org (hmac-sha256)
-                "site:5IS/IdH3aaMwyzRv0fwy+2oh5OsXZ2emV8991dFWrko=":
-                    // {"site":"example.org","alias":"example.com"} encrypted
-                    "YWJjZGVmZ2hpamts_b/AA8REorsFjuwlGDYB+KVwzY6AHbySpsh0UJUDiWQp8VBKqAXsc55K/RRsY3NAIQzDdtK+4TrjLOu3X",
-            },
-        })
+        HashMap::from([
+            // cba as base64
+            ("salt", "Y2Jh"),
+            // abc encrypted (nonce abcdefghijkl, encryption key \x9b\x4f\x2d\x17\x37\xb6\xc2\x57\xf7\x50\x49\x51\x8c\x84\x49\x87\xb5\xde\x40\x1b\x3a\x87\x04\x8b\x26\x2d\x9b\x40\xae\xf8\xb0\xe2)
+            ("hmac-secret", "YWJjZGVmZ2hpamts_Nosk0g9vPYtLPn9QzyFXLQ/1ZuAHVw=="),
+            // example.com (hmac-sha256)
+            ("site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=",
+                // {"site":"example.com"} encrypted
+                "YWJjZGVmZ2hpamts_b/AA8REorsFjuwlGDYB+KVw/fqoHPv2Ehc7sBIYqhR+ygcsd/t4="),
+            // example.com\x00blubber\x00 (hmac-sha256)
+            ("site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:/uudghlPp4TDZPtfZFPj6nJs/zMDAE2AqVfz6Hu8N9I=",
+                // {"type":"generated2","site":"example.com","name":"blubber","revision":"","length":16,"lower":true,"upper":true,"number":true,"symbol":true} encrypted
+                "YWJjZGVmZ2hpamts_b/AH4RUorsFjuRRJBYJzOBc4I+UJYXWhqhFXbEC9Aw5pRRO/Q31d6d/+RQhdj8wH0SWpEXk/ZkVXSAjSqpbqKsEek2JzzOetQNutMR4tblZGzTsPxWZogaKazYGFvg+J43L9ugBf7PjDfk+Rx3QbGdWaScEdCdciXlv6z/drMjyK0b8+kKgrdjdaIT7NuJwpEiZxzMngRiqPqZI="),
+            // example.com\x00blabber\x002 (hmac-sha256)
+            ("site:fRTOldDD+lTwIBS8G+eUkrIzvNsfdGRSWQXrXqszDHM=:h2pnx6RFyNbAUBLcuQYz9w79/vnf4fgJlY/c+EP44d8=",
+                // {"type":"stored","site":"example.com","name":"blabber","revision":"2","password":"asdf"} encrypted
+                "YWJjZGVmZ2hpamts_b/AH4RUorsFjrQVIEpV2bl5+Yq5RJiTy/BENNw+oFwoqVhC3TzIQ6py/AkQGwMtJimWpGH5/KAJXD1KZq5rzLZBN3j5z2uf/DYqyIx84fhxe1WtKjSImk92FeghEDLDNbwijfAnncDw="),
+            // example.info (hmac-sha256)
+            ("site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=",
+                // {"site":"example.info"} encrypted
+                "YWJjZGVmZ2hpamts_b/AA8REorsFjuwlGDYB+KVw1f6FKYXsPR37ZtYXddpCecTwncBIM"),
+            // example.info\x00test\x00yet another (hmac-sha256)
+            ("site:Gd2Cx/SbNs6BWf2KlmHZrOY7SNi5GnjBLG58eJdgqdc=:BSjLwWY3MLEPQdG1f/jwKOtJRKCxwXpRH5qkMrUnVsI=",
+                // {"type":"generated2","site":"example.info","name":"test","revision":"yet another","length":8,"lower":true,"upper":false,"number":true,"symbol":false} encrypted
+                "YWJjZGVmZ2hpamts_b/AH4RUorsFjuRRJBYJzOBc4I+UJYXWhqhFXbEC9Aw5pRRO/Q3dc4pLwS0RSg8RAyT3pCWkucAIJSFaVrprvKt0Z3jZzj6D7TJivOwQif0xG2yhVjCpjmr3dhZuT6BGT8Tut7Upb+/+EaBmWwmFSSZnVQsIUCJA0CEf6x7ksM2fdx6In1759dztSPv4LAx+oMQrVGzjFO4a3iuk8bTSFjmb4jtH+"),
+            // example.org (hmac-sha256)
+            ("site:5IS/IdH3aaMwyzRv0fwy+2oh5OsXZ2emV8991dFWrko=",
+                // {"site":"example.org","alias":"example.com"} encrypted
+                "YWJjZGVmZ2hpamts_b/AA8REorsFjuwlGDYB+KVwzY6AHbySpsh0UJUDiWQp8VBKqAXsc55K/RRsY3NAIQzDdtK+4TrjLOu3X"),
+        ]).iter().map(|(key, value)| (key.to_string(), value.to_string())).collect()
     }
 
     fn password_name(password: Password) -> String
@@ -463,17 +455,17 @@ mod tests
         #[test]
         fn read_empty_file()
         {
-            let io = MemoryIO::new("");
+            let io = MemoryIO::new(HashMap::new());
             let passwords = Passwords::new(io);
 
-            assert!(matches!(passwords.initialized().expect_err("Passwords should be uninitialized"), Error::InvalidJson { .. }));
+            assert!(matches!(passwords.initialized().expect_err("Passwords should be uninitialized"), Error::UnexpectedData { .. }));
             assert!(matches!(passwords.unlocked().expect_err("Passwords should locked"), Error::PasswordsLocked { .. }));
         }
 
         #[test]
         fn read_success()
         {
-            let io = MemoryIO::new(&empty_data());
+            let io = MemoryIO::new(empty_data());
             let passwords = Passwords::new(io);
 
             passwords.initialized().expect("Passwords should be initialized");
@@ -483,7 +475,7 @@ mod tests
         #[test]
         fn unlock()
         {
-            let io = MemoryIO::new(&default_data());
+            let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
 
             assert!(matches!(passwords.unlock("asdfyxcv").expect_err("Passwords shouldn't unlock"), Error::DecryptionFailure { .. }));
@@ -498,7 +490,7 @@ mod tests
         #[test]
         fn reset_uninitialized()
         {
-            let io = MemoryIO::new("");
+            let io = MemoryIO::new(HashMap::new());
             let mut passwords = Passwords::new(io);
             passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
 
@@ -520,7 +512,7 @@ mod tests
         #[test]
         fn reset_initialized()
         {
-            let io = MemoryIO::new(&default_data());
+            let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
 
@@ -561,7 +553,7 @@ mod tests
         #[test]
         fn list_sites_wildcards()
         {
-            let io = MemoryIO::new(&default_data());
+            let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
@@ -577,7 +569,7 @@ mod tests
         #[test]
         fn list_passwords_wildcards()
         {
-            let io = MemoryIO::new(&default_data());
+            let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
@@ -613,7 +605,7 @@ mod tests
         #[test]
         fn query_passwords()
         {
-            let io = MemoryIO::new(&default_data());
+            let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
@@ -654,7 +646,7 @@ mod tests
         #[test]
         fn add_passwords()
         {
-            let io = MemoryIO::new(&empty_data());
+            let io = MemoryIO::new(empty_data());
             let mut passwords = Passwords::new(io);
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
@@ -686,7 +678,7 @@ mod tests
         #[test]
         fn remove_passwords()
         {
-            let io = MemoryIO::new(&default_data());
+            let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
 
