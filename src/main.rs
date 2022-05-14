@@ -217,22 +217,6 @@ impl<T> HandleError<T> for Result<T, Error>
     }
 }
 
-impl<T> HandleError<T> for Result<T, &Error>
-{
-    fn handle_error(self) -> T
-    {
-        match self
-        {
-            Ok(value) => value,
-            Err(error) =>
-            {
-                eprintln!("{}", format_error(error));
-                process::exit(1);
-            }
-        }
-    }
-}
-
 fn get_default_storage_path() -> path::PathBuf
 {
     let app_info = app_dirs2::AppInfo {name: "PfP", author: "Wladimir Palant"};
