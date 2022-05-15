@@ -6,17 +6,8 @@
 
 //! Various types processed by storage functions.
 
-use crate::error::Error;
-
-pub(crate) trait FromJson
-{
-    fn from_json(value: &json::object::Object) -> Result<Self, Error> where Self: Sized;
-}
-
-pub(crate) trait ToJson
-{
-    fn to_json(&self) -> json::object::Object;
-}
+use serde::ser::{Serializer, Serialize, SerializeMap};
+use serde::de::{Deserializer, Visitor, Deserialize, MapAccess, Unexpected, Error};
 
 #[derive(enumset::EnumSetType, Debug)]
 /// Possible character types that a password is generated from.
@@ -71,30 +62,6 @@ impl PasswordId
     pub fn revision(&self) -> &str
     {
         &self.revision
-    }
-}
-
-impl FromJson for PasswordId
-{
-    fn from_json(value: &json::object::Object) -> Result<Self, Error>
-    {
-        return Ok(PasswordId::new(
-            value["site"].as_str().ok_or(Error::PasswordMissingSite)?,
-            value["name"].as_str().ok_or(Error::PasswordMissingName)?,
-            value["revision"].as_str().ok_or(Error::PasswordMissingRevision)?,
-        ));
-    }
-}
-
-impl ToJson for PasswordId
-{
-    fn to_json(&self) -> json::object::Object
-    {
-        let mut obj = json::object::Object::new();
-        obj.insert("site", self.site().into());
-        obj.insert("name", self.name().into());
-        obj.insert("revision", self.revision().into());
-        obj
     }
 }
 
@@ -169,57 +136,6 @@ impl GeneratedPassword
     }
 }
 
-impl FromJson for GeneratedPassword
-{
-    fn from_json(value: &json::object::Object) -> Result<Self, Error>
-    {
-        let id = PasswordId::from_json(value)?;
-
-        let mut charset = CharacterSet::empty();
-        if value["lower"].as_bool().unwrap_or(false)
-        {
-            charset.insert(CharacterType::Lower);
-        }
-        if value["upper"].as_bool().unwrap_or(false)
-        {
-            charset.insert(CharacterType::Upper);
-        }
-        if value["number"].as_bool().unwrap_or(false)
-        {
-            charset.insert(CharacterType::Digit);
-        }
-        if value["symbol"].as_bool().unwrap_or(false)
-        {
-            charset.insert(CharacterType::Symbol);
-        }
-
-        Ok(GeneratedPassword {
-            id,
-            length: value["length"].as_usize().ok_or(Error::PasswordMissingLength)?,
-            charset,
-            notes: value["notes"].as_str().unwrap_or("").to_string(),
-        })
-    }
-}
-
-impl ToJson for GeneratedPassword
-{
-    fn to_json(&self) -> json::object::Object
-    {
-        let mut obj = self.id.to_json();
-        obj.insert("length", self.length().into());
-        obj.insert("lower", self.charset().contains(CharacterType::Lower).into());
-        obj.insert("upper", self.charset().contains(CharacterType::Upper).into());
-        obj.insert("number", self.charset().contains(CharacterType::Digit).into());
-        obj.insert("symbol", self.charset().contains(CharacterType::Symbol).into());
-        if !self.notes.is_empty()
-        {
-            obj.insert("notes", self.notes().into());
-        }
-        obj
-    }
-}
-
 #[derive(Debug)]
 /// A stored password, with the password value stored verbatim in storage.
 pub struct StoredPassword
@@ -264,34 +180,6 @@ impl StoredPassword
     pub fn set_notes(&mut self, notes: &str)
     {
         self.notes = notes.to_string();
-    }
-}
-
-impl FromJson for StoredPassword
-{
-    fn from_json(value: &json::object::Object) -> Result<StoredPassword, Error>
-    {
-        let id = PasswordId::from_json(value)?;
-        let password = value["password"].as_str().ok_or(Error::PasswordMissingValue)?;
-        Ok(StoredPassword {
-            id,
-            password: password.to_string(),
-            notes: value["notes"].as_str().unwrap_or("").to_string(),
-        })
-    }
-}
-
-impl ToJson for StoredPassword
-{
-    fn to_json(&self) -> json::object::Object
-    {
-        let mut obj = self.id.to_json();
-        obj.insert("password", self.password().into());
-        if !self.notes.is_empty()
-        {
-            obj.insert("notes", self.notes().into());
-        }
-        obj
     }
 }
 
@@ -342,44 +230,239 @@ impl Password
     }
 }
 
-impl FromJson for Password
+impl Serialize for Password
 {
-    fn from_json(value: &json::object::Object) -> Result<Self, Error>
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>
     {
-        let password_type = value["type"].as_str().ok_or(Error::PasswordMissingType)?;
-        if password_type == "generated2"
-        {
-            Ok(Password::Generated { password: GeneratedPassword::from_json(value)? })
-        }
-        else if password_type == "stored"
-        {
-            Ok(Password::Stored { password: StoredPassword::from_json(value)? })
-        }
-        else
-        {
-            Err(Error::PasswordUnknownType)
-        }
-    }
-}
-
-impl ToJson for Password
-{
-    fn to_json(&self) -> json::object::Object
-    {
+        let mut map = serializer.serialize_map(None)?;
         match self
         {
             Password::Generated {password} =>
             {
-                let mut value = password.to_json();
-                value.insert("type", "generated2".into());
-                value
+                map.serialize_entry("type", "generated2")?;
+                map.serialize_entry("site", password.id().site())?;
+                map.serialize_entry("name", password.id().name())?;
+                map.serialize_entry("revision", password.id().revision())?;
+                map.serialize_entry("length", &password.length())?;
+                map.serialize_entry("lower", &password.charset().contains(CharacterType::Lower))?;
+                map.serialize_entry("upper", &password.charset().contains(CharacterType::Upper))?;
+                map.serialize_entry("number", &password.charset().contains(CharacterType::Digit))?;
+                map.serialize_entry("symbol", &password.charset().contains(CharacterType::Symbol))?;
+                if !password.notes().is_empty()
+                {
+                    map.serialize_entry("notes", password.notes())?;
+                }
             },
             Password::Stored {password} =>
             {
-                let mut value = password.to_json();
-                value.insert("type", "stored".into());
-                value
+                map.serialize_entry("type", "stored")?;
+                map.serialize_entry("site", password.id().site())?;
+                map.serialize_entry("name", password.id().name())?;
+                map.serialize_entry("revision", password.id().revision())?;
+                map.serialize_entry("password", password.password())?;
+                if !password.notes().is_empty()
+                {
+                    map.serialize_entry("notes", password.notes())?;
+                }
             }
+        }
+        map.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Password
+{
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error>
+    {
+        deserializer.deserialize_map(PasswordVisitor {})
+    }
+}
+
+struct PasswordVisitor;
+
+impl<'de> Visitor<'de> for PasswordVisitor
+{
+    type Value = Password;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result
+    {
+        formatter.write_str("PfP password data")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error>
+    {
+        let mut pwdtype = 0;
+        let mut site = None;
+        let mut name = None;
+        let mut revision = None;
+        let mut length = None;
+        let mut charset = CharacterSet::empty();
+        let mut password = None;
+        let mut notes = None;
+
+        loop
+        {
+            match map.next_key::<&str>()?
+            {
+                None => break,
+                Some("type") =>
+                {
+                    if pwdtype != 0
+                    {
+                        return Err(Error::duplicate_field("type"));
+                    }
+
+                    let value = map.next_value::<String>()?;
+                    if value == "generated2"
+                    {
+                        pwdtype = 1;
+                    }
+                    else if value == "stored"
+                    {
+                        pwdtype = 2;
+                    }
+                    else
+                    {
+                        return Err(Error::invalid_value(Unexpected::Str(&value), &"generated2 or stored"));
+                    }
+                },
+                Some("site") =>
+                {
+                    if site.is_some()
+                    {
+                        return Err(Error::duplicate_field("site"));
+                    }
+
+                    site = Some(map.next_value::<String>()?);
+                },
+                Some("name") =>
+                {
+                    if name.is_some()
+                    {
+                        return Err(Error::duplicate_field("name"));
+                    }
+
+                    name = Some(map.next_value::<String>()?);
+                },
+                Some("revision") =>
+                {
+                    if revision.is_some()
+                    {
+                        return Err(Error::duplicate_field("revision"));
+                    }
+
+                    revision = Some(map.next_value::<String>()?);
+                },
+                Some("length") =>
+                {
+                    if length.is_some()
+                    {
+                        return Err(Error::duplicate_field("length"));
+                    }
+
+                    length = Some(map.next_value::<usize>()?);
+                },
+                Some("lower") =>
+                {
+                    if map.next_value::<bool>()?
+                    {
+                        charset.insert(CharacterType::Lower);
+                    }
+                },
+                Some("upper") =>
+                {
+                    if map.next_value::<bool>()?
+                    {
+                        charset.insert(CharacterType::Upper);
+                    }
+                },
+                Some("number") =>
+                {
+                    if map.next_value::<bool>()?
+                    {
+                        charset.insert(CharacterType::Digit);
+                    }
+                },
+                Some("symbol") =>
+                {
+                    if map.next_value::<bool>()?
+                    {
+                        charset.insert(CharacterType::Symbol);
+                    }
+                },
+                Some("password") =>
+                {
+                    if password.is_some()
+                    {
+                        return Err(Error::duplicate_field("password"));
+                    }
+
+                    password = Some(map.next_value::<String>()?);
+                },
+                Some("notes") =>
+                {
+                    if notes.is_some()
+                    {
+                        return Err(Error::duplicate_field("notes"));
+                    }
+
+                    notes = Some(map.next_value::<String>()?);
+                },
+                Some(key) =>
+                {
+                    return Err(Error::unknown_field(key, &[]));
+                },
+            }
+        }
+
+        if pwdtype == 1
+        {
+            if password.is_some()
+            {
+                return Err(Error::unknown_field("password", &[]));
+            }
+            if charset.is_empty()
+            {
+                return Err(Error::missing_field("lower/upper/number/symbol"));
+            }
+            let mut result = GeneratedPassword::new(
+                &site.ok_or_else(|| Error::missing_field("site"))?,
+                &name.ok_or_else(|| Error::missing_field("name"))?,
+                &revision.ok_or_else(|| Error::missing_field("revision"))?,
+                length.ok_or_else(|| Error::missing_field("length"))?,
+                charset,
+            );
+            if let Some(value) = notes
+            {
+                result.set_notes(&value);
+            }
+            Ok(Password::Generated { password: result })
+        }
+        else if pwdtype == 2
+        {
+            if length.is_some()
+            {
+                return Err(Error::unknown_field("length", &[]));
+            }
+            if !charset.is_empty()
+            {
+                return Err(Error::unknown_field("lower/upper/number/symbol", &[]));
+            }
+            let mut result = StoredPassword::new(
+                &site.ok_or_else(|| Error::missing_field("site"))?,
+                &name.ok_or_else(|| Error::missing_field("name"))?,
+                &revision.ok_or_else(|| Error::missing_field("revision"))?,
+                &password.ok_or_else(|| Error::missing_field("password"))?,
+            );
+            if let Some(value) = notes
+            {
+                result.set_notes(&value);
+            }
+            Ok(Password::Stored { password: result })
+        }
+        else
+        {
+            Err(Error::missing_field("type"))
         }
     }
 }
@@ -421,27 +504,77 @@ impl Site
     }
 }
 
-impl FromJson for Site
+impl Serialize for Site
 {
-    fn from_json(value: &json::object::Object) -> Result<Site, Error>
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>
     {
-        return Ok(Site::new(
-            value["site"].as_str().ok_or(Error::SiteMissingName)?,
-            value["alias"].as_str(),
-        ));
+        let mut map = serializer.serialize_map(None)?;
+        map.serialize_entry("site", self.name())?;
+        if let Some(value) = self.alias()
+        {
+            map.serialize_entry("alias", value)?;
+        }
+        map.end()
     }
 }
 
-impl ToJson for Site
+impl<'de> Deserialize<'de> for Site
 {
-    fn to_json(&self) -> json::object::Object
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error>
     {
-        let mut obj = json::object::Object::new();
-        obj.insert("site", self.name().into());
-        if let Some(value) = self.alias()
+        deserializer.deserialize_map(SiteVisitor {})
+    }
+}
+
+struct SiteVisitor;
+
+impl<'de> Visitor<'de> for SiteVisitor
+{
+    type Value = Site;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result
+    {
+        formatter.write_str("PfP site data")
+    }
+
+    fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Self::Value, A::Error>
+    {
+        let mut site = None;
+        let mut alias = None;
+
+        loop
         {
-            obj.insert("alias", value.into());
+            match map.next_key::<&str>()?
+            {
+                None => break,
+                Some("site") =>
+                {
+                    if site.is_some()
+                    {
+                        return Err(Error::duplicate_field("site"));
+                    }
+
+                    site = Some(map.next_value::<String>()?);
+                },
+                Some("alias") =>
+                {
+                    if alias.is_some()
+                    {
+                        return Err(Error::duplicate_field("alias"));
+                    }
+
+                    alias = Some(map.next_value::<String>()?);
+                },
+                Some(key) =>
+                {
+                    return Err(Error::unknown_field(key, &["site", "alias"]));
+                },
+            }
         }
-        obj
+
+        Ok(Site::new(
+            &site.ok_or_else(|| Error::missing_field("site"))?,
+            alias.as_deref(),
+        ))
     }
 }

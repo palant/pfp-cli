@@ -31,7 +31,7 @@ pub enum Error
     /// Base64 decoding failed.
     InvalidBase64 { error: base64::DecodeError },
     /// JSON decoding failed.
-    InvalidJson { error: json::Error },
+    InvalidJson { error: serde_json::Error },
     /// UTF-8 decoding failed.
     InvalidUtf8 { error: std::string::FromUtf8Error },
     /// Decryption failed, probably due to wrong master password.

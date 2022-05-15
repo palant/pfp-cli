@@ -126,7 +126,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let key = get_encryption_key(master_password, &salt);
         let hmac_secret = crypto::get_rng().gen::<[u8; 32]>();
 
-        self.storage.clear(&salt, &hmac_secret, &key);
+        self.storage.clear(&salt, &hmac_secret, &key)?;
         self.storage.flush()?;
 
         self.key = Some(key);
@@ -241,12 +241,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        self.storage.ensure_site_data(&site_resolved, hmac_secret, key);
+        self.storage.ensure_site_data(&site_resolved, hmac_secret, key)?;
 
         self.storage.set_generated(
             GeneratedPassword::new(&site_resolved, name, revision, length, charset),
             hmac_secret, key
-        );
+        )?;
         self.storage.flush()
     }
 
@@ -268,12 +268,12 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        self.storage.ensure_site_data(&site_resolved, hmac_secret, key);
+        self.storage.ensure_site_data(&site_resolved, hmac_secret, key)?;
 
         self.storage.set_stored(
             StoredPassword::new(&site_resolved, name, revision, password),
             hmac_secret, key
-        );
+        )?;
         self.storage.flush()
     }
 
@@ -371,7 +371,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
             hmac_secret, key
         )?;
         password.set_notes(notes);
-        self.storage.set_password(password, hmac_secret, key);
+        self.storage.set_password(password, hmac_secret, key)?;
         self.storage.flush()
     }
 

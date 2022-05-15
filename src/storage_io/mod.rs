@@ -18,6 +18,8 @@
 //! let passwords = Passwords::new(io);
 //! ```
 
+mod json;
+
 use std::collections::HashMap;
 use std::fs;
 use std::path;
@@ -56,12 +58,6 @@ pub struct FileIO
 
 impl FileIO
 {
-    const APPLICATION_KEY: &'static str = "application";
-    const APPLICATION_VALUE: &'static str = "pfp";
-    const FORMAT_KEY: &'static str = "format";
-    const CURRENT_FORMAT: u32 = 3;
-    const DATA_KEY: &'static str = "data";
-
     /// Creates a new `FileIO` instance from a file path on disk.
     pub fn new(path: &path::Path) -> Self
     {
@@ -71,24 +67,9 @@ impl FileIO
         }
     }
 
-    fn get_object(value: &json::JsonValue) -> Result<&json::object::Object, Error>
+    pub(crate) fn data(&self) -> &HashMap<String, String>
     {
-        match value
-        {
-            json::JsonValue::Null => Err(Error::KeyMissing),
-            json::JsonValue::Object(obj) => Ok(obj),
-            _unexpected => Err(Error::UnexpectedData),
-        }
-    }
-
-    fn get_string(value: &json::JsonValue) -> Result<String, Error>
-    {
-        Ok(value.as_str().ok_or(Error::UnexpectedData)?.to_string())
-    }
-
-    fn get_u32(value: &json::JsonValue) -> Result<u32, Error>
-    {
-        value.as_u32().ok_or(Error::UnexpectedData)
+        &self.data
     }
 }
 
@@ -97,24 +78,11 @@ impl StorageIO for FileIO
     fn load(&mut self) -> Result<(), Error>
     {
         let contents = fs::read_to_string(&self.path).map_err(|error| Error::FileReadFailure { error })?;
-        let parsed = json::parse(&contents).map_err(|error| Error::InvalidJson { error })?;
-        let root = Self::get_object(&parsed)?;
-
-        if Self::get_string(&root[Self::APPLICATION_KEY])? != Self::APPLICATION_VALUE ||
-           Self::get_u32(&root[Self::FORMAT_KEY])? != Self::CURRENT_FORMAT
-        {
-            return Err(Error::UnexpectedStorageFormat);
-        }
-
-        self.data.clear();
-        let data_obj = Self::get_object(&root[Self::DATA_KEY])?;
-        for (key, value) in data_obj.iter()
-        {
-            if let Ok(value) = Self::get_string(value)
-            {
-                self.data.insert(key.to_string(), value);
-            }
-        }
+        self.data =
+            serde_json::from_str::<json::Deserializer>(&contents)
+                .map_err(|error| Error::InvalidJson { error })?
+                .data()
+                .ok_or(Error::UnexpectedData)?;
         Ok(())
     }
 
@@ -150,18 +118,7 @@ impl StorageIO for FileIO
 
     fn flush(&mut self) -> Result<(), Error>
     {
-        let mut root = json::object::Object::new();
-        root.insert(Self::APPLICATION_KEY, Self::APPLICATION_VALUE.into());
-        root.insert(Self::FORMAT_KEY, Self::CURRENT_FORMAT.into());
-
-        let mut data_obj = json::object::Object::new();
-        for (key, value) in self.data.iter()
-        {
-            data_obj.insert(key, value.as_str().into());
-        }
-        root.insert(Self::DATA_KEY, data_obj.into());
-
-        let contents = json::stringify(root);
+        let contents = serde_json::to_string(&json::Serializer::new(self)).map_err(|error| Error::InvalidJson { error })?;
 
         let parent = self.path.parent();
         if let Some(parent) = parent
