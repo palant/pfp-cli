@@ -36,22 +36,6 @@ pub enum Error
     InvalidUtf8 { error: std::string::FromUtf8Error },
     /// Decryption failed, probably due to wrong master password.
     DecryptionFailure,
-    /// Password entry in storage doesn't contain a password type.
-    PasswordMissingType,
-    /// Password entry in storage contains an unsupported password type.
-    PasswordUnknownType,
-    /// Password entry in storage is missing the associated site name.
-    PasswordMissingSite,
-    /// Password entry in storage is missing password name.
-    PasswordMissingName,
-    /// Password entry in storage is missing revision.
-    PasswordMissingRevision,
-    /// Entry for generated password is missing password length.
-    PasswordMissingLength,
-    /// Entry for stored password is missing password value.
-    PasswordMissingValue,
-    /// Site entry in storage is missing site name.
-    SiteMissingName,
     /// The alias requested doesn't exist.
     NoSuchAlias,
     /// Cannot alias a site to itself.
