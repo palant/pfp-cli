@@ -66,11 +66,6 @@ impl FileIO
             data: HashMap::new(),
         }
     }
-
-    pub(crate) fn data(&self) -> &HashMap<String, String>
-    {
-        &self.data
-    }
 }
 
 impl StorageIO for FileIO
@@ -79,7 +74,7 @@ impl StorageIO for FileIO
     {
         let contents = fs::read_to_string(&self.path).map_err(|error| Error::FileReadFailure { error })?;
         self.data =
-            serde_json::from_str::<json::Deserializer>(&contents)
+            serde_json::from_str::<json::Metadata>(&contents)
                 .map_err(|error| Error::InvalidJson { error })?
                 .data();
         Ok(())
@@ -117,7 +112,12 @@ impl StorageIO for FileIO
 
     fn flush(&mut self) -> Result<(), Error>
     {
-        let contents = serde_json::to_string(&json::Serializer::new(self.data())).map_err(|error| Error::InvalidJson { error })?;
+        let data = std::mem::replace(&mut self.data, HashMap::new());
+        let metadata = json::Metadata::new(data);
+        let result = serde_json::to_string(&metadata);
+        self.data = metadata.data();
+
+        let contents = result.map_err(|error| Error::InvalidJson { error })?;
 
         let parent = self.path.parent();
         if let Some(parent) = parent

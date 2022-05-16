@@ -55,17 +55,18 @@ impl<'de> serde::de::Deserialize<'de> for Format
     }
 }
 
-#[derive(Serialize)]
-pub struct Serializer<'ser>
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct Metadata
 {
     application: ApplicationName,
     format: Format,
-    data: &'ser HashMap<String, String>,
+    data: HashMap<String, String>,
 }
 
-impl<'ser> Serializer<'ser>
+impl Metadata
 {
-    pub fn new(data: &'ser HashMap<String, String>) -> Self
+    pub fn new(data: HashMap<String, String>) -> Self
     {
         Self {
             application: ApplicationName::Pfp,
@@ -73,21 +74,7 @@ impl<'ser> Serializer<'ser>
             data,
         }
     }
-}
 
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct Deserializer
-{
-    #[allow(dead_code)]
-    application: ApplicationName,
-    #[allow(dead_code)]
-    format: Format,
-    data: HashMap<String, String>,
-}
-
-impl Deserializer
-{
     pub fn data(self) -> HashMap<String, String>
     {
         self.data
