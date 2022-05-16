@@ -85,11 +85,6 @@ impl<'de> Visitor<'de> for PasswordVisitor
                 None => break,
                 Some("type") =>
                 {
-                    if pwdtype != 0
-                    {
-                        return Err(Error::duplicate_field("type"));
-                    }
-
                     let value = map.next_value::<String>()?;
                     if value == "generated2"
                     {
@@ -106,38 +101,18 @@ impl<'de> Visitor<'de> for PasswordVisitor
                 },
                 Some("site") =>
                 {
-                    if site.is_some()
-                    {
-                        return Err(Error::duplicate_field("site"));
-                    }
-
                     site = Some(map.next_value::<String>()?);
                 },
                 Some("name") =>
                 {
-                    if name.is_some()
-                    {
-                        return Err(Error::duplicate_field("name"));
-                    }
-
                     name = Some(map.next_value::<String>()?);
                 },
                 Some("revision") =>
                 {
-                    if revision.is_some()
-                    {
-                        return Err(Error::duplicate_field("revision"));
-                    }
-
                     revision = Some(map.next_value::<String>()?);
                 },
                 Some("length") =>
                 {
-                    if length.is_some()
-                    {
-                        return Err(Error::duplicate_field("length"));
-                    }
-
                     length = Some(map.next_value::<usize>()?);
                 },
                 Some("lower") =>
@@ -170,20 +145,10 @@ impl<'de> Visitor<'de> for PasswordVisitor
                 },
                 Some("password") =>
                 {
-                    if password.is_some()
-                    {
-                        return Err(Error::duplicate_field("password"));
-                    }
-
                     password = Some(map.next_value::<String>()?);
                 },
                 Some("notes") =>
                 {
-                    if notes.is_some()
-                    {
-                        return Err(Error::duplicate_field("notes"));
-                    }
-
                     notes = Some(map.next_value::<String>()?);
                 },
                 Some(key) =>
@@ -290,20 +255,10 @@ impl<'de> Visitor<'de> for SiteVisitor
                 None => break,
                 Some("site") =>
                 {
-                    if site.is_some()
-                    {
-                        return Err(Error::duplicate_field("site"));
-                    }
-
                     site = Some(map.next_value::<String>()?);
                 },
                 Some("alias") =>
                 {
-                    if alias.is_some()
-                    {
-                        return Err(Error::duplicate_field("alias"));
-                    }
-
                     alias = Some(map.next_value::<String>()?);
                 },
                 Some(key) =>

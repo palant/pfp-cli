@@ -90,11 +90,6 @@ impl<'de> Visitor<'de> for Deserializer
                 None => break,
                 Some(APPLICATION_KEY) =>
                 {
-                    if seen_application
-                    {
-                        return Err(serde::de::Error::duplicate_field(APPLICATION_KEY));
-                    }
-
                     let value = map.next_value::<String>()?;
                     if value != APPLICATION_VALUE
                     {
@@ -104,11 +99,6 @@ impl<'de> Visitor<'de> for Deserializer
                 },
                 Some(FORMAT_KEY) =>
                 {
-                    if seen_format
-                    {
-                        return Err(serde::de::Error::duplicate_field(FORMAT_KEY));
-                    }
-
                     let value = map.next_value::<u64>()?;
                     if value != CURRENT_FORMAT
                     {
@@ -118,11 +108,6 @@ impl<'de> Visitor<'de> for Deserializer
                 },
                 Some(DATA_KEY) =>
                 {
-                    if self.data.is_some()
-                    {
-                        return Err(serde::de::Error::duplicate_field(DATA_KEY));
-                    }
-
                     self.data = Some(map.next_value()?);
                 },
                 Some(key) =>
