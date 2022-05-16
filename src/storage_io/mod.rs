@@ -118,7 +118,7 @@ impl StorageIO for FileIO
 
     fn flush(&mut self) -> Result<(), Error>
     {
-        let contents = serde_json::to_string(&json::Serializer::new(self)).map_err(|error| Error::InvalidJson { error })?;
+        let contents = serde_json::to_string(&json::Serializer::new(self.data())).map_err(|error| Error::InvalidJson { error })?;
 
         let parent = self.path.parent();
         if let Some(parent) = parent

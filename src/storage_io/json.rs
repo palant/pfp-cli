@@ -16,15 +16,15 @@ const DATA_KEY: &str = "data";
 
 pub(crate) struct Serializer<'ser>
 {
-    io: &'ser super::FileIO,
+    data: &'ser HashMap<String, String>,
 }
 
 impl<'ser> Serializer<'ser>
 {
-    pub fn new(io: &'ser super::FileIO) -> Self
+    pub fn new(data: &'ser HashMap<String, String>) -> Self
     {
         Self {
-            io,
+            data,
         }
     }
 }
@@ -36,7 +36,7 @@ impl<'ser> Serialize for Serializer<'ser>
         let mut map = serializer.serialize_map(Some(3))?;
         map.serialize_entry(APPLICATION_KEY, APPLICATION_VALUE)?;
         map.serialize_entry(FORMAT_KEY, &CURRENT_FORMAT)?;
-        map.serialize_entry(DATA_KEY, self.io.data())?;
+        map.serialize_entry(DATA_KEY, self.data)?;
         map.end()
     }
 }
