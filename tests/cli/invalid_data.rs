@@ -132,6 +132,17 @@ fn missing_hmac_secret()
 }
 
 #[test]
+fn missing_bracket()
+{
+    let setup = Setup::new();
+    setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"}"#);
+    let mut session = setup.run(&["list"], None);
+
+    session.expect_str("Corrupt JSON data");
+    session.expect_str("EOF");
+}
+
+#[test]
 fn complete_data()
 {
     let setup = Setup::new();
