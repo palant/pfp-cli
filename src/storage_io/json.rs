@@ -9,15 +9,6 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
-enum FieldName
-{
-    Application,
-    Format,
-    Data,
-}
-
-#[derive(Serialize, Deserialize)]
-#[serde(rename_all = "lowercase")]
 enum ApplicationName
 {
     Pfp,
