@@ -21,6 +21,7 @@ rpassword = "6.0.1"
 scrypt = { version = "0.10.0", default-features = false }
 serde = "1.0.137"
 serde_json = "1.0.81"
+serde_repr = "0.1.8"
 sha2 = "0.10.2"
 wildmatch = "2.1.0"
 

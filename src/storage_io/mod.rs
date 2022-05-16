@@ -81,8 +81,7 @@ impl StorageIO for FileIO
         self.data =
             serde_json::from_str::<json::Deserializer>(&contents)
                 .map_err(|error| Error::InvalidJson { error })?
-                .data()
-                .ok_or(Error::UnexpectedData)?;
+                .data();
         Ok(())
     }
 

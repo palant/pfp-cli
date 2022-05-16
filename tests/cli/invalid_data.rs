@@ -47,8 +47,8 @@ fn wrong_application()
     let mut session = setup.run(&["list"], None);
 
     session.expect_str("Corrupt JSON data");
-    session.expect_str("invalid value");
-    session.expect_str("expected pfp");
+    session.expect_str("unknown variant");
+    session.expect_str("pfp");
 }
 
 #[test]
@@ -140,6 +140,28 @@ fn missing_bracket()
 
     session.expect_str("Corrupt JSON data");
     session.expect_str("EOF");
+}
+
+#[test]
+fn extra_field()
+{
+    let setup = Setup::new();
+    setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"},"something":2}"#);
+    let mut session = setup.run(&["list"], None);
+
+    session.expect_str("Corrupt JSON data");
+    session.expect_str("unknown field");
+}
+
+#[test]
+fn extra_data()
+{
+    let setup = Setup::new();
+    setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"}}5"#);
+    let mut session = setup.run(&["list"], None);
+
+    session.expect_str("Corrupt JSON data");
+    session.expect_str("trailing characters");
 }
 
 #[test]
