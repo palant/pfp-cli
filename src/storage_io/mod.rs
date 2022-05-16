@@ -53,7 +53,7 @@ pub trait StorageIO
 pub struct FileIO
 {
     path: path::PathBuf,
-    data: HashMap<String, String>,
+    data: json::Metadata,
 }
 
 impl FileIO
@@ -63,7 +63,7 @@ impl FileIO
     {
         Self {
             path: path.to_path_buf(),
-            data: HashMap::new(),
+            data: json::Metadata::new(HashMap::new()),
         }
     }
 }
@@ -75,49 +75,43 @@ impl StorageIO for FileIO
         let contents = fs::read_to_string(&self.path).map_err(|error| Error::FileReadFailure { error })?;
         self.data =
             serde_json::from_str::<json::Metadata>(&contents)
-                .map_err(|error| Error::InvalidJson { error })?
-                .data();
+                .map_err(|error| Error::InvalidJson { error })?;
         Ok(())
     }
 
     fn contains_key(&self, key: &str) -> bool
     {
-        self.data.contains_key(key)
+        self.data.data.contains_key(key)
     }
 
     fn get(&self, key: &str) -> Result<&String, Error>
     {
-        self.data.get(key).ok_or(Error::KeyMissing)
+        self.data.data.get(key).ok_or(Error::KeyMissing)
     }
 
     fn set(&mut self, key: String, value: String)
     {
-        self.data.insert(key, value);
+        self.data.data.insert(key, value);
     }
 
     fn remove(&mut self, key: &str) -> Result<(), Error>
     {
-        self.data.remove(key).map(|_| ()).ok_or(Error::KeyMissing)
+        self.data.data.remove(key).map(|_| ()).ok_or(Error::KeyMissing)
     }
 
     fn keys(&self) -> Box<dyn Iterator<Item = &String> + '_>
     {
-        Box::new(self.data.keys())
+        Box::new(self.data.data.keys())
     }
 
     fn clear(&mut self)
     {
-        self.data.clear();
+        self.data.data.clear();
     }
 
     fn flush(&mut self) -> Result<(), Error>
     {
-        let data = std::mem::replace(&mut self.data, HashMap::new());
-        let metadata = json::Metadata::new(data);
-        let result = serde_json::to_string(&metadata);
-        self.data = metadata.data();
-
-        let contents = result.map_err(|error| Error::InvalidJson { error })?;
+        let contents = serde_json::to_string(&self.data).map_err(|error| Error::InvalidJson { error })?;
 
         let parent = self.path.parent();
         if let Some(parent) = parent
