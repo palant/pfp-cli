@@ -9,13 +9,13 @@ use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "lowercase")]
-pub enum ApplicationName
+enum ApplicationName
 {
     Pfp,
 }
 
 #[derive(Copy, Clone, Debug)]
-pub enum Format
+enum Format
 {
     Current = 3,
 }
@@ -50,8 +50,8 @@ impl<'de> serde::de::Deserialize<'de> for Format
 #[serde(deny_unknown_fields)]
 pub struct Metadata
 {
-    pub application: ApplicationName,
-    pub format: Format,
+    application: ApplicationName,
+    format: Format,
     pub data: HashMap<String, String>,
 }
 
