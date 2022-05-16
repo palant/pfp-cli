@@ -15,3 +15,4 @@ mod initialization;
 mod passwords;
 mod aliases;
 mod list;
+mod invalid_data;

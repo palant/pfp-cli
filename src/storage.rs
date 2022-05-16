@@ -24,13 +24,17 @@ impl<IO: storage_io::StorageIO> Storage<IO>
     fn load_storage(io: &mut impl storage_io::StorageIO) -> Result<(), Error>
     {
         io.load()?;
-        if io.contains_key(SALT_KEY) && io.contains_key(HMAC_SECRET_KEY)
+        if !io.contains_key(SALT_KEY)
         {
-            Ok(())
+            Err(Error::InvalidJson { error: serde::de::Error::missing_field(SALT_KEY) })
+        }
+        else if !io.contains_key(HMAC_SECRET_KEY)
+        {
+            Err(Error::InvalidJson { error: serde::de::Error::missing_field(HMAC_SECRET_KEY) })
         }
         else
         {
-            Err(Error::UnexpectedData)
+            Ok(())
         }
     }
 
@@ -355,7 +359,7 @@ mod tests
         fn read_empty_data()
         {
             let io = MemoryIO::new(HashMap::new());
-            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from empty data should fail"), Error::UnexpectedData { .. }));
+            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from empty data should fail"), Error::InvalidJson { .. }));
         }
 
         #[test]
@@ -364,7 +368,7 @@ mod tests
             let io = MemoryIO::new(HashMap::from([
                 ("salt".to_string(), "asdf".to_string()),
             ]));
-            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from incomplete data should fail"), Error::UnexpectedData { .. }));
+            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from incomplete data should fail"), Error::InvalidJson { .. }));
         }
 
         #[test]
@@ -373,7 +377,7 @@ mod tests
             let io = MemoryIO::new(HashMap::from([
                 ("hmac-secret".to_string(), "fdsa".to_string()),
             ]));
-            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from incomplete data should fail"), Error::UnexpectedData { .. }));
+            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from incomplete data should fail"), Error::InvalidJson { .. }));
         }
 
         #[test]

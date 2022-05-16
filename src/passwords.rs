@@ -499,7 +499,7 @@ mod tests
         fn read_empty_data()
         {
             let io = MemoryIO::new(HashMap::new());
-            assert!(matches!(Passwords::new(io).expect_err("Creating Passwords instance from empty data should fail"), Error::UnexpectedData { .. }));
+            assert!(matches!(Passwords::new(io).expect_err("Creating Passwords instance from empty data should fail"), Error::InvalidJson { .. }));
         }
 
         #[test]

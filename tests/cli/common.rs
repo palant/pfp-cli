@@ -26,6 +26,11 @@ impl Setup
         setup
     }
 
+    pub fn set_file_data(&self, data: &str)
+    {
+        std::fs::write(&self.storage_file, data.as_bytes()).expect("Writing to temporary file should succeed");
+    }
+
     pub fn run(&self, args: &[&str], master_password: Option<&str>) -> Session
     {
         let binary = env!("CARGO_BIN_EXE_pfp-cli");
@@ -131,5 +136,10 @@ impl Session
             }
         }
         String::from_utf8(contents).expect("App output should be valid UTF-8").replace('\r', "")
+    }
+
+    pub fn kill(&mut self)
+    {
+        self.process.kill().expect("App should terminate");
     }
 }
