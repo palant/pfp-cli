@@ -84,7 +84,7 @@ impl Session
         let mut buffer = [0u8; 1];
         while !contents.ends_with(pattern.as_bytes())
         {
-            assert!(start.elapsed() < Self::TIMEOUT, "Timed out waiting for string {} in process output", pattern);
+            assert!(start.elapsed() < Self::TIMEOUT, "Timed out waiting for string '{}' in process output, instead received: '{}'", pattern, String::from_utf8(contents).unwrap());
             let n = stdout.read(&mut buffer).expect(&format!("Failed waiting for string {} in process output", pattern));
             contents.extend_from_slice(&buffer[0 .. n]);
         }
