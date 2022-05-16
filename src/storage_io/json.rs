@@ -5,7 +5,6 @@
  */
 
 use serde::{Serialize, Deserialize};
-use serde_repr::{Serialize_repr, Deserialize_repr};
 use std::collections::HashMap;
 
 #[derive(Serialize, Deserialize)]
@@ -24,11 +23,36 @@ enum ApplicationName
     Pfp,
 }
 
-#[derive(Serialize_repr, Deserialize_repr)]
-#[repr(u32)]
+#[derive(Copy, Clone)]
 enum Format
 {
     Current = 3,
+}
+
+impl serde::ser::Serialize for Format
+{
+    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
+        where S: serde::ser::Serializer,
+    {
+        s.serialize_u64(*self as u64)
+    }
+}
+
+impl<'de> serde::de::Deserialize<'de> for Format
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+        where D: serde::de::Deserializer<'de>
+    {
+        let result = u64::deserialize(deserializer)?;
+        if result == Self::Current as u64
+        {
+            Ok(Self::Current)
+        }
+        else
+        {
+            Err(serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(result), &(Self::Current as u64).to_string().as_str()))
+        }
+    }
 }
 
 #[derive(Serialize)]
