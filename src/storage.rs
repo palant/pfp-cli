@@ -614,8 +614,7 @@ mod tests
             storage.ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
             storage.ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
 
-            if let Password::Generated {password} = serde_json::from_str(r#"{
-                "type": "generated2",
+            storage.set_generated(serde_json::from_str(r#"{
                 "site": "example.com",
                 "name": "blubber",
                 "revision": "",
@@ -625,26 +624,19 @@ mod tests
                 "number": true,
                 "symbol": true,
                 "notes": "whatever"
-            }"#).unwrap()
-            {
-                storage.set_generated(password, HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
-            }
+            }"#).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
 
             let mut password = storage.get_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
             password.set_notes("");
             storage.set_password(password, HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
 
-            if let Password::Stored { password } = serde_json::from_str(r#"{
-                "type": "stored",
+            storage.set_stored(serde_json::from_str(r#"{
                 "site": "example.com",
                 "name": "blabber",
                 "revision": "2",
                 "password": "asdf",
                 "notes": "hi!"
-            }"#).unwrap()
-            {
-                storage.set_stored(password, HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
-            }
+            }"#).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
 
             let mut password = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
             password.set_notes("hi there!");
@@ -653,8 +645,7 @@ mod tests
             storage.ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
             storage.ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
 
-            if let Password::Generated { password} = serde_json::from_str(r#"{
-                "type": "generated2",
+            storage.set_generated(serde_json::from_str(r#"{
                 "site": "example.info",
                 "name": "test",
                 "revision": "yet another",
@@ -663,10 +654,7 @@ mod tests
                 "upper": false,
                 "number": true,
                 "symbol": false
-            }"#).unwrap()
-            {
-                storage.set_generated(password, HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
-            }
+            }"#).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
 
             let mut password = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
             password.set_notes("nothing here");
