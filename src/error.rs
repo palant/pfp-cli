@@ -11,11 +11,20 @@
 pub enum Error
 {
     /// Directory for the storage file cannot be created.
-    CreateDirFailure { error: std::io::Error },
+    CreateDirFailure {
+        /// Underlying I/O error
+        error: std::io::Error,
+    },
     /// File cannot be read from disk.
-    FileReadFailure { error: std::io::Error },
+    FileReadFailure {
+        /// Underlying I/O error
+        error: std::io::Error,
+    },
     /// File cannot be written to disk.
-    FileWriteFailure { error: std::io::Error },
+    FileWriteFailure {
+        /// Underlying I/O error
+        error: std::io::Error,
+    },
     /// Operation requires the storage to be initialized but it currently isn't.
     StorageNotInitialized,
     /// Storage file's format and version aren't supported.
@@ -29,11 +38,20 @@ pub enum Error
     /// Ciphertext isn't stored in the expected format.
     InvalidCiphertext,
     /// Base64 decoding failed.
-    InvalidBase64 { error: base64::DecodeError },
+    InvalidBase64 {
+        /// Underlying Base64 error
+        error: base64::DecodeError,
+    },
     /// JSON decoding failed.
-    InvalidJson { error: serde_json::Error },
+    InvalidJson {
+        /// Underlying serde error
+        error: serde_json::Error,
+    },
     /// UTF-8 decoding failed.
-    InvalidUtf8 { error: std::string::FromUtf8Error },
+    InvalidUtf8 {
+        /// Underlying UTF8 error
+        error: std::string::FromUtf8Error,
+    },
     /// Decryption failed, probably due to wrong master password.
     DecryptionFailure,
     /// The alias requested doesn't exist.
@@ -42,10 +60,16 @@ pub enum Error
     AliasToSelf,
     /// Cannot alias a site that already has passwords.
     SiteHasPasswords,
-    /// Recovery code contains extra data starting with given line.
-    RecoveryCodeExtraData { line: usize },
-    /// Recovery code validation detected a checksum mismatch in given line.
-    RecoveryCodeChecksumMismatch { line: usize },
+    /// Recovery code contains extra data.
+    RecoveryCodeExtraData {
+        /// First line to contain extra data
+        line: usize,
+    },
+    /// Recovery code validation detected a checksum mismatch.
+    RecoveryCodeChecksumMismatch {
+        /// Line where the checksum mismatch was detected
+        line: usize,
+    },
     /// Recovery code is incomplete.
     RecoveryCodeIncomplete,
     /// Recovery code version is unsupported.

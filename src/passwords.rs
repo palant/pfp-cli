@@ -347,6 +347,10 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         recovery_codes::decode(code, master_password)
     }
 
+    /// Retrieves notes for a given site/name/revision combination.
+    ///
+    /// No notes will produce an empty string. This can fail if passwords are locked or the
+    /// password doesn't exist.
     pub fn get_notes(&self, site: &str, name: &str, revision: &str) -> Result<String, Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -360,6 +364,10 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
         Ok(password.notes().to_string())
     }
 
+    /// Changes notes for a given site/name/revision combination. `notes` parameter can be an
+    /// empty string.
+    ///
+    /// This can fail if passwords are locked or the password doesn't exist.
     pub fn set_notes(&mut self, site: &str, name: &str, revision: &str, notes: &str) -> Result<(), Error>
     {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;

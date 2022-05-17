@@ -40,9 +40,9 @@ pub trait StorageIO
     /// Removes the value associated with a particlar key or returns `Error::KeyMissing` if the key
     /// isn't found.
     fn remove(&mut self, key: &str) -> Result<(), Error>;
-    /// Iterates over keys contained in the data.
     /// Removes all data from the file.
     fn clear(&mut self);
+    /// Iterates over keys contained in the data.
     fn keys(&self) -> Box<dyn Iterator<Item = &String> + '_>;
     /// Saves the changes back to the storage file if necessary.
     fn flush(&mut self) -> Result<(), Error>;
@@ -152,6 +152,7 @@ impl MemoryIO
         }
     }
 
+    /// Retrieves the data stored in the "file".
     pub fn data(&self) -> &HashMap<String, String>
     {
         &self.file_data

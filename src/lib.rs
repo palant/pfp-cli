@@ -4,6 +4,10 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+#![deny(unsafe_code, nonstandard_style)]
+#![warn(missing_debug_implementations, missing_docs)]
+#![forbid(rust_2021_compatibility)]
+
 //! Functionality required to work with JSON files produced as data exports by the
 //! PfP: Pain-free Passwords browser extension. Usually, you will use the high-level functionality
 //! provided by the `passwords` module:
