@@ -6,9 +6,25 @@
 
 use serde::ser::{Serializer, SerializeMap};
 use serde::de::{Deserializer, Visitor, MapAccess};
-use super::{CharacterSet, CharacterType};
 
-pub fn serialize_charset<S: Serializer>(charset: &CharacterSet, serializer: S) -> Result<S::Ok, S::Error>
+#[derive(enumset::EnumSetType, Debug)]
+/// Possible character types that a password is generated from.
+pub enum CharacterType
+{
+    /// Lower-case letters
+    Lower,
+    /// Upper-case letters
+    Upper,
+    /// Digits
+    Digit,
+    /// Various non-alphanumeric characters
+    Symbol,
+}
+
+/// A set of character types to generate a password from.
+pub type CharacterSet = enumset::EnumSet<CharacterType>;
+
+pub fn serialize<S: Serializer>(charset: &CharacterSet, serializer: S) -> Result<S::Ok, S::Error>
 {
     let mut map = serializer.serialize_map(None)?;
     map.serialize_entry("lower", &charset.contains(CharacterType::Lower))?;
@@ -18,7 +34,7 @@ pub fn serialize_charset<S: Serializer>(charset: &CharacterSet, serializer: S) -
     map.end()
 }
 
-pub fn deserialize_charset<'de, D: Deserializer<'de>>(deserializer: D) -> Result<CharacterSet, D::Error>
+pub fn deserialize<'de, D: Deserializer<'de>>(deserializer: D) -> Result<CharacterSet, D::Error>
 {
     struct CharacterSetVisitor;
 
