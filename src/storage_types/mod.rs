@@ -8,6 +8,8 @@
 
 mod json;
 
+use serde::{Serialize, Deserialize};
+
 #[derive(enumset::EnumSetType, Debug)]
 /// Possible character types that a password is generated from.
 pub enum CharacterType
@@ -229,11 +231,14 @@ impl Password
     }
 }
 
-#[derive(Debug)]
 /// A website entry in storage.
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(deny_unknown_fields)]
 pub struct Site
 {
+    #[serde(rename = "site")]
     name: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
     alias: Option<String>,
 }
 
