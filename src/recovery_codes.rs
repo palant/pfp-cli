@@ -141,13 +141,7 @@ pub fn format_code(code: &[u8], insert_punctuation: bool) -> String {
     if result
         .as_bytes()
         .last()
-        .and_then(|&byte| {
-            if byte == b'\n' || byte == b':' || byte == b'-' {
-                Some(())
-            } else {
-                None
-            }
-        })
+        .filter(|&&byte| byte == b'\n' || byte == b':' || byte == b'-')
         .is_some()
     {
         result.pop();
