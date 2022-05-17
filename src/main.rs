@@ -162,13 +162,13 @@ fn prompt_password(prompt: &str, stdin_passwords: bool) -> String {
 fn format_error(error: &Error) -> String {
     match error {
         Error::CreateDirFailure { error } => {
-            format!("Failed creating directory for storage ({}).", *error)
+            format!("Failed creating directory for storage ({}).", error)
         }
         Error::FileReadFailure { error } => format!(
             "Failed reading storage file ({}). Maybe use set-master subcommand first?",
-            *error
+            error
         ),
-        Error::FileWriteFailure { error } => format!("Failed writing storage file ({}).", *error),
+        Error::FileWriteFailure { error } => format!("Failed writing storage file ({}).", error),
         Error::StorageNotInitialized => {
             "Unexpected: Storage is being accessed before initialization.".to_string()
         }

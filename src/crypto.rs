@@ -53,7 +53,7 @@ pub fn derive_password(
 fn to_password(bytes: &[u8], charset: CharacterSet) -> String {
     let mut result = String::with_capacity(bytes.len());
     let mut seen = CharacterSet::empty();
-    for (i, byte) in bytes.iter().enumerate() {
+    for (i, &byte) in bytes.iter().enumerate() {
         let allowed = if charset.len() - seen.len() >= bytes.len() - i {
             charset - seen
         } else {
@@ -67,7 +67,7 @@ fn to_password(bytes: &[u8], charset: CharacterSet) -> String {
             }
         });
 
-        let mut index = usize::from(*byte) % num_chars;
+        let mut index = usize::from(byte) % num_chars;
         for (chartype, chars) in CHARS_MAPPING {
             if allowed.contains(chartype) {
                 if index < chars.len() {
@@ -171,11 +171,11 @@ pub fn base32_decode(input: &[u8]) -> Result<Vec<u8>, Error> {
     let mut invalid_bytes = false;
     let input_converted = input
         .iter()
-        .map(|byte| {
-            if LOOKUP[*byte as usize] >= 32 {
+        .map(|&byte| {
+            if LOOKUP[byte as usize] >= 32 {
                 invalid_bytes = true;
             }
-            LOOKUP[*byte as usize]
+            LOOKUP[byte as usize]
         })
         .collect::<Vec<u8>>();
     if invalid_bytes {

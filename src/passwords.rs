@@ -23,7 +23,7 @@ use rand::Rng;
 /// stored as plain text in the storage file.
 pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8> {
     // Replicate salt being converted to UTF-8 as done by JS code
-    let salt_str = String::from_iter(salt.iter().map(|byte| *byte as char));
+    let salt_str = String::from_iter(salt.iter().map(|&byte| byte as char));
     crypto::derive_key(master_password, salt_str.as_bytes())
 }
 
