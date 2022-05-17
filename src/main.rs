@@ -598,11 +598,11 @@ fn main()
                     let password_type;
                     match &password
                     {
-                        Password::Generated { .. } =>
+                        Password::Generated(_) =>
                         {
                             password_type = "generated";
                         }
-                        Password::Stored { .. } =>
+                        Password::Stored(_) =>
                         {
                             password_type = "stored";
                         }
@@ -623,7 +623,7 @@ fn main()
 
                     if *recovery
                     {
-                        if let Password::Stored { password } = &password
+                        if let Password::Stored(password) = &password
                         {
                             println!("        Recovery code:");
                             for line in passwords.get_recovery_code(password).handle_error().split('\n')
@@ -641,7 +641,7 @@ fn main()
                             println!("        Notes: {}", notes);
                         }
 
-                        if let Password::Generated { password } = &password
+                        if let Password::Generated(password) = &password
                         {
                             println!("        Length: {}", password.length());
 

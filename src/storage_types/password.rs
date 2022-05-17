@@ -179,17 +179,11 @@ impl StoredPassword
 pub enum Password
 {
     #[serde(rename = "generated2")]
-    Generated
-    {
-        #[serde(flatten)]
-        password: GeneratedPassword,
-    },
+    /// Contains a generated password
+    Generated(GeneratedPassword),
+    /// Contains a stored password
     #[serde(rename = "stored")]
-    Stored
-    {
-        #[serde(flatten)]
-        password: StoredPassword,
-    },
+    Stored(StoredPassword),
 }
 
 impl Password
@@ -199,8 +193,8 @@ impl Password
     {
         match self
         {
-            Self::Generated { password } => password.id(),
-            Self::Stored { password } => password.id(),
+            Self::Generated(password) => password.id(),
+            Self::Stored(password) => password.id(),
         }
     }
 
@@ -209,8 +203,8 @@ impl Password
     {
         match self
         {
-            Self::Generated { password } => password.notes(),
-            Self::Stored { password } => password.notes(),
+            Self::Generated(password) => password.notes(),
+            Self::Stored(password) => password.notes(),
         }
     }
 
@@ -219,8 +213,8 @@ impl Password
     {
         match self
         {
-            Self::Generated { password } => password.set_notes(notes),
-            Self::Stored { password } => password.set_notes(notes),
+            Self::Generated(password) => password.set_notes(notes),
+            Self::Stored(password) => password.set_notes(notes),
         }
     }
 }

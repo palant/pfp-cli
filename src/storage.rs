@@ -228,13 +228,13 @@ impl<IO: storage_io::StorageIO> Storage<IO>
     pub fn set_generated(&mut self, password: GeneratedPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
         let key = self.get_password_key(password.id(), hmac_secret);
-        self.set(&key, &Password::Generated { password }, encryption_key)
+        self.set(&key, &Password::Generated(password), encryption_key)
     }
 
     pub fn set_stored(&mut self, password: StoredPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
     {
         let key = self.get_password_key(password.id(), hmac_secret);
-        self.set(&key, &Password::Stored { password }, encryption_key)
+        self.set(&key, &Password::Stored(password), encryption_key)
     }
 
     pub fn get_password(&self, id: &PasswordId, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<Password, Error>

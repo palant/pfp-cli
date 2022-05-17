@@ -316,11 +316,11 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
         match password
         {
-            Password::Generated {password} =>
+            Password::Generated(password) =>
             {
                 Ok(crypto::derive_password(master_password, &password.salt(), password.length(), password.charset()))
             }
-            Password::Stored {password} =>
+            Password::Stored(password) =>
             {
                 Ok(password.password().to_string())
             }
