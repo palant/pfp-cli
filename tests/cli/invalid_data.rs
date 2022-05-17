@@ -59,7 +59,7 @@ fn wrong_format()
     let mut session = setup.run(&["list"], None);
 
     session.expect_str("Corrupt JSON data");
-    session.expect_str("invalid value");
+    session.expect_str("Unexpected format");
     session.expect_str("expected 3");
 }
 

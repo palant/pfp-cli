@@ -14,34 +14,34 @@ enum ApplicationName
     Pfp,
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
+#[serde(try_from="u8", into="u8")]
 enum Format
 {
     Current = 3,
 }
 
-impl serde::ser::Serialize for Format
+impl From<Format> for u8
 {
-    fn serialize<S>(&self, s: S) -> Result<S::Ok, S::Error>
-        where S: serde::ser::Serializer,
+    fn from(value: Format) -> u8
     {
-        s.serialize_u64(*self as u64)
+        value as u8
     }
 }
 
-impl<'de> serde::de::Deserialize<'de> for Format
+impl TryFrom<u8> for Format
 {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: serde::de::Deserializer<'de>
+    type Error = String;
+
+    fn try_from(value: u8) -> Result<Self, Self::Error>
     {
-        let result = u64::deserialize(deserializer)?;
-        if result == Self::Current as u64
+        if value == Self::Current as u8
         {
             Ok(Self::Current)
         }
         else
         {
-            Err(serde::de::Error::invalid_value(serde::de::Unexpected::Unsigned(result), &(Self::Current as u64).to_string().as_str()))
+            Err(format!("Unexpected format {}, expected {}", value, Self::Current as u8))
         }
     }
 }
