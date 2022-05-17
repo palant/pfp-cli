@@ -65,4 +65,14 @@ impl Metadata
             data,
         }
     }
+
+    pub fn data(&self) -> &HashMap<String, String>
+    {
+        &self.data
+    }
+
+    pub fn data_mut(&mut self) -> &mut HashMap<String, String>
+    {
+        &mut self.data
+    }
 }

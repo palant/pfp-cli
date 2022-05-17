@@ -66,6 +66,16 @@ impl FileIO
             data: json::Metadata::new(HashMap::new()),
         }
     }
+
+    fn data(&self) -> &HashMap<String, String>
+    {
+        self.data.data()
+    }
+
+    fn data_mut(&mut self) -> &mut HashMap<String, String>
+    {
+        self.data.data_mut()
+    }
 }
 
 impl StorageIO for FileIO
@@ -81,32 +91,32 @@ impl StorageIO for FileIO
 
     fn contains_key(&self, key: &str) -> bool
     {
-        self.data.data.contains_key(key)
+        self.data().contains_key(key)
     }
 
     fn get(&self, key: &str) -> Result<&String, Error>
     {
-        self.data.data.get(key).ok_or(Error::KeyMissing)
+        self.data().get(key).ok_or(Error::KeyMissing)
     }
 
     fn set(&mut self, key: String, value: String)
     {
-        self.data.data.insert(key, value);
+        self.data_mut().insert(key, value);
     }
 
     fn remove(&mut self, key: &str) -> Result<(), Error>
     {
-        self.data.data.remove(key).map(|_| ()).ok_or(Error::KeyMissing)
+        self.data_mut().remove(key).map(|_| ()).ok_or(Error::KeyMissing)
     }
 
     fn keys(&self) -> Box<dyn Iterator<Item = &String> + '_>
     {
-        Box::new(self.data.data.keys())
+        Box::new(self.data().keys())
     }
 
     fn clear(&mut self)
     {
-        self.data.data.clear();
+        self.data_mut().clear();
     }
 
     fn flush(&mut self) -> Result<(), Error>
