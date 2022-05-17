@@ -310,11 +310,11 @@ mod tests {
         assert_eq!(
             decode(
                 "
-            AHLL-QKN7-S2AW:BEZF-3EB7-R923
-            4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
-            2VCY-FK9C-5BUX:NH86-RDC6-QYMY
-            ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
-        ",
+                    AHLL-QKN7-S2AW:BEZF-3EB7-R923
+                    4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
+                    2VCY-FK9C-5BUX:NH86-RDC6-QYMY
+                    ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
+                ",
                 MASTER_PASSWORD
             )
             .expect("Password recovery should succeed"),
@@ -324,11 +324,11 @@ mod tests {
         assert_eq!(
             decode(
                 "
-            ahll-QKN7-S2AW:BEZF-3EB7-R923+4ASW
-            WSGA-2YMRTMB7-5WZ5-MRZJ
-            2VCY-FK9C-5BUX:NH86-RDC6-QYMY
-            ELVM-RQ44-vb8t:VGPW-AW6K-DUQD
-        ",
+                    ahll-QKN7-S2AW:BEZF-3EB7-R923+4ASW
+                    WSGA-2YMRTMB7-5WZ5-MRZJ
+                    2VCY-FK9C-5BUX:NH86-RDC6-QYMY
+                    ELVM-RQ44-vb8t:VGPW-AW6K-DUQD
+                ",
                 MASTER_PASSWORD
             )
             .expect("Password recovery should succeed"),
@@ -337,11 +337,11 @@ mod tests {
 
         let err1 = decode(
             "
-            AHLL-QKN7-S2AW:BEZF-3EB7-R923
-            2VCY-FK9C-5BUX:NH86-RDC6-QYMY
-            4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
-            ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
-        ",
+                AHLL-QKN7-S2AW:BEZF-3EB7-R923
+                2VCY-FK9C-5BUX:NH86-RDC6-QYMY
+                4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
+                ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
+            ",
             MASTER_PASSWORD,
         )
         .expect_err("Password recovery should fail");
@@ -353,11 +353,11 @@ mod tests {
 
         let err2 = decode(
             "
-            AHLL-QKN7-S2AW:BEZF-3EB7-R923
-            4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
-            2VCY-YK9C-5BUX:NH86-RDC6-QYMY
-            ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
-        ",
+                AHLL-QKN7-S2AW:BEZF-3EB7-R923
+                4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
+                2VCY-YK9C-5BUX:NH86-RDC6-QYMY
+                ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
+            ",
             MASTER_PASSWORD,
         )
         .expect_err("Password recovery should fail");
@@ -369,12 +369,12 @@ mod tests {
 
         let err3 = decode(
             "
-            AHLL-QKN7-S2AW:BEZF-3EB7-R923
-            4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
-            2VCY-FK9C-5BUX:NH86-RDC6-QYMY
-            ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
-            ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
-        ",
+                AHLL-QKN7-S2AW:BEZF-3EB7-R923
+                4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
+                2VCY-FK9C-5BUX:NH86-RDC6-QYMY
+                ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
+                ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
+            ",
             MASTER_PASSWORD,
         )
         .expect_err("Password recovery should fail");
@@ -387,11 +387,11 @@ mod tests {
         assert!(matches!(
             decode(
                 "
-            AHLL-QKN7-S2AW:BEZF-3EB7-R923
-            4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
-            2VCY-FK9C-5BUX:NH86-RDC6-QYMY
-            ELVM-RQ44-VB8T:
-        ",
+                    AHLL-QKN7-S2AW:BEZF-3EB7-R923
+                    4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
+                    2VCY-FK9C-5BUX:NH86-RDC6-QYMY
+                    ELVM-RQ44-VB8T:
+                ",
                 MASTER_PASSWORD
             )
             .expect_err("Password recovery should fail"),
@@ -401,11 +401,11 @@ mod tests {
         assert!(matches!(
             decode(
                 "
-            AHLL-QKN7-S2AW:BEZF-3EB7-R923
-            4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
-            2VCY-FK9C-5BUX:NH86-RDC6-QYMY
-            ELVM-RQ44-
-        ",
+                    AHLL-QKN7-S2AW:BEZF-3EB7-R923
+                    4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
+                    2VCY-FK9C-5BUX:NH86-RDC6-QYMY
+                    ELVM-RQ44-
+                ",
                 MASTER_PASSWORD
             )
             .expect_err("Password recovery should fail"),
@@ -415,10 +415,10 @@ mod tests {
         assert!(matches!(
             decode(
                 "
-            AHLL-QKN7-S2AW:BEZF-3EB7-R923
-            4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
-            2VCY-FK9C-5BUX:NH86-RDC6-QYMY
-        ",
+                    AHLL-QKN7-S2AW:BEZF-3EB7-R923
+                    4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
+                    2VCY-FK9C-5BUX:NH86-RDC6-QYMY
+                ",
                 MASTER_PASSWORD
             )
             .expect_err("Password recovery should fail"),
