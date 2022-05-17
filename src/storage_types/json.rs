@@ -4,48 +4,18 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use serde::ser::{Serializer, Serialize, SerializeMap};
+use serde::ser::{Serializer, SerializeMap};
 use serde::de::{Deserializer, Visitor, Deserialize, MapAccess, Unexpected, Error};
-use super::{Password, StoredPassword, GeneratedPassword, CharacterSet, CharacterType, Site};
+use super::{Password, StoredPassword, GeneratedPassword, CharacterSet, CharacterType};
 
-impl Serialize for Password
+pub fn serialize_charset<S: Serializer>(charset: &CharacterSet, serializer: S) -> Result<S::Ok, S::Error>
 {
-    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    {
-        let mut map = serializer.serialize_map(None)?;
-        match self
-        {
-            Password::Generated {password} =>
-            {
-                map.serialize_entry("type", "generated2")?;
-                map.serialize_entry("site", password.id().site())?;
-                map.serialize_entry("name", password.id().name())?;
-                map.serialize_entry("revision", password.id().revision())?;
-                map.serialize_entry("length", &password.length())?;
-                map.serialize_entry("lower", &password.charset().contains(CharacterType::Lower))?;
-                map.serialize_entry("upper", &password.charset().contains(CharacterType::Upper))?;
-                map.serialize_entry("number", &password.charset().contains(CharacterType::Digit))?;
-                map.serialize_entry("symbol", &password.charset().contains(CharacterType::Symbol))?;
-                if !password.notes().is_empty()
-                {
-                    map.serialize_entry("notes", password.notes())?;
-                }
-            },
-            Password::Stored {password} =>
-            {
-                map.serialize_entry("type", "stored")?;
-                map.serialize_entry("site", password.id().site())?;
-                map.serialize_entry("name", password.id().name())?;
-                map.serialize_entry("revision", password.id().revision())?;
-                map.serialize_entry("password", password.password())?;
-                if !password.notes().is_empty()
-                {
-                    map.serialize_entry("notes", password.notes())?;
-                }
-            }
-        }
-        map.end()
-    }
+    let mut map = serializer.serialize_map(None)?;
+    map.serialize_entry("lower", &charset.contains(CharacterType::Lower))?;
+    map.serialize_entry("upper", &charset.contains(CharacterType::Upper))?;
+    map.serialize_entry("number", &charset.contains(CharacterType::Digit))?;
+    map.serialize_entry("symbol", &charset.contains(CharacterType::Symbol))?;
+    map.end()
 }
 
 impl<'de> Deserialize<'de> for Password

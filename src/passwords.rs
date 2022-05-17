@@ -695,7 +695,7 @@ mod tests
             passwords.set_alias("www.example.org", "www.example.com").expect("Adding alias should succeed");
             assert!(matches!(passwords.set_alias("www.example.com", "example.org").expect_err("Adding alias should fail"), Error::AliasToSelf { .. }));
 
-            passwords.set_generated("example.com", "blubber", "", 16, CharacterType::Lower | CharacterType::Upper | CharacterType::Digit | CharacterType::Symbol).expect("Adding password should succeed");
+            passwords.set_generated("example.com", "blubber", "", 16, CharacterSet::all()).expect("Adding password should succeed");
             passwords.set_stored("example.com", "blabber", "2", "asdf").expect("Adding password should succeed");
             passwords.set_generated("example.info", "test", "yet another", 8, CharacterType::Lower | CharacterType::Digit).expect("Adding password should succeed");
 

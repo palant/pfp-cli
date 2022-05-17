@@ -23,7 +23,7 @@ pub enum CharacterType
 /// A set of character types to generate a password from.
 pub type CharacterSet = enumset::EnumSet<CharacterType>;
 
-#[derive(Debug)]
+#[derive(Serialize, Debug)]
 /// A password identifier, no two passwords with identical identifiers are allowed in storage.
 pub struct PasswordId
 {
@@ -66,14 +66,17 @@ impl PasswordId
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Debug)]
 /// A generated password, generated from master password and various password parameters when
 /// needed.
 pub struct GeneratedPassword
 {
+    #[serde(flatten)]
     id: PasswordId,
     length: usize,
+    #[serde(serialize_with = "json::serialize_charset", flatten)]
     charset: CharacterSet,
+    #[serde(skip_serializing_if = "String::is_empty")]
     notes: String,
 }
 
@@ -137,12 +140,14 @@ impl GeneratedPassword
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Debug)]
 /// A stored password, with the password value stored verbatim in storage.
 pub struct StoredPassword
 {
+    #[serde(flatten)]
     id: PasswordId,
     password: String,
+    #[serde(skip_serializing_if = "String::is_empty")]
     notes: String,
 }
 
@@ -184,16 +189,21 @@ impl StoredPassword
     }
 }
 
-#[derive(Debug)]
+#[derive(Serialize, Debug)]
+#[serde(tag = "type")]
 /// The type used by functions that can handle both generated and stored passwords.
 pub enum Password
 {
+    #[serde(rename = "generated2")]
     Generated
     {
+        #[serde(flatten)]
         password: GeneratedPassword,
     },
+    #[serde(rename = "stored")]
     Stored
     {
+        #[serde(flatten)]
         password: StoredPassword,
     },
 }
@@ -231,9 +241,9 @@ impl Password
     }
 }
 
-/// A website entry in storage.
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
+/// A website entry in storage.
 pub struct Site
 {
     #[serde(rename = "site")]
