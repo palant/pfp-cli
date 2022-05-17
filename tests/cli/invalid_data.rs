@@ -7,8 +7,7 @@
 use crate::common::Setup;
 
 #[test]
-fn empty_file()
-{
+fn empty_file() {
     let setup = Setup::new();
     setup.set_file_data("");
     let mut session = setup.run(&["list"], None);
@@ -18,8 +17,7 @@ fn empty_file()
 }
 
 #[test]
-fn wrong_type()
-{
+fn wrong_type() {
     let setup = Setup::new();
     setup.set_file_data("42");
     let mut session = setup.run(&["list"], None);
@@ -29,8 +27,7 @@ fn wrong_type()
 }
 
 #[test]
-fn empty_object()
-{
+fn empty_object() {
     let setup = Setup::new();
     setup.set_file_data("{}");
     let mut session = setup.run(&["list"], None);
@@ -40,8 +37,7 @@ fn empty_object()
 }
 
 #[test]
-fn wrong_application()
-{
+fn wrong_application() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"easypasswords"}"#);
     let mut session = setup.run(&["list"], None);
@@ -52,8 +48,7 @@ fn wrong_application()
 }
 
 #[test]
-fn wrong_format()
-{
+fn wrong_format() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":8}"#);
     let mut session = setup.run(&["list"], None);
@@ -64,8 +59,7 @@ fn wrong_format()
 }
 
 #[test]
-fn wrong_format_type()
-{
+fn wrong_format_type() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":"3"}"#);
     let mut session = setup.run(&["list"], None);
@@ -75,8 +69,7 @@ fn wrong_format_type()
 }
 
 #[test]
-fn missing_data()
-{
+fn missing_data() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":3}"#);
     let mut session = setup.run(&["list"], None);
@@ -86,8 +79,7 @@ fn missing_data()
 }
 
 #[test]
-fn null_data()
-{
+fn null_data() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":null}"#);
     let mut session = setup.run(&["list"], None);
@@ -97,8 +89,7 @@ fn null_data()
 }
 
 #[test]
-fn empty_data()
-{
+fn empty_data() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":{}}"#);
     let mut session = setup.run(&["list"], None);
@@ -108,8 +99,7 @@ fn empty_data()
 }
 
 #[test]
-fn missing_salt()
-{
+fn missing_salt() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"hmac_secret":"abc"}}"#);
     let mut session = setup.run(&["list"], None);
@@ -120,8 +110,7 @@ fn missing_salt()
 }
 
 #[test]
-fn missing_hmac_secret()
-{
+fn missing_hmac_secret() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba"}}"#);
     let mut session = setup.run(&["list"], None);
@@ -132,10 +121,11 @@ fn missing_hmac_secret()
 }
 
 #[test]
-fn missing_bracket()
-{
+fn missing_bracket() {
     let setup = Setup::new();
-    setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"}"#);
+    setup.set_file_data(
+        r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"}"#,
+    );
     let mut session = setup.run(&["list"], None);
 
     session.expect_str("Corrupt JSON data");
@@ -143,8 +133,7 @@ fn missing_bracket()
 }
 
 #[test]
-fn extra_field()
-{
+fn extra_field() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"},"something":2}"#);
     let mut session = setup.run(&["list"], None);
@@ -154,10 +143,11 @@ fn extra_field()
 }
 
 #[test]
-fn extra_data()
-{
+fn extra_data() {
     let setup = Setup::new();
-    setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"}}5"#);
+    setup.set_file_data(
+        r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"}}5"#,
+    );
     let mut session = setup.run(&["list"], None);
 
     session.expect_str("Corrupt JSON data");
@@ -165,9 +155,10 @@ fn extra_data()
 }
 
 #[test]
-fn complete_data()
-{
+fn complete_data() {
     let setup = Setup::new();
-    setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"}}"#);
+    setup.set_file_data(
+        r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"}}"#,
+    );
     setup.run(&["list"], Some("asdf")).kill();
 }

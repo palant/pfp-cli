@@ -6,21 +6,22 @@
 
 //! Holds the `Passwords` type encapsulating most of the crate's functionality.
 
-use rand::Rng;
 use crate::crypto;
 use crate::error::Error;
 use crate::recovery_codes;
 use crate::storage;
 use crate::storage_io;
-use crate::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site, CharacterSet};
+use crate::storage_types::{
+    CharacterSet, GeneratedPassword, Password, PasswordId, Site, StoredPassword,
+};
+use rand::Rng;
 
 /// Generates the storage data encryption key.
 ///
 /// The encryption key is always derived from a particular secret master password. Salt should be a
 /// random value to prevent rainbow table attacks. The salt is not considered a secret and is
 /// stored as plain text in the storage file.
-pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
-{
+pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8> {
     // Replicate salt being converted to UTF-8 as done by JS code
     let salt_str = String::from_iter(salt.iter().map(|byte| *byte as char));
     crypto::derive_key(master_password, salt_str.as_bytes())
@@ -55,21 +56,18 @@ pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8>
 ///
 /// // Get generated password
 /// assert_eq!(passwords.get("example.com", "me", "1").unwrap(), "sWEdAx<E<Gd_kaa2");
-pub struct Passwords<IO>
-{
+pub struct Passwords<IO> {
     storage: storage::Storage<IO>,
     key: Option<Vec<u8>>,
     hmac_secret: Option<Vec<u8>>,
     master_password: Option<String>,
 }
 
-impl<IO: storage_io::StorageIO> Passwords<IO>
-{
+impl<IO: storage_io::StorageIO> Passwords<IO> {
     /// Creates a new `Passwords` instance and loads data from `io`. Any errors produced by `io`
     /// when loading the data such as `Error::FileReadFailure` will be returned. Also, this will
     /// result in `Error::UnexpectedData` if salt or HMAC secret aren't present in the data.
-    pub fn new(io: IO) -> Result<Self, Error>
-    {
+    pub fn new(io: IO) -> Result<Self, Error> {
         Ok(Self {
             storage: storage::Storage::new(io)?,
             key: None,
@@ -80,8 +78,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 
     /// Creates a new `Passwords` instance without initializing it by loading data from `io`.
     /// Calling [reset() method](#method.reset) will be necessary to use this instance.
-    pub fn uninitialized(io: IO) -> Self
-    {
+    pub fn uninitialized(io: IO) -> Self {
         Self {
             storage: storage::Storage::uninitialized(io),
             key: None,
@@ -97,8 +94,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// Note that this call returning `true` doesn't mean that passwords can be accessed. Password
     /// data also needs to be unlocked with the right master password.
-    pub fn initialized(&self) -> bool
-    {
+    pub fn initialized(&self) -> bool {
         self.storage.initialized()
     }
 
@@ -108,8 +104,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// Passwords can be unlocked through calling either [unlock()](#method.unlock) or
     /// [reset()](#method.reset).
-    pub fn unlocked(&self) -> bool
-    {
+    pub fn unlocked(&self) -> bool {
         self.key.is_some()
     }
 
@@ -120,8 +115,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// be unlocked implicitly, calling `unlock()` isn't required.
     ///
     /// This only produces errors related to writing out the storage data to disk.
-    pub fn reset(&mut self, master_password: &str) -> Result<(), Error>
-    {
+    pub fn reset(&mut self, master_password: &str) -> Result<(), Error> {
         let salt = crypto::get_rng().gen::<[u8; 16]>();
         let key = get_encryption_key(master_password, &salt);
         let hmac_secret = crypto::get_rng().gen::<[u8; 32]>();
@@ -142,8 +136,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// [Error::StorageNotInitialized](../error/enum.Error.html#variant.StorageNotInitialized).
     /// Calling this method with a wrong master password will result in
     /// [Error::DecryptionFailure](../error/enum.Error.html#variant.DecryptionFailure).
-    pub fn unlock(&mut self, master_password: &str) -> Result<(), Error>
-    {
+    pub fn unlock(&mut self, master_password: &str) -> Result<(), Error> {
         let salt = self.storage.get_salt()?;
         let key = get_encryption_key(master_password, &salt);
 
@@ -159,8 +152,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// After this call, passwords will no longer be accessible until [unlock()](#method.unlock)
     /// is called again.
-    pub fn lock(&mut self)
-    {
+    pub fn lock(&mut self) {
         self.key = None;
         self.hmac_secret = None;
         self.master_password = None;
@@ -172,19 +164,23 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// an alias for another site, `site` will become an alias for that site. Attempting to mark a
     /// site as an alias which already has passwords will result in
     /// [Error::SiteHasPasswords](../error/enum.Error.html#variant.SiteHasPasswords).
-    pub fn set_alias(&mut self, site: &str, alias: &str) -> Result<(), Error>
-    {
+    pub fn set_alias(&mut self, site: &str, alias: &str) -> Result<(), Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_normalized = self.storage.normalize_site(site);
         let alias_resolved = self.storage.resolve_site(alias, hmac_secret, key);
-        if self.storage.list_passwords(&site_normalized, hmac_secret, key).next().is_some()
+        if self
+            .storage
+            .list_passwords(&site_normalized, hmac_secret, key)
+            .next()
+            .is_some()
         {
             return Err(Error::SiteHasPasswords);
         }
 
-        self.storage.set_alias(&site_normalized, &alias_resolved, hmac_secret, key)?;
+        self.storage
+            .set_alias(&site_normalized, &alias_resolved, hmac_secret, key)?;
         self.storage.flush()
     }
 
@@ -193,13 +189,13 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// This will normalize `site` parameter (remove `www.` prefix). If `site` isn't marked as an
     /// alias, this call will result in
     /// [Error::NoSuchAlias](../error/enum.Error.html#variant.NoSuchAlias).
-    pub fn remove_alias(&mut self, site: &str) -> Result<(), Error>
-    {
+    pub fn remove_alias(&mut self, site: &str) -> Result<(), Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_normalized = self.storage.normalize_site(site);
-        self.storage.remove_alias(&site_normalized, hmac_secret, key)?;
+        self.storage
+            .remove_alias(&site_normalized, hmac_secret, key)?;
         self.storage.flush()
     }
 
@@ -208,16 +204,13 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// *Important*: This does not remove the passwords belonging to the sites, and this method
     /// will not check whether such passwords exist. It should only be called for sites known to
     /// have no passwords.
-    pub fn remove_sites(&mut self, sites: &[String]) -> Result<(), Error>
-    {
-        if sites.is_empty()
-        {
+    pub fn remove_sites(&mut self, sites: &[String]) -> Result<(), Error> {
+        if sites.is_empty() {
             return Ok(());
         }
 
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
-        for site in sites
-        {
+        for site in sites {
             self.storage.remove_site(site, hmac_secret)?;
         }
         self.storage.flush()
@@ -235,17 +228,25 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// When the password is generated, it will have the length `length` and use the character sets
     /// as determined by the `charset` parameter.
-    pub fn set_generated(&mut self, site: &str, name: &str, revision: &str, length: usize, charset: CharacterSet) -> Result<(), Error>
-    {
+    pub fn set_generated(
+        &mut self,
+        site: &str,
+        name: &str,
+        revision: &str,
+        length: usize,
+        charset: CharacterSet,
+    ) -> Result<(), Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        self.storage.ensure_site_data(&site_resolved, hmac_secret, key)?;
+        self.storage
+            .ensure_site_data(&site_resolved, hmac_secret, key)?;
 
         self.storage.set_generated(
             GeneratedPassword::new(&site_resolved, name, revision, length, charset),
-            hmac_secret, key
+            hmac_secret,
+            key,
         )?;
         self.storage.flush()
     }
@@ -262,17 +263,24 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// The actual password value is supplied in the `password` parameter and will be encrypted
     /// along with all other data.
-    pub fn set_stored(&mut self, site: &str, name: &str, revision: &str, password: &str) -> Result<(), Error>
-    {
+    pub fn set_stored(
+        &mut self,
+        site: &str,
+        name: &str,
+        revision: &str,
+        password: &str,
+    ) -> Result<(), Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        self.storage.ensure_site_data(&site_resolved, hmac_secret, key)?;
+        self.storage
+            .ensure_site_data(&site_resolved, hmac_secret, key)?;
 
         self.storage.set_stored(
             StoredPassword::new(&site_resolved, name, revision, password),
-            hmac_secret, key
+            hmac_secret,
+            key,
         )?;
         self.storage.flush()
     }
@@ -282,15 +290,14 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// The `site` parameter will be normalized (`www.` prefix removed). If the site in question is
     /// an alias, the password will be associated with the site it is an alias for.
-    pub fn has(&self, site: &str, name: &str, revision: &str) -> Result<bool, Error>
-    {
+    pub fn has(&self, site: &str, name: &str, revision: &str) -> Result<bool, Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         Ok(self.storage.has_password(
             &PasswordId::new(&site_resolved, name, revision),
-            hmac_secret
+            hmac_secret,
         ))
     }
 
@@ -302,35 +309,35 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// If the password does not exist, the call will result in
     /// [Error::KeyMissing error](../error/enum.Error.html#variant.KeyMissing).
-    pub fn get(&self, site: &str, name: &str, revision: &str) -> Result<String, Error>
-    {
+    pub fn get(&self, site: &str, name: &str, revision: &str) -> Result<String, Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
-        let master_password = self.master_password.as_ref().ok_or(Error::PasswordsLocked)?;
+        let master_password = self
+            .master_password
+            .as_ref()
+            .ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         let password = self.storage.get_password(
             &PasswordId::new(&site_resolved, name, revision),
-            hmac_secret, key
+            hmac_secret,
+            key,
         )?;
 
-        match password
-        {
-            Password::Generated(password) =>
-            {
-                Ok(crypto::derive_password(master_password, &password.salt(), password.length(), password.charset()))
-            }
-            Password::Stored(password) =>
-            {
-                Ok(password.password().to_string())
-            }
+        match password {
+            Password::Generated(password) => Ok(crypto::derive_password(
+                master_password,
+                &password.salt(),
+                password.length(),
+                password.charset(),
+            )),
+            Password::Stored(password) => Ok(password.password().to_string()),
         }
     }
 
     /// Generates a human-readable recovery code for a stored password. With the correct master
     /// password, the password can be decoded back from the recovery code.
-    pub fn get_recovery_code(&self, password: &StoredPassword) -> Result<String, Error>
-    {
+    pub fn get_recovery_code(&self, password: &StoredPassword) -> Result<String, Error> {
         let salt = self.storage.get_salt()?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
         recovery_codes::generate(password.password(), &salt, key)
@@ -341,9 +348,11 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// This will produce the same errors as
     /// [recovery_codes::decode()](../recovery_codes/fn.decode.html).
-    pub fn decode_recovery_code(&self, code: &str) -> Result<String, Error>
-    {
-        let master_password = self.master_password.as_ref().ok_or(Error::PasswordsLocked)?;
+    pub fn decode_recovery_code(&self, code: &str) -> Result<String, Error> {
+        let master_password = self
+            .master_password
+            .as_ref()
+            .ok_or(Error::PasswordsLocked)?;
         recovery_codes::decode(code, master_password)
     }
 
@@ -351,15 +360,15 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// No notes will produce an empty string. This can fail if passwords are locked or the
     /// password doesn't exist.
-    pub fn get_notes(&self, site: &str, name: &str, revision: &str) -> Result<String, Error>
-    {
+    pub fn get_notes(&self, site: &str, name: &str, revision: &str) -> Result<String, Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         let password = self.storage.get_password(
             &PasswordId::new(&site_resolved, name, revision),
-            hmac_secret, key
+            hmac_secret,
+            key,
         )?;
         Ok(password.notes().to_string())
     }
@@ -368,15 +377,21 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// empty string.
     ///
     /// This can fail if passwords are locked or the password doesn't exist.
-    pub fn set_notes(&mut self, site: &str, name: &str, revision: &str, notes: &str) -> Result<(), Error>
-    {
+    pub fn set_notes(
+        &mut self,
+        site: &str,
+        name: &str,
+        revision: &str,
+        notes: &str,
+    ) -> Result<(), Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         let mut password = self.storage.get_password(
             &PasswordId::new(&site_resolved, name, revision),
-            hmac_secret, key
+            hmac_secret,
+            key,
         )?;
         password.set_notes(notes);
         self.storage.set_password(password, hmac_secret, key)?;
@@ -391,13 +406,15 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// If the password does not exist, the call will result in
     /// [Error::KeyMissing error](../error/enum.Error.html#variant.KeyMissing).
-    pub fn remove(&mut self, site: &str, name: &str, revision: &str) -> Result<(), Error>
-    {
+    pub fn remove(&mut self, site: &str, name: &str, revision: &str) -> Result<(), Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
-        self.storage.remove_password(&PasswordId::new(&site_resolved, name, revision), hmac_secret)?;
+        self.storage.remove_password(
+            &PasswordId::new(&site_resolved, name, revision),
+            hmac_secret,
+        )?;
         self.storage.flush()
     }
 
@@ -405,18 +422,18 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     /// parameter is a password name filter and can contain wildcards (see
     /// [wildmatch crate](https://docs.rs/wildmatch/latest/wildmatch/)). Passing `"*"` for `name`
     /// will list all passwords for the site.
-    pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = Password> + '_
-    {
+    pub fn list(&self, site: &str, name: &str) -> impl Iterator<Item = Password> + '_ {
         assert!(self.unlocked());
 
         let hmac_secret = self.hmac_secret.as_ref().unwrap();
         let key = self.key.as_ref().unwrap();
         let site_resolved = self.storage.resolve_site(site, hmac_secret, key);
         let matcher = wildmatch::WildMatch::new(name);
-        self.storage.list_passwords(&site_resolved, hmac_secret, key).filter(move |password|
-        {
-            return matcher.matches(password.id().name());
-        })
+        self.storage
+            .list_passwords(&site_resolved, hmac_secret, key)
+            .filter(move |password| {
+                return matcher.matches(password.id().name());
+            })
     }
 
     /// Iterates over existing site entries. The `site` parameter is a site name filter and can
@@ -425,17 +442,14 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
     ///
     /// This function will also return aliased sites, both if the site name matches the filter and
     /// if the name of the site they are aliases for matches it.
-    pub fn list_sites(&self, site: &str) -> impl Iterator<Item = Site> + '_
-    {
+    pub fn list_sites(&self, site: &str) -> impl Iterator<Item = Site> + '_ {
         assert!(self.unlocked());
 
         let key = self.key.as_ref().unwrap();
 
         let matcher = wildmatch::WildMatch::new(site);
-        self.storage.list_sites(key).filter(move |site|
-        {
-            return match site.alias()
-            {
+        self.storage.list_sites(key).filter(move |site| {
+            return match site.alias() {
                 Some(alias) => matcher.matches(alias),
                 None => false,
             } || matcher.matches(site.name());
@@ -444,24 +458,27 @@ impl<IO: storage_io::StorageIO> Passwords<IO>
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
+    use super::*;
     use std::collections::HashMap;
     use storage_io::MemoryIO;
-    use super::*;
 
     const MASTER_PASSWORD: &str = "foobar";
 
-    fn empty_data() -> HashMap<String, String>
-    {
+    fn empty_data() -> HashMap<String, String> {
         HashMap::from([
             ("salt", "Y2Jh"),
-            ("hmac-secret", "YWJjZGVmZ2hpamts_Nosk0g9vPYtLPn9QzyFXLQ/1ZuAHVw=="),
-        ]).iter().map(|(key, value)| (key.to_string(), value.to_string())).collect()
+            (
+                "hmac-secret",
+                "YWJjZGVmZ2hpamts_Nosk0g9vPYtLPn9QzyFXLQ/1ZuAHVw==",
+            ),
+        ])
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect()
     }
 
-    fn default_data() -> HashMap<String, String>
-    {
+    fn default_data() -> HashMap<String, String> {
         HashMap::from([
             // cba as base64
             ("salt", "Y2Jh"),
@@ -494,25 +511,25 @@ mod tests
         ]).iter().map(|(key, value)| (key.to_string(), value.to_string())).collect()
     }
 
-    fn password_name(password: Password) -> String
-    {
+    fn password_name(password: Password) -> String {
         password.id().name().to_string()
     }
 
-    mod initialization
-    {
+    mod initialization {
         use super::*;
 
         #[test]
-        fn read_empty_data()
-        {
+        fn read_empty_data() {
             let io = MemoryIO::new(HashMap::new());
-            assert!(matches!(Passwords::new(io).expect_err("Creating Passwords instance from empty data should fail"), Error::InvalidJson { .. }));
+            assert!(matches!(
+                Passwords::new(io)
+                    .expect_err("Creating Passwords instance from empty data should fail"),
+                Error::InvalidJson { .. }
+            ));
         }
 
         #[test]
-        fn read_success()
-        {
+        fn read_success() {
             let io = MemoryIO::new(empty_data());
             let passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
 
@@ -521,94 +538,193 @@ mod tests
         }
 
         #[test]
-        fn unlock()
-        {
+        fn unlock() {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
+            let mut passwords =
+                Passwords::new(io).expect("Creating Passwords instance should succeed");
 
-            assert!(matches!(passwords.unlock("asdfyxcv").expect_err("Passwords shouldn't unlock"), Error::DecryptionFailure { .. }));
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            assert!(matches!(
+                passwords
+                    .unlock("asdfyxcv")
+                    .expect_err("Passwords shouldn't unlock"),
+                Error::DecryptionFailure { .. }
+            ));
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
         }
     }
 
-    mod reset
-    {
+    mod reset {
         use super::*;
 
         #[test]
-        fn reset_uninitialized()
-        {
+        fn reset_uninitialized() {
             let io = MemoryIO::new(HashMap::new());
             let mut passwords = Passwords::uninitialized(io);
             assert_eq!(passwords.initialized(), false);
 
-            passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
+            passwords
+                .reset(MASTER_PASSWORD)
+                .expect("Reset should succeed");
             assert_eq!(passwords.initialized(), true);
             assert_eq!(passwords.unlocked(), true);
             assert_eq!(passwords.list_sites("*").count(), 0);
 
-            assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
-            assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
-            assert_eq!(passwords.master_password.as_ref().expect("Master password should be present"), MASTER_PASSWORD);
+            assert_eq!(
+                passwords
+                    .storage
+                    .get_salt()
+                    .expect("Salt should be present"),
+                b"abcdefghijklmnop"
+            );
+            assert_eq!(
+                passwords
+                    .hmac_secret
+                    .as_ref()
+                    .expect("HMAC secret should be present"),
+                b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80"
+            );
+            assert_eq!(
+                passwords
+                    .master_password
+                    .as_ref()
+                    .expect("Master password should be present"),
+                MASTER_PASSWORD
+            );
 
             passwords.lock();
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
-            assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
-            assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
-            assert_eq!(passwords.master_password.as_ref().expect("Master password should be present"), MASTER_PASSWORD);
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
+            assert_eq!(
+                passwords
+                    .storage
+                    .get_salt()
+                    .expect("Salt should be present"),
+                b"abcdefghijklmnop"
+            );
+            assert_eq!(
+                passwords
+                    .hmac_secret
+                    .as_ref()
+                    .expect("HMAC secret should be present"),
+                b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80"
+            );
+            assert_eq!(
+                passwords
+                    .master_password
+                    .as_ref()
+                    .expect("Master password should be present"),
+                MASTER_PASSWORD
+            );
         }
 
         #[test]
-        fn reset_initialized()
-        {
+        fn reset_initialized() {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
-            passwords.reset(MASTER_PASSWORD).expect("Reset should succeed");
+            let mut passwords =
+                Passwords::new(io).expect("Creating Passwords instance should succeed");
+            passwords
+                .reset(MASTER_PASSWORD)
+                .expect("Reset should succeed");
 
             assert_eq!(passwords.initialized(), true);
             assert_eq!(passwords.unlocked(), true);
             assert_eq!(passwords.list_sites("*").count(), 0);
 
-            assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
-            assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
-            assert_eq!(passwords.master_password.as_ref().expect("Master password should be present"), MASTER_PASSWORD);
+            assert_eq!(
+                passwords
+                    .storage
+                    .get_salt()
+                    .expect("Salt should be present"),
+                b"abcdefghijklmnop"
+            );
+            assert_eq!(
+                passwords
+                    .hmac_secret
+                    .as_ref()
+                    .expect("HMAC secret should be present"),
+                b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80"
+            );
+            assert_eq!(
+                passwords
+                    .master_password
+                    .as_ref()
+                    .expect("Master password should be present"),
+                MASTER_PASSWORD
+            );
 
             passwords.lock();
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
-            assert_eq!(passwords.storage.get_salt().expect("Salt should be present"), b"abcdefghijklmnop");
-            assert_eq!(passwords.hmac_secret.as_ref().expect("HMAC secret should be present"), b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80");
-            assert_eq!(passwords.master_password.as_ref().expect("Master password should be present"), MASTER_PASSWORD);
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
+            assert_eq!(
+                passwords
+                    .storage
+                    .get_salt()
+                    .expect("Salt should be present"),
+                b"abcdefghijklmnop"
+            );
+            assert_eq!(
+                passwords
+                    .hmac_secret
+                    .as_ref()
+                    .expect("HMAC secret should be present"),
+                b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80"
+            );
+            assert_eq!(
+                passwords
+                    .master_password
+                    .as_ref()
+                    .expect("Master password should be present"),
+                MASTER_PASSWORD
+            );
         }
     }
 
-    mod retrieval
-    {
+    mod retrieval {
         use super::*;
 
-        fn list_sites(passwords: &Passwords<MemoryIO>, site: &str) -> Vec<String>
-        {
-            let mut vec = passwords.list_sites(site).map(|site| site.name().to_string()).collect::<Vec<String>>();
+        fn list_sites(passwords: &Passwords<MemoryIO>, site: &str) -> Vec<String> {
+            let mut vec = passwords
+                .list_sites(site)
+                .map(|site| site.name().to_string())
+                .collect::<Vec<String>>();
             vec.sort();
             vec
         }
 
-        fn list_passwords(passwords: &Passwords<MemoryIO>, site: &str, name: &str) -> Vec<String>
-        {
-            let mut vec = passwords.list(site, name).map(password_name).collect::<Vec<String>>();
+        fn list_passwords(passwords: &Passwords<MemoryIO>, site: &str, name: &str) -> Vec<String> {
+            let mut vec = passwords
+                .list(site, name)
+                .map(password_name)
+                .collect::<Vec<String>>();
             vec.sort();
             vec
         }
 
         #[test]
-        fn list_sites_wildcards()
-        {
+        fn list_sites_wildcards() {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            let mut passwords =
+                Passwords::new(io).expect("Creating Passwords instance should succeed");
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
 
-            assert_eq!(list_sites(&passwords, "*"), vec!["example.com", "example.info", "example.org"]);
-            assert_eq!(list_sites(&passwords, "ex*"), vec!["example.com", "example.info", "example.org"]);
-            assert_eq!(list_sites(&passwords, "*.com"), vec!["example.com", "example.org"]);
+            assert_eq!(
+                list_sites(&passwords, "*"),
+                vec!["example.com", "example.info", "example.org"]
+            );
+            assert_eq!(
+                list_sites(&passwords, "ex*"),
+                vec!["example.com", "example.info", "example.org"]
+            );
+            assert_eq!(
+                list_sites(&passwords, "*.com"),
+                vec!["example.com", "example.org"]
+            );
             assert_eq!(list_sites(&passwords, "*am*i*"), vec!["example.info"]);
             assert_eq!(list_sites(&passwords, "example.info"), vec!["example.info"]);
             assert_eq!(list_sites(&passwords, "example.net").len(), 0);
@@ -616,161 +732,453 @@ mod tests
         }
 
         #[test]
-        fn list_passwords_wildcards()
-        {
+        fn list_passwords_wildcards() {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            let mut passwords =
+                Passwords::new(io).expect("Creating Passwords instance should succeed");
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
 
-            assert_eq!(list_passwords(&passwords, "example.com", "*"), vec!["blabber", "blubber"]);
-            assert_eq!(list_passwords(&passwords, "www.example.com", "*"), vec!["blabber", "blubber"]);
-            assert_eq!(list_passwords(&passwords, "example.org", "*"), vec!["blabber", "blubber"]);
-            assert_eq!(list_passwords(&passwords, "www.example.org", "*"), vec!["blabber", "blubber"]);
-            assert_eq!(list_passwords(&passwords, "example.info", "*"), vec!["test"]);
-            assert_eq!(list_passwords(&passwords, "www.example.info", "*"), vec!["test"]);
+            assert_eq!(
+                list_passwords(&passwords, "example.com", "*"),
+                vec!["blabber", "blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.com", "*"),
+                vec!["blabber", "blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "example.org", "*"),
+                vec!["blabber", "blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.org", "*"),
+                vec!["blabber", "blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "example.info", "*"),
+                vec!["test"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.info", "*"),
+                vec!["test"]
+            );
 
-            assert_eq!(list_passwords(&passwords, "example.com", "b*"), vec!["blabber", "blubber"]);
-            assert_eq!(list_passwords(&passwords, "www.example.com", "b*"), vec!["blabber", "blubber"]);
-            assert_eq!(list_passwords(&passwords, "example.org", "b*"), vec!["blabber", "blubber"]);
-            assert_eq!(list_passwords(&passwords, "www.example.org", "b*"), vec!["blabber", "blubber"]);
+            assert_eq!(
+                list_passwords(&passwords, "example.com", "b*"),
+                vec!["blabber", "blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.com", "b*"),
+                vec!["blabber", "blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "example.org", "b*"),
+                vec!["blabber", "blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.org", "b*"),
+                vec!["blabber", "blubber"]
+            );
             assert_eq!(list_passwords(&passwords, "example.info", "b*").len(), 0);
-            assert_eq!(list_passwords(&passwords, "www.example.info", "b*").len(), 0);
+            assert_eq!(
+                list_passwords(&passwords, "www.example.info", "b*").len(),
+                0
+            );
 
-            assert_eq!(list_passwords(&passwords, "example.com", "blu*"), vec!["blubber"]);
-            assert_eq!(list_passwords(&passwords, "www.example.com", "blu*"), vec!["blubber"]);
-            assert_eq!(list_passwords(&passwords, "example.org", "blu*"), vec!["blubber"]);
-            assert_eq!(list_passwords(&passwords, "www.example.org", "blu*"), vec!["blubber"]);
+            assert_eq!(
+                list_passwords(&passwords, "example.com", "blu*"),
+                vec!["blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.com", "blu*"),
+                vec!["blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "example.org", "blu*"),
+                vec!["blubber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.org", "blu*"),
+                vec!["blubber"]
+            );
             assert_eq!(list_passwords(&passwords, "example.info", "blu*").len(), 0);
-            assert_eq!(list_passwords(&passwords, "www.example.info", "blu*").len(), 0);
+            assert_eq!(
+                list_passwords(&passwords, "www.example.info", "blu*").len(),
+                0
+            );
 
-            assert_eq!(list_passwords(&passwords, "example.com", "*a*"), vec!["blabber"]);
-            assert_eq!(list_passwords(&passwords, "www.example.com", "*a*"), vec!["blabber"]);
-            assert_eq!(list_passwords(&passwords, "example.org", "*a*"), vec!["blabber"]);
-            assert_eq!(list_passwords(&passwords, "www.example.org", "*a*"), vec!["blabber"]);
-            assert_eq!(list_passwords(&passwords, "example.info", "t*t"), vec!["test"]);
-            assert_eq!(list_passwords(&passwords, "www.example.info", "t*t"), vec!["test"]);
+            assert_eq!(
+                list_passwords(&passwords, "example.com", "*a*"),
+                vec!["blabber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.com", "*a*"),
+                vec!["blabber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "example.org", "*a*"),
+                vec!["blabber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.org", "*a*"),
+                vec!["blabber"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "example.info", "t*t"),
+                vec!["test"]
+            );
+            assert_eq!(
+                list_passwords(&passwords, "www.example.info", "t*t"),
+                vec!["test"]
+            );
         }
 
         #[test]
-        fn query_passwords()
-        {
+        fn query_passwords() {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            let mut passwords =
+                Passwords::new(io).expect("Creating Passwords instance should succeed");
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
 
-            assert!(passwords.has("example.com", "blubber", "").expect("Check should succeed"));
-            assert_eq!(passwords.get("example.com", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
-            assert!(passwords.has("www.example.com", "blubber", "").expect("Check should succeed"));
-            assert_eq!(passwords.get("www.example.com", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
-            assert!(passwords.has("example.org", "blubber", "").expect("Check should succeed"));
-            assert_eq!(passwords.get("example.org", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
-            assert!(passwords.has("www.example.org", "blubber", "").expect("Check should succeed"));
-            assert_eq!(passwords.get("www.example.org", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
+            assert!(passwords
+                .has("example.com", "blubber", "")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("example.com", "blubber", "")
+                    .expect("Retrieval should succeed"),
+                "SUDJjn&%:nBe}cr8"
+            );
+            assert!(passwords
+                .has("www.example.com", "blubber", "")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("www.example.com", "blubber", "")
+                    .expect("Retrieval should succeed"),
+                "SUDJjn&%:nBe}cr8"
+            );
+            assert!(passwords
+                .has("example.org", "blubber", "")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("example.org", "blubber", "")
+                    .expect("Retrieval should succeed"),
+                "SUDJjn&%:nBe}cr8"
+            );
+            assert!(passwords
+                .has("www.example.org", "blubber", "")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("www.example.org", "blubber", "")
+                    .expect("Retrieval should succeed"),
+                "SUDJjn&%:nBe}cr8"
+            );
 
-            assert!(passwords.has("example.com", "blabber", "2").expect("Check should succeed"));
-            assert_eq!(passwords.get("example.com", "blabber", "2").expect("Retrieval should succeed"), "asdf");
-            assert!(passwords.has("www.example.com", "blabber", "2").expect("Check should succeed"));
-            assert_eq!(passwords.get("www.example.com", "blabber", "2").expect("Retrieval should succeed"), "asdf");
-            assert!(passwords.has("example.org", "blabber", "2").expect("Check should succeed"));
-            assert_eq!(passwords.get("example.org", "blabber", "2").expect("Retrieval should succeed"), "asdf");
-            assert!(passwords.has("www.example.org", "blabber", "2").expect("Check should succeed"));
-            assert_eq!(passwords.get("www.example.org", "blabber", "2").expect("Retrieval should succeed"), "asdf");
+            assert!(passwords
+                .has("example.com", "blabber", "2")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("example.com", "blabber", "2")
+                    .expect("Retrieval should succeed"),
+                "asdf"
+            );
+            assert!(passwords
+                .has("www.example.com", "blabber", "2")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("www.example.com", "blabber", "2")
+                    .expect("Retrieval should succeed"),
+                "asdf"
+            );
+            assert!(passwords
+                .has("example.org", "blabber", "2")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("example.org", "blabber", "2")
+                    .expect("Retrieval should succeed"),
+                "asdf"
+            );
+            assert!(passwords
+                .has("www.example.org", "blabber", "2")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("www.example.org", "blabber", "2")
+                    .expect("Retrieval should succeed"),
+                "asdf"
+            );
 
-            assert!(passwords.has("example.info", "test", "yet another").expect("Check should succeed"));
-            assert_eq!(passwords.get("example.info", "test", "yet another").expect("Retrieval should succeed"), "rjtfxqf4");
-            assert!(passwords.has("www.example.info", "test", "yet another").expect("Check should succeed"));
-            assert_eq!(passwords.get("www.example.info", "test", "yet another").expect("Retrieval should succeed"), "rjtfxqf4");
-            assert!(!passwords.has("example.info", "blubber", "").expect("Check should succeed"));
-            assert!(matches!(passwords.get("example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
-            assert!(!passwords.has("www.example.info", "blubber", "").expect("Check should succeed"));
-            assert!(matches!(passwords.get("www.example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
+            assert!(passwords
+                .has("example.info", "test", "yet another")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("example.info", "test", "yet another")
+                    .expect("Retrieval should succeed"),
+                "rjtfxqf4"
+            );
+            assert!(passwords
+                .has("www.example.info", "test", "yet another")
+                .expect("Check should succeed"));
+            assert_eq!(
+                passwords
+                    .get("www.example.info", "test", "yet another")
+                    .expect("Retrieval should succeed"),
+                "rjtfxqf4"
+            );
+            assert!(!passwords
+                .has("example.info", "blubber", "")
+                .expect("Check should succeed"));
+            assert!(matches!(
+                passwords
+                    .get("example.info", "blubber", "")
+                    .expect_err("Retrieval should fail"),
+                Error::KeyMissing { .. }
+            ));
+            assert!(!passwords
+                .has("www.example.info", "blubber", "")
+                .expect("Check should succeed"));
+            assert!(matches!(
+                passwords
+                    .get("www.example.info", "blubber", "")
+                    .expect_err("Retrieval should fail"),
+                Error::KeyMissing { .. }
+            ));
         }
     }
 
-    mod addition
-    {
+    mod addition {
         use super::*;
         use crate::storage_types::CharacterType;
 
         #[test]
-        fn add_passwords()
-        {
+        fn add_passwords() {
             let io = MemoryIO::new(empty_data());
-            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            let mut passwords =
+                Passwords::new(io).expect("Creating Passwords instance should succeed");
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
 
-            assert!(matches!(passwords.set_alias("www.example.org", "example.org").expect_err("Adding alias should fail"), Error::AliasToSelf { .. }));
-            passwords.set_alias("www.example.org", "www.example.com").expect("Adding alias should succeed");
-            assert!(matches!(passwords.set_alias("www.example.com", "example.org").expect_err("Adding alias should fail"), Error::AliasToSelf { .. }));
+            assert!(matches!(
+                passwords
+                    .set_alias("www.example.org", "example.org")
+                    .expect_err("Adding alias should fail"),
+                Error::AliasToSelf { .. }
+            ));
+            passwords
+                .set_alias("www.example.org", "www.example.com")
+                .expect("Adding alias should succeed");
+            assert!(matches!(
+                passwords
+                    .set_alias("www.example.com", "example.org")
+                    .expect_err("Adding alias should fail"),
+                Error::AliasToSelf { .. }
+            ));
 
-            passwords.set_generated("example.com", "blubber", "", 16, CharacterSet::all()).expect("Adding password should succeed");
-            passwords.set_stored("example.com", "blabber", "2", "asdf").expect("Adding password should succeed");
-            passwords.set_generated("example.info", "test", "yet another", 8, CharacterType::Lower | CharacterType::Digit).expect("Adding password should succeed");
+            passwords
+                .set_generated("example.com", "blubber", "", 16, CharacterSet::all())
+                .expect("Adding password should succeed");
+            passwords
+                .set_stored("example.com", "blabber", "2", "asdf")
+                .expect("Adding password should succeed");
+            passwords
+                .set_generated(
+                    "example.info",
+                    "test",
+                    "yet another",
+                    8,
+                    CharacterType::Lower | CharacterType::Digit,
+                )
+                .expect("Adding password should succeed");
 
-            assert!(matches!(passwords.set_alias("www.example.com", "example.info").expect_err("Adding alias should fail"), Error::SiteHasPasswords { .. }));
+            assert!(matches!(
+                passwords
+                    .set_alias("www.example.com", "example.info")
+                    .expect_err("Adding alias should fail"),
+                Error::SiteHasPasswords { .. }
+            ));
 
-            assert_eq!(passwords.get("example.com", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
-            assert_eq!(passwords.get("example.org", "blubber", "").expect("Retrieval should succeed"), "SUDJjn&%:nBe}cr8");
+            assert_eq!(
+                passwords
+                    .get("example.com", "blubber", "")
+                    .expect("Retrieval should succeed"),
+                "SUDJjn&%:nBe}cr8"
+            );
+            assert_eq!(
+                passwords
+                    .get("example.org", "blubber", "")
+                    .expect("Retrieval should succeed"),
+                "SUDJjn&%:nBe}cr8"
+            );
 
-            assert_eq!(passwords.get("www.example.com", "blabber", "2").expect("Retrieval should succeed"), "asdf");
-            assert_eq!(passwords.get("www.example.org", "blabber", "2").expect("Retrieval should succeed"), "asdf");
+            assert_eq!(
+                passwords
+                    .get("www.example.com", "blabber", "2")
+                    .expect("Retrieval should succeed"),
+                "asdf"
+            );
+            assert_eq!(
+                passwords
+                    .get("www.example.org", "blabber", "2")
+                    .expect("Retrieval should succeed"),
+                "asdf"
+            );
 
-            assert_eq!(passwords.get("example.info", "test", "yet another").expect("Retrieval should succeed"), "rjtfxqf4");
-            assert!(matches!(passwords.get("example.info", "blubber", "").expect_err("Retrieval should fail"), Error::KeyMissing { .. }));
+            assert_eq!(
+                passwords
+                    .get("example.info", "test", "yet another")
+                    .expect("Retrieval should succeed"),
+                "rjtfxqf4"
+            );
+            assert!(matches!(
+                passwords
+                    .get("example.info", "blubber", "")
+                    .expect_err("Retrieval should fail"),
+                Error::KeyMissing { .. }
+            ));
         }
     }
 
-    mod notes
-    {
+    mod notes {
         use super::*;
 
         #[test]
-        fn notes()
-        {
+        fn notes() {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            let mut passwords =
+                Passwords::new(io).expect("Creating Passwords instance should succeed");
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
 
-            assert_eq!(passwords.get_notes("www.example.com", "blubber", "").expect("Getting notes should succeed"), "");
-            assert_eq!(passwords.get_notes("www.example.com", "blabber", "2").expect("Getting notes should succeed"), "hi there!");
-            assert_eq!(passwords.get_notes("example.info", "test", "yet another").expect("Getting notes should succeed"), "nothing here");
-            assert!(matches!(passwords.get_notes("example.info", "blubber", "").expect_err("Getting notes should fail"), Error::KeyMissing { .. }));
+            assert_eq!(
+                passwords
+                    .get_notes("www.example.com", "blubber", "")
+                    .expect("Getting notes should succeed"),
+                ""
+            );
+            assert_eq!(
+                passwords
+                    .get_notes("www.example.com", "blabber", "2")
+                    .expect("Getting notes should succeed"),
+                "hi there!"
+            );
+            assert_eq!(
+                passwords
+                    .get_notes("example.info", "test", "yet another")
+                    .expect("Getting notes should succeed"),
+                "nothing here"
+            );
+            assert!(matches!(
+                passwords
+                    .get_notes("example.info", "blubber", "")
+                    .expect_err("Getting notes should fail"),
+                Error::KeyMissing { .. }
+            ));
 
-            passwords.set_notes("example.com", "blubber", "", "hey!").expect("Setting notes should succeed");
-            passwords.set_notes("example.com", "blabber", "2", "").expect("Setting notes should succeed");
-            passwords.set_notes("www.example.info", "test", "yet another", "something here").expect("Setting notes should succeed");
-            assert!(matches!(passwords.set_notes("example.info", "blubber", "", "").expect_err("Getting notes should fail"), Error::KeyMissing { .. }));
+            passwords
+                .set_notes("example.com", "blubber", "", "hey!")
+                .expect("Setting notes should succeed");
+            passwords
+                .set_notes("example.com", "blabber", "2", "")
+                .expect("Setting notes should succeed");
+            passwords
+                .set_notes("www.example.info", "test", "yet another", "something here")
+                .expect("Setting notes should succeed");
+            assert!(matches!(
+                passwords
+                    .set_notes("example.info", "blubber", "", "")
+                    .expect_err("Getting notes should fail"),
+                Error::KeyMissing { .. }
+            ));
 
-            assert_eq!(passwords.get_notes("www.example.com", "blubber", "").expect("Getting notes should succeed"), "hey!");
-            assert_eq!(passwords.get_notes("www.example.com", "blabber", "2").expect("Getting notes should succeed"), "");
-            assert_eq!(passwords.get_notes("example.info", "test", "yet another").expect("Getting notes should succeed"), "something here");
-            assert!(matches!(passwords.get_notes("example.info", "blubber", "").expect_err("Getting notes should fail"), Error::KeyMissing { .. }));
+            assert_eq!(
+                passwords
+                    .get_notes("www.example.com", "blubber", "")
+                    .expect("Getting notes should succeed"),
+                "hey!"
+            );
+            assert_eq!(
+                passwords
+                    .get_notes("www.example.com", "blabber", "2")
+                    .expect("Getting notes should succeed"),
+                ""
+            );
+            assert_eq!(
+                passwords
+                    .get_notes("example.info", "test", "yet another")
+                    .expect("Getting notes should succeed"),
+                "something here"
+            );
+            assert!(matches!(
+                passwords
+                    .get_notes("example.info", "blubber", "")
+                    .expect_err("Getting notes should fail"),
+                Error::KeyMissing { .. }
+            ));
         }
     }
 
-    mod removal
-    {
+    mod removal {
         use super::*;
 
         #[test]
-        fn remove_passwords()
-        {
+        fn remove_passwords() {
             let io = MemoryIO::new(default_data());
-            let mut passwords = Passwords::new(io).expect("Creating Passwords instance should succeed");
-            passwords.unlock(MASTER_PASSWORD).expect("Passwords should unlock");
+            let mut passwords =
+                Passwords::new(io).expect("Creating Passwords instance should succeed");
+            passwords
+                .unlock(MASTER_PASSWORD)
+                .expect("Passwords should unlock");
 
-            assert!(matches!(passwords.remove_alias("example.net").expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));
-            passwords.remove("www.example.org", "blubber", "").expect("Removing password should succeed");
-            passwords.remove_alias("www.example.org").expect("Removing alias should succeed");
-            assert!(matches!(passwords.remove("example.org", "blabber", "2").expect_err("Removing password should fail"), Error::KeyMissing { .. }));
-            passwords.remove("example.com", "blabber", "2").expect("Removing password should succeed");
-            passwords.remove("example.info", "test", "yet another").expect("Removing password should succeed");
-            assert!(matches!(passwords.remove("example.info", "test", "yet another").expect_err("Removing password should fail"), Error::KeyMissing { .. }));
+            assert!(matches!(
+                passwords
+                    .remove_alias("example.net")
+                    .expect_err("Removing alias should fail"),
+                Error::NoSuchAlias { .. }
+            ));
+            passwords
+                .remove("www.example.org", "blubber", "")
+                .expect("Removing password should succeed");
+            passwords
+                .remove_alias("www.example.org")
+                .expect("Removing alias should succeed");
+            assert!(matches!(
+                passwords
+                    .remove("example.org", "blabber", "2")
+                    .expect_err("Removing password should fail"),
+                Error::KeyMissing { .. }
+            ));
+            passwords
+                .remove("example.com", "blabber", "2")
+                .expect("Removing password should succeed");
+            passwords
+                .remove("example.info", "test", "yet another")
+                .expect("Removing password should succeed");
+            assert!(matches!(
+                passwords
+                    .remove("example.info", "test", "yet another")
+                    .expect_err("Removing password should fail"),
+                Error::KeyMissing { .. }
+            ));
 
             assert_eq!(passwords.list("example.com", "*").count(), 0);
             assert_eq!(passwords.list("example.info", "*").count(), 0);
 
-            passwords.remove_sites(&["example.com".to_string(), "example.info".to_string()]).expect("Removing sites should succeed");
+            passwords
+                .remove_sites(&["example.com".to_string(), "example.info".to_string()])
+                .expect("Removing sites should succeed");
             assert_eq!(passwords.list_sites("*").count(), 0);
         }
     }

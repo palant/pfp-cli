@@ -9,8 +9,7 @@ use crate::common::Setup;
 const MASTER_PASSWORD: &str = "foobar";
 
 #[test]
-fn uninitialized()
-{
+fn uninitialized() {
     let setup = Setup::new();
     let mut session = setup.run(&["set-alias", "example.info", "example.com"], None);
     session.expect_str("Failed reading storage file");
@@ -20,8 +19,7 @@ fn uninitialized()
 }
 
 #[test]
-fn add_remove()
-{
+fn add_remove() {
     let setup = Setup::new();
     setup.initialize(MASTER_PASSWORD);
 
@@ -31,10 +29,16 @@ fn add_remove()
     session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
     session.expect_str("No such value");
 
-    session = setup.run(&["set-alias", "example.info", "example.com"], Some(MASTER_PASSWORD));
+    session = setup.run(
+        &["set-alias", "example.info", "example.com"],
+        Some(MASTER_PASSWORD),
+    );
     session.expect_str("Alias added");
 
-    session = setup.run(&["set-alias", "example.net", "example.com"], Some(MASTER_PASSWORD));
+    session = setup.run(
+        &["set-alias", "example.net", "example.com"],
+        Some(MASTER_PASSWORD),
+    );
     session.expect_str("Alias added");
 
     session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));

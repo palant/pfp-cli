@@ -20,14 +20,13 @@
 
 mod json;
 
+use super::error::Error;
 use std::collections::HashMap;
 use std::fs;
 use std::path;
-use super::error::Error;
 
 /// Methods to be exposed by the type wrapping access to the storage file.
-pub trait StorageIO
-{
+pub trait StorageIO {
     /// Reads storage file.
     fn load(&mut self) -> Result<(), Error>;
     /// Checks whether a particular key is present in the data.
@@ -50,82 +49,71 @@ pub trait StorageIO
 
 #[derive(Debug)]
 /// File-based I/O implementation
-pub struct FileIO
-{
+pub struct FileIO {
     path: path::PathBuf,
     data: json::Metadata,
 }
 
-impl FileIO
-{
+impl FileIO {
     /// Creates a new `FileIO` instance from a file path on disk.
-    pub fn new(path: &path::Path) -> Self
-    {
+    pub fn new(path: &path::Path) -> Self {
         Self {
             path: path.to_path_buf(),
             data: json::Metadata::new(HashMap::new()),
         }
     }
 
-    fn data(&self) -> &HashMap<String, String>
-    {
+    fn data(&self) -> &HashMap<String, String> {
         self.data.data()
     }
 
-    fn data_mut(&mut self) -> &mut HashMap<String, String>
-    {
+    fn data_mut(&mut self) -> &mut HashMap<String, String> {
         self.data.data_mut()
     }
 }
 
-impl StorageIO for FileIO
-{
-    fn load(&mut self) -> Result<(), Error>
-    {
-        let contents = fs::read_to_string(&self.path).map_err(|error| Error::FileReadFailure { error })?;
-        self.data =
-            serde_json::from_str::<json::Metadata>(&contents)
-                .map_err(|error| Error::InvalidJson { error })?;
+impl StorageIO for FileIO {
+    fn load(&mut self) -> Result<(), Error> {
+        let contents =
+            fs::read_to_string(&self.path).map_err(|error| Error::FileReadFailure { error })?;
+        self.data = serde_json::from_str::<json::Metadata>(&contents)
+            .map_err(|error| Error::InvalidJson { error })?;
         Ok(())
     }
 
-    fn contains_key(&self, key: &str) -> bool
-    {
+    fn contains_key(&self, key: &str) -> bool {
         self.data().contains_key(key)
     }
 
-    fn get(&self, key: &str) -> Result<&String, Error>
-    {
+    fn get(&self, key: &str) -> Result<&String, Error> {
         self.data().get(key).ok_or(Error::KeyMissing)
     }
 
-    fn set(&mut self, key: String, value: String)
-    {
+    fn set(&mut self, key: String, value: String) {
         self.data_mut().insert(key, value);
     }
 
-    fn remove(&mut self, key: &str) -> Result<(), Error>
-    {
-        self.data_mut().remove(key).map(|_| ()).ok_or(Error::KeyMissing)
+    fn remove(&mut self, key: &str) -> Result<(), Error> {
+        self.data_mut()
+            .remove(key)
+            .map(|_| ())
+            .ok_or(Error::KeyMissing)
     }
 
-    fn keys(&self) -> Box<dyn Iterator<Item = &String> + '_>
-    {
+    fn keys(&self) -> Box<dyn Iterator<Item = &String> + '_> {
         Box::new(self.data().keys())
     }
 
-    fn clear(&mut self)
-    {
+    fn clear(&mut self) {
         self.data_mut().clear();
     }
 
-    fn flush(&mut self) -> Result<(), Error>
-    {
-        let contents = serde_json::to_string(&self.data).map_err(|error| Error::InvalidJson { error })?;
+    fn flush(&mut self) -> Result<(), Error> {
+        let contents =
+            serde_json::to_string(&self.data).map_err(|error| Error::InvalidJson { error })?;
 
         let parent = self.path.parent();
-        if let Some(parent) = parent
-        {
+        if let Some(parent) = parent {
             fs::create_dir_all(parent).map_err(|error| Error::CreateDirFailure { error })?;
         }
         fs::write(&self.path, &contents).map_err(|error| Error::FileWriteFailure { error })
@@ -134,18 +122,15 @@ impl StorageIO for FileIO
 
 #[derive(Debug)]
 /// In-memory I/O implementation (for tests)
-pub struct MemoryIO
-{
+pub struct MemoryIO {
     file_data: HashMap<String, String>,
     data: HashMap<String, String>,
 }
 
-impl MemoryIO
-{
+impl MemoryIO {
     #[cfg(test)]
     /// Creates a new `MemoryIO` instance with some initial "file" data.
-    pub fn new(data: HashMap<String, String>) -> Self
-    {
+    pub fn new(data: HashMap<String, String>) -> Self {
         Self {
             file_data: data,
             data: HashMap::new(),
@@ -153,52 +138,42 @@ impl MemoryIO
     }
 
     /// Retrieves the data stored in the "file".
-    pub fn data(&self) -> &HashMap<String, String>
-    {
+    pub fn data(&self) -> &HashMap<String, String> {
         &self.file_data
     }
 }
 
-impl StorageIO for MemoryIO
-{
-    fn load(&mut self) -> Result<(), Error>
-    {
+impl StorageIO for MemoryIO {
+    fn load(&mut self) -> Result<(), Error> {
         self.data = self.file_data.clone();
         Ok(())
     }
 
-    fn contains_key(&self, key: &str) -> bool
-    {
+    fn contains_key(&self, key: &str) -> bool {
         self.data.contains_key(key)
     }
 
-    fn get(&self, key: &str) -> Result<&String, Error>
-    {
+    fn get(&self, key: &str) -> Result<&String, Error> {
         self.data.get(key).ok_or(Error::KeyMissing)
     }
 
-    fn set(&mut self, key: String, value: String)
-    {
+    fn set(&mut self, key: String, value: String) {
         self.data.insert(key, value);
     }
 
-    fn remove(&mut self, key: &str) -> Result<(), Error>
-    {
+    fn remove(&mut self, key: &str) -> Result<(), Error> {
         self.data.remove(key).map(|_| ()).ok_or(Error::KeyMissing)
     }
 
-    fn keys(&self) -> Box<dyn Iterator<Item = &String> + '_>
-    {
+    fn keys(&self) -> Box<dyn Iterator<Item = &String> + '_> {
         Box::new(self.data.keys())
     }
 
-    fn clear(&mut self)
-    {
+    fn clear(&mut self) {
         self.data.clear();
     }
 
-    fn flush(&mut self) -> Result<(), Error>
-    {
+    fn flush(&mut self) -> Result<(), Error> {
         self.file_data = self.data.clone();
         Ok(())
     }

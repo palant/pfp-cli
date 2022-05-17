@@ -10,7 +10,7 @@ mod character_set;
 pub use character_set::{CharacterSet, CharacterType};
 
 mod password;
-pub use password::{PasswordId, GeneratedPassword, StoredPassword, Password};
+pub use password::{GeneratedPassword, Password, PasswordId, StoredPassword};
 
 mod site;
 pub use site::Site;

@@ -10,8 +10,7 @@ const MASTER_PASSWORD: &str = "foobar";
 const ANOTHER_MASTER_PASSWORD: &str = "asdfyxcv";
 
 #[test]
-fn short_password()
-{
+fn short_password() {
     let setup = Setup::new();
     let mut session = setup.run(&["set-master"], None);
 
@@ -21,8 +20,7 @@ fn short_password()
 }
 
 #[test]
-fn mismatch()
-{
+fn mismatch() {
     let setup = Setup::new();
     let mut session = setup.run(&["set-master"], None);
 
@@ -34,8 +32,7 @@ fn mismatch()
 }
 
 #[test]
-fn success()
-{
+fn success() {
     let setup = Setup::new();
     setup.initialize(MASTER_PASSWORD);
 
@@ -47,8 +44,7 @@ fn success()
 }
 
 #[test]
-fn reinitialization_aborted()
-{
+fn reinitialization_aborted() {
     let setup = Setup::new();
     setup.initialize(MASTER_PASSWORD);
 
@@ -59,8 +55,7 @@ fn reinitialization_aborted()
 }
 
 #[test]
-fn reinitialization_accepted()
-{
+fn reinitialization_accepted() {
     let setup = Setup::new();
     setup.initialize(MASTER_PASSWORD);
 
@@ -82,8 +77,7 @@ fn reinitialization_accepted()
 }
 
 #[test]
-fn reinitialization_noninteractive()
-{
+fn reinitialization_noninteractive() {
     let setup = Setup::new();
     setup.initialize(MASTER_PASSWORD);
 

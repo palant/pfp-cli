@@ -8,8 +8,7 @@
 
 #[derive(Debug)]
 /// A list of all error types returned by this crate's operations.
-pub enum Error
-{
+pub enum Error {
     /// Directory for the storage file cannot be created.
     CreateDirFailure {
         /// Underlying I/O error

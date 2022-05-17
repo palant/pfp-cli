@@ -10,9 +10,9 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+mod aliases;
 mod common;
 mod initialization;
-mod passwords;
-mod aliases;
-mod list;
 mod invalid_data;
+mod list;
+mod passwords;

@@ -7,77 +7,69 @@
 use super::crypto;
 use super::error::Error;
 use super::storage_io;
-use super::storage_types::{PasswordId, GeneratedPassword, StoredPassword, Password, Site};
+use super::storage_types::{GeneratedPassword, Password, PasswordId, Site, StoredPassword};
 
 const SALT_KEY: &str = "salt";
 const HMAC_SECRET_KEY: &str = "hmac-secret";
 const STORAGE_PREFIX: &str = "site:";
 
 #[derive(Debug)]
-pub struct Storage<IO>
-{
+pub struct Storage<IO> {
     io: IO,
 }
 
-impl<IO: storage_io::StorageIO> Storage<IO>
-{
-    fn load_storage(io: &mut impl storage_io::StorageIO) -> Result<(), Error>
-    {
+impl<IO: storage_io::StorageIO> Storage<IO> {
+    fn load_storage(io: &mut impl storage_io::StorageIO) -> Result<(), Error> {
         io.load()?;
-        if !io.contains_key(SALT_KEY)
-        {
-            Err(Error::InvalidJson { error: serde::de::Error::missing_field(SALT_KEY) })
-        }
-        else if !io.contains_key(HMAC_SECRET_KEY)
-        {
-            Err(Error::InvalidJson { error: serde::de::Error::missing_field(HMAC_SECRET_KEY) })
-        }
-        else
-        {
+        if !io.contains_key(SALT_KEY) {
+            Err(Error::InvalidJson {
+                error: serde::de::Error::missing_field(SALT_KEY),
+            })
+        } else if !io.contains_key(HMAC_SECRET_KEY) {
+            Err(Error::InvalidJson {
+                error: serde::de::Error::missing_field(HMAC_SECRET_KEY),
+            })
+        } else {
             Ok(())
         }
     }
 
-    pub fn new(mut io: IO) -> Result<Self, Error>
-    {
+    pub fn new(mut io: IO) -> Result<Self, Error> {
         Self::load_storage(&mut io)?;
-        Ok(Self {
-            io,
-        })
+        Ok(Self { io })
     }
 
-    pub fn uninitialized(io: IO) -> Self
-    {
-        Self {
-            io,
-        }
+    pub fn uninitialized(io: IO) -> Self {
+        Self { io }
     }
 
-    pub fn clear(&mut self, salt: &[u8], hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
-    {
+    pub fn clear(
+        &mut self,
+        salt: &[u8],
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<(), Error> {
         self.io.clear();
         self.set_salt(salt);
         self.set_hmac_secret(hmac_secret, encryption_key)?;
         Ok(())
     }
 
-    pub fn flush(&mut self) -> Result<(), Error>
-    {
+    pub fn flush(&mut self) -> Result<(), Error> {
         self.io.flush()
     }
 
-    pub fn initialized(&self) -> bool
-    {
+    pub fn initialized(&self) -> bool {
         self.io.contains_key(SALT_KEY) && self.io.contains_key(HMAC_SECRET_KEY)
     }
 
-    fn contains(&self, key: &str) -> bool
-    {
+    fn contains(&self, key: &str) -> bool {
         self.io.contains_key(key)
     }
 
     fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
-        where T: for<'de> serde::de::Deserialize<'de>
+    where
+        T: for<'de> serde::de::Deserialize<'de>,
     {
         let value = self.io.get(key)?;
         let decrypted = crypto::decrypt_data(value, encryption_key)?;
@@ -85,61 +77,65 @@ impl<IO: storage_io::StorageIO> Storage<IO>
     }
 
     fn set<T>(&mut self, key: &str, value: &T, encryption_key: &[u8]) -> Result<(), Error>
-        where T: serde::ser::Serialize
+    where
+        T: serde::ser::Serialize,
     {
         let serialized = serde_json::to_vec(value).map_err(|error| Error::InvalidJson { error })?;
-        self.io.set(key.to_string(), crypto::encrypt_data(&serialized, encryption_key));
+        self.io.set(
+            key.to_string(),
+            crypto::encrypt_data(&serialized, encryption_key),
+        );
         Ok(())
     }
 
-    fn remove(&mut self, key: &str) -> Result<(), Error>
-    {
+    fn remove(&mut self, key: &str) -> Result<(), Error> {
         self.io.remove(key)
     }
 
-    pub fn get_salt(&self) -> Result<Vec<u8>, Error>
-    {
-        let encoded = self.io.get(SALT_KEY).map_err(|_| Error::StorageNotInitialized)?;
+    pub fn get_salt(&self) -> Result<Vec<u8>, Error> {
+        let encoded = self
+            .io
+            .get(SALT_KEY)
+            .map_err(|_| Error::StorageNotInitialized)?;
         base64::decode(encoded.as_bytes()).map_err(|error| Error::InvalidBase64 { error })
     }
 
-    fn set_salt(&mut self, salt: &[u8])
-    {
+    fn set_salt(&mut self, salt: &[u8]) {
         self.io.set(SALT_KEY.to_string(), base64::encode(salt));
     }
 
-    pub fn get_hmac_secret(&self, encryption_key: &[u8]) -> Result<Vec<u8>, Error>
-    {
-        let ciphertext = self.io.get(HMAC_SECRET_KEY).map_err(|_| Error::StorageNotInitialized)?;
+    pub fn get_hmac_secret(&self, encryption_key: &[u8]) -> Result<Vec<u8>, Error> {
+        let ciphertext = self
+            .io
+            .get(HMAC_SECRET_KEY)
+            .map_err(|_| Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
-        let hmac_secret = serde_json::from_str::<String>(&decrypted).map_err(|error| Error::InvalidJson { error })?;
+        let hmac_secret = serde_json::from_str::<String>(&decrypted)
+            .map_err(|error| Error::InvalidJson { error })?;
         base64::decode(hmac_secret).map_err(|error| Error::InvalidBase64 { error })
     }
 
-    fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
-    {
-        let stringified = serde_json::to_string(&base64::encode(hmac_secret)).map_err(|error| Error::InvalidJson { error })?;
+    fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error> {
+        let stringified = serde_json::to_string(&base64::encode(hmac_secret))
+            .map_err(|error| Error::InvalidJson { error })?;
         let encrypted = crypto::encrypt_data(stringified.as_bytes(), encryption_key);
         self.io.set(HMAC_SECRET_KEY.to_string(), encrypted);
         Ok(())
     }
 
-    fn get_site_key(&self, site: &str, hmac_secret: &[u8]) -> String
-    {
+    fn get_site_key(&self, site: &str, hmac_secret: &[u8]) -> String {
         let mut result = String::from(STORAGE_PREFIX);
         result.push_str(&crypto::get_digest(hmac_secret, site));
         result
     }
 
-    fn get_site_prefix(&self, site: &str, hmac_secret: &[u8]) -> String
-    {
+    fn get_site_prefix(&self, site: &str, hmac_secret: &[u8]) -> String {
         let mut result = self.get_site_key(site, hmac_secret);
         result.push(':');
         result
     }
 
-    fn get_password_key(&self, id: &PasswordId, hmac_secret: &[u8]) -> String
-    {
+    fn get_password_key(&self, id: &PasswordId, hmac_secret: &[u8]) -> String {
         let mut input = String::new();
         input.push_str(id.site());
         input.push('\0');
@@ -152,40 +148,50 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         result
     }
 
-    pub fn get_alias(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<String, Error>
-    {
+    pub fn get_alias(
+        &self,
+        site: &str,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<String, Error> {
         let site = self.get_site(site, hmac_secret, encryption_key)?;
-        site.alias().map(|value| value.to_string()).ok_or(Error::NoSuchAlias)
+        site.alias()
+            .map(|value| value.to_string())
+            .ok_or(Error::NoSuchAlias)
     }
 
-    pub fn normalize_site(&self, site: &str) -> String
-    {
+    pub fn normalize_site(&self, site: &str) -> String {
         site.strip_prefix("www.").unwrap_or(site).to_string()
     }
 
-    pub fn resolve_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> String
-    {
+    pub fn resolve_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> String {
         let normalized = self.normalize_site(site);
-        self.get_alias(&normalized, hmac_secret, encryption_key).unwrap_or(normalized)
+        self.get_alias(&normalized, hmac_secret, encryption_key)
+            .unwrap_or(normalized)
     }
 
-    pub fn ensure_site_data(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
-    {
+    pub fn ensure_site_data(
+        &mut self,
+        site: &str,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<(), Error> {
         let key = self.get_site_key(site, hmac_secret);
-        if self.get::<Site>(&key, encryption_key).is_err()
-        {
+        if self.get::<Site>(&key, encryption_key).is_err() {
             self.set(&key, &Site::new(site, None), encryption_key)
-        }
-        else
-        {
+        } else {
             Ok(())
         }
     }
 
-    pub fn set_alias(&mut self, site: &str, alias: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
-    {
-        if site == alias
-        {
+    pub fn set_alias(
+        &mut self,
+        site: &str,
+        alias: &str,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<(), Error> {
+        if site == alias {
             return Err(Error::AliasToSelf);
         }
         let key = self.get_site_key(site, hmac_secret);
@@ -193,106 +199,136 @@ impl<IO: storage_io::StorageIO> Storage<IO>
         self.set(&key, &site, encryption_key)
     }
 
-    pub fn get_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<Site, Error>
-    {
+    pub fn get_site(
+        &self,
+        site: &str,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<Site, Error> {
         let key = self.get_site_key(site, hmac_secret);
         self.get(&key, encryption_key)
     }
 
-    pub fn remove_alias(&mut self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
-    {
+    pub fn remove_alias(
+        &mut self,
+        site: &str,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<(), Error> {
         let key = self.get_site_key(site, hmac_secret);
         let site: Site = self.get(&key, encryption_key).or(Err(Error::NoSuchAlias))?;
-        if site.alias().is_none()
-        {
+        if site.alias().is_none() {
             Err(Error::NoSuchAlias)
-        }
-        else
-        {
+        } else {
             self.remove(&key)
         }
     }
 
-    pub fn remove_site(&mut self, site: &str, hmac_secret: &[u8]) -> Result<(), Error>
-    {
+    pub fn remove_site(&mut self, site: &str, hmac_secret: &[u8]) -> Result<(), Error> {
         let key = self.get_site_key(site, hmac_secret);
         self.remove(&key)
     }
 
-    pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> bool
-    {
+    pub fn has_password(&self, id: &PasswordId, hmac_secret: &[u8]) -> bool {
         let key = self.get_password_key(id, hmac_secret);
         self.contains(&key)
     }
 
-    pub fn set_generated(&mut self, password: GeneratedPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
-    {
+    pub fn set_generated(
+        &mut self,
+        password: GeneratedPassword,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<(), Error> {
         let key = self.get_password_key(password.id(), hmac_secret);
         self.set(&key, &Password::Generated(password), encryption_key)
     }
 
-    pub fn set_stored(&mut self, password: StoredPassword, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
-    {
+    pub fn set_stored(
+        &mut self,
+        password: StoredPassword,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<(), Error> {
         let key = self.get_password_key(password.id(), hmac_secret);
         self.set(&key, &Password::Stored(password), encryption_key)
     }
 
-    pub fn get_password(&self, id: &PasswordId, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<Password, Error>
-    {
+    pub fn get_password(
+        &self,
+        id: &PasswordId,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<Password, Error> {
         let key = self.get_password_key(id, hmac_secret);
         self.get(&key, encryption_key)
     }
 
-    pub fn set_password(&mut self, password: Password, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error>
-    {
+    pub fn set_password(
+        &mut self,
+        password: Password,
+        hmac_secret: &[u8],
+        encryption_key: &[u8],
+    ) -> Result<(), Error> {
         let key = self.get_password_key(password.id(), hmac_secret);
         self.set(&key, &password, encryption_key)
     }
 
-    pub fn remove_password(&mut self, id: &PasswordId, hmac_secret: &[u8]) -> Result<(), Error>
-    {
+    pub fn remove_password(&mut self, id: &PasswordId, hmac_secret: &[u8]) -> Result<(), Error> {
         let key = self.get_password_key(id, hmac_secret);
         self.remove(&key)
     }
 
-    pub fn list_passwords<'a>(&'a self, site: &str, hmac_secret: &[u8], encryption_key: &'a [u8]) -> impl Iterator<Item = Password> + 'a
-    {
+    pub fn list_passwords<'a>(
+        &'a self,
+        site: &str,
+        hmac_secret: &[u8],
+        encryption_key: &'a [u8],
+    ) -> impl Iterator<Item = Password> + 'a {
         let prefix = self.get_site_prefix(site, hmac_secret);
-        self.io.keys().filter_map(move |key| if key.starts_with(&prefix)
-        {
-            self.get(key, encryption_key).ok()
-        } else { None })
+        self.io.keys().filter_map(move |key| {
+            if key.starts_with(&prefix) {
+                self.get(key, encryption_key).ok()
+            } else {
+                None
+            }
+        })
     }
 
-    pub fn list_sites<'a>(&'a self, encryption_key: &'a [u8]) -> impl Iterator<Item = Site> + 'a
-    {
-        self.io.keys().filter_map(move |key| if key.starts_with(STORAGE_PREFIX) && key[STORAGE_PREFIX.len()..].find(':').is_none()
-        {
-            self.get(key, encryption_key).ok()
-        } else { None })
+    pub fn list_sites<'a>(&'a self, encryption_key: &'a [u8]) -> impl Iterator<Item = Site> + 'a {
+        self.io.keys().filter_map(move |key| {
+            if key.starts_with(STORAGE_PREFIX) && key[STORAGE_PREFIX.len()..].find(':').is_none() {
+                self.get(key, encryption_key).ok()
+            } else {
+                None
+            }
+        })
     }
 }
 
 #[cfg(test)]
-mod tests
-{
+mod tests {
+    use super::*;
     use std::collections::HashMap;
     use storage_io::MemoryIO;
-    use super::*;
 
     const HMAC_SECRET: &[u8] = b"abc";
     const ENCRYPTION_KEY: &[u8] = b"abcdefghijklmnopqrstuvwxyz123456";
 
-    fn empty_data() -> HashMap<String, String>
-    {
+    fn empty_data() -> HashMap<String, String> {
         return HashMap::from([
             ("salt", "Y2Jh"),
-            ("hmac-secret", "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w=="),
-        ]).iter().map(|(key, value)| (key.to_string(), value.to_string())).collect()
+            (
+                "hmac-secret",
+                "YWJjZGVmZ2hpamts_IjTSu0kFnBz6wSrzs73IKmBRi8zn9w==",
+            ),
+        ])
+        .iter()
+        .map(|(key, value)| (key.to_string(), value.to_string()))
+        .collect();
     }
 
-    fn default_data() -> HashMap<String, String>
-    {
+    fn default_data() -> HashMap<String, String> {
         return HashMap::from([
             // cba as base64
             ("salt", "Y2Jh"),
@@ -322,87 +358,100 @@ mod tests
             ("site:5IS/IdH3aaMwyzRv0fwy+2oh5OsXZ2emV8991dFWrko=",
                 // {"site":"example.org","alias":"example.com"} encrypted
                 "YWJjZGVmZ2hpamts_e0/2mFdCrXFftagc/uRqX1zZR19XieMvG7iyiBd+3hskJEGasgJAueBp0cngww8j0ruPmOiqFSkDcdc0"),
-        ]).iter().map(|(key, value)| (key.to_string(), value.to_string())).collect()
+        ]).iter().map(|(key, value)| (key.to_string(), value.to_string())).collect();
     }
 
-    fn decrypt_entries(data: &HashMap<String, String>) -> HashMap<String, serde_json::Value>
-    {
+    fn decrypt_entries(data: &HashMap<String, String>) -> HashMap<String, serde_json::Value> {
         let mut decrypted = HashMap::new();
-        for (key, value) in data.iter()
-        {
-            if key.starts_with("site:")
-            {
-                let entry = crypto::decrypt_data(value, ENCRYPTION_KEY).expect("Value should be decryptable");
+        for (key, value) in data.iter() {
+            if key.starts_with("site:") {
+                let entry = crypto::decrypt_data(value, ENCRYPTION_KEY)
+                    .expect("Value should be decryptable");
 
-                decrypted.insert(key.to_owned(), serde_json::from_str(&entry).expect("Should be valid JSON"));
+                decrypted.insert(
+                    key.to_owned(),
+                    serde_json::from_str(&entry).expect("Should be valid JSON"),
+                );
             }
         }
         return decrypted;
     }
 
-    fn compare_storage_data(data1: &HashMap<String, String>, data2: &HashMap<String, String>)
-    {
+    fn compare_storage_data(data1: &HashMap<String, String>, data2: &HashMap<String, String>) {
         assert_eq!(decrypt_entries(data1), decrypt_entries(data2));
     }
 
-    fn to_json_value<T: serde::ser::Serialize>(value: &T) -> serde_json::Value
-    {
+    fn to_json_value<T: serde::ser::Serialize>(value: &T) -> serde_json::Value {
         let serialized = serde_json::to_string(value).unwrap();
         serde_json::from_str(&serialized).unwrap()
     }
 
-    mod initialization
-    {
+    mod initialization {
         use super::*;
 
         #[test]
-        fn read_empty_data()
-        {
+        fn read_empty_data() {
             let io = MemoryIO::new(HashMap::new());
-            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from empty data should fail"), Error::InvalidJson { .. }));
+            assert!(matches!(
+                Storage::new(io)
+                    .expect_err("Creating Storage instance from empty data should fail"),
+                Error::InvalidJson { .. }
+            ));
         }
 
         #[test]
-        fn read_missing_hmac()
-        {
-            let io = MemoryIO::new(HashMap::from([
-                ("salt".to_string(), "asdf".to_string()),
-            ]));
-            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from incomplete data should fail"), Error::InvalidJson { .. }));
+        fn read_missing_hmac() {
+            let io = MemoryIO::new(HashMap::from([("salt".to_string(), "asdf".to_string())]));
+            assert!(matches!(
+                Storage::new(io)
+                    .expect_err("Creating Storage instance from incomplete data should fail"),
+                Error::InvalidJson { .. }
+            ));
         }
 
         #[test]
-        fn read_missing_salt()
-        {
-            let io = MemoryIO::new(HashMap::from([
-                ("hmac-secret".to_string(), "fdsa".to_string()),
-            ]));
-            assert!(matches!(Storage::new(io).expect_err("Creating Storage instance from incomplete data should fail"), Error::InvalidJson { .. }));
+        fn read_missing_salt() {
+            let io = MemoryIO::new(HashMap::from([(
+                "hmac-secret".to_string(),
+                "fdsa".to_string(),
+            )]));
+            assert!(matches!(
+                Storage::new(io)
+                    .expect_err("Creating Storage instance from incomplete data should fail"),
+                Error::InvalidJson { .. }
+            ));
         }
 
         #[test]
-        fn read_success()
-        {
+        fn read_success() {
             let io = MemoryIO::new(default_data());
             let storage = Storage::new(io).expect("Creating Storage instance should succeed");
             assert_eq!(storage.initialized(), true);
-            assert_eq!(storage.get_salt().expect("Storage should be initialized"), b"cba");
-            assert_eq!(storage.get_hmac_secret(ENCRYPTION_KEY).expect("Storage should be initialized"), HMAC_SECRET);
+            assert_eq!(
+                storage.get_salt().expect("Storage should be initialized"),
+                b"cba"
+            );
+            assert_eq!(
+                storage
+                    .get_hmac_secret(ENCRYPTION_KEY)
+                    .expect("Storage should be initialized"),
+                HMAC_SECRET
+            );
         }
     }
 
-    mod clear
-    {
+    mod clear {
         use super::*;
 
         #[test]
-        fn clear_uninitialized()
-        {
+        fn clear_uninitialized() {
             let io = MemoryIO::new(HashMap::new());
             let mut storage = Storage::uninitialized(io);
             assert_eq!(storage.initialized(), false);
 
-            storage.clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY).expect("Clearing storage should succeed");
+            storage
+                .clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Clearing storage should succeed");
             assert_eq!(storage.initialized(), true);
             assert_eq!(storage.list_sites(ENCRYPTION_KEY).count(), 0);
 
@@ -412,12 +461,13 @@ mod tests
         }
 
         #[test]
-        fn clear_initialized()
-        {
+        fn clear_initialized() {
             let io = MemoryIO::new(default_data());
             let mut storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
-            storage.clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY).expect("Clearing storage should succeed");
+            storage
+                .clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Clearing storage should succeed");
             assert_eq!(storage.initialized(), true);
             assert_eq!(storage.list_sites(ENCRYPTION_KEY).count(), 0);
 
@@ -427,28 +477,30 @@ mod tests
         }
     }
 
-    mod retrieval
-    {
+    mod retrieval {
         use super::*;
         use serde_json::json;
 
-        fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String>
-        {
-            let mut vec = storage.list_sites(ENCRYPTION_KEY).map(|site| site.name().to_string()).collect::<Vec<String>>();
+        fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String> {
+            let mut vec = storage
+                .list_sites(ENCRYPTION_KEY)
+                .map(|site| site.name().to_string())
+                .collect::<Vec<String>>();
             vec.sort();
             return vec;
         }
 
-        fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<serde_json::Value>
-        {
-            let mut vec = storage.list_passwords(site, HMAC_SECRET, ENCRYPTION_KEY).map(|password| to_json_value(&password)).collect::<Vec<serde_json::Value>>();
+        fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<serde_json::Value> {
+            let mut vec = storage
+                .list_passwords(site, HMAC_SECRET, ENCRYPTION_KEY)
+                .map(|password| to_json_value(&password))
+                .collect::<Vec<serde_json::Value>>();
             vec.sort_by_key(|password| password["name"].as_str().unwrap().to_owned());
             return vec;
         }
 
         #[test]
-        fn list_empty()
-        {
+        fn list_empty() {
             let io = MemoryIO::new(empty_data());
             let storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
@@ -457,11 +509,13 @@ mod tests
         }
 
         #[test]
-        fn list_non_empty()
-        {
+        fn list_non_empty() {
             let io = MemoryIO::new(default_data());
             let storage = Storage::new(io).expect("Creating Storage instance should succeed");
-            assert_eq!(list_sites(&storage), vec!["example.com", "example.info", "example.org"]);
+            assert_eq!(
+                list_sites(&storage),
+                vec!["example.com", "example.info", "example.org"]
+            );
 
             let password1 = json!({
                 "type": "stored",
@@ -494,127 +548,228 @@ mod tests
                 "symbol": false,
                 "notes": "nothing here",
             });
-            assert_eq!(list_passwords(&storage, "example.com"), vec![password1, password2]);
+            assert_eq!(
+                list_passwords(&storage, "example.com"),
+                vec![password1, password2]
+            );
             assert_eq!(list_passwords(&storage, "example.info"), vec![password3]);
             assert_eq!(list_passwords(&storage, "example.org").len(), 0);
             assert_eq!(list_passwords(&storage, "example.net").len(), 0);
         }
 
         #[test]
-        fn get_password()
-        {
+        fn get_password() {
             let io = MemoryIO::new(default_data());
             let storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
-            let site1 = storage.get_site("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Site should be present");
-            assert_eq!(to_json_value(&site1), json!({
-                "site": "example.com",
-            }));
-            let site2 = storage.get_site("example.info", HMAC_SECRET, ENCRYPTION_KEY).expect("Site should be present");
-            assert_eq!(to_json_value(&site2), json!({
-                "site": "example.info",
-            }));
-            let site3 = storage.get_site("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Site should be present");
-            assert_eq!(to_json_value(&site3), json!({
-                "site": "example.org",
-                "alias": "example.com",
-            }));
-            assert!(matches!(storage.get_site("example.net", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Site should be missing"), Error::KeyMissing { .. }));
+            let site1 = storage
+                .get_site("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Site should be present");
+            assert_eq!(
+                to_json_value(&site1),
+                json!({
+                    "site": "example.com",
+                })
+            );
+            let site2 = storage
+                .get_site("example.info", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Site should be present");
+            assert_eq!(
+                to_json_value(&site2),
+                json!({
+                    "site": "example.info",
+                })
+            );
+            let site3 = storage
+                .get_site("example.org", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Site should be present");
+            assert_eq!(
+                to_json_value(&site3),
+                json!({
+                    "site": "example.org",
+                    "alias": "example.com",
+                })
+            );
+            assert!(matches!(
+                storage
+                    .get_site("example.net", HMAC_SECRET, ENCRYPTION_KEY)
+                    .expect_err("Site should be missing"),
+                Error::KeyMissing { .. }
+            ));
 
-            assert!(storage.has_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET));
-            let password1 = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
-            assert_eq!(to_json_value(&password1), json!({
-                "type": "stored",
-                "site": "example.com",
-                "name": "blabber",
-                "revision": "2",
-                "password": "asdf",
-                "notes": "hi there!",
-            }));
+            assert!(
+                storage.has_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET)
+            );
+            let password1 = storage
+                .get_password(
+                    &PasswordId::new("example.com", "blabber", "2"),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Password should be present");
+            assert_eq!(
+                to_json_value(&password1),
+                json!({
+                    "type": "stored",
+                    "site": "example.com",
+                    "name": "blabber",
+                    "revision": "2",
+                    "password": "asdf",
+                    "notes": "hi there!",
+                })
+            );
 
-            assert!(storage.has_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET));
-            let password2 = storage.get_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
-            assert_eq!(to_json_value(&password2), json!({
-                "type": "generated2",
-                "site": "example.com",
-                "name": "blubber",
-                "revision": "",
-                "length": 16,
-                "lower": true,
-                "upper": true,
-                "number": true,
-                "symbol": true,
-            }));
+            assert!(
+                storage.has_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET)
+            );
+            let password2 = storage
+                .get_password(
+                    &PasswordId::new("example.com", "blubber", ""),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Password should be present");
+            assert_eq!(
+                to_json_value(&password2),
+                json!({
+                    "type": "generated2",
+                    "site": "example.com",
+                    "name": "blubber",
+                    "revision": "",
+                    "length": 16,
+                    "lower": true,
+                    "upper": true,
+                    "number": true,
+                    "symbol": true,
+                })
+            );
 
-            assert!(storage.has_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET));
-            let password3 = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
-            assert_eq!(to_json_value(&password3), json!({
-                "type": "generated2",
-                "site": "example.info",
-                "name": "test",
-                "revision": "yet another",
-                "length": 8,
-                "lower": true,
-                "upper": false,
-                "number": true,
-                "symbol": false,
-                "notes": "nothing here",
-            }));
+            assert!(storage.has_password(
+                &PasswordId::new("example.info", "test", "yet another"),
+                HMAC_SECRET
+            ));
+            let password3 = storage
+                .get_password(
+                    &PasswordId::new("example.info", "test", "yet another"),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Password should be present");
+            assert_eq!(
+                to_json_value(&password3),
+                json!({
+                    "type": "generated2",
+                    "site": "example.info",
+                    "name": "test",
+                    "revision": "yet another",
+                    "length": 8,
+                    "lower": true,
+                    "upper": false,
+                    "number": true,
+                    "symbol": false,
+                    "notes": "nothing here",
+                })
+            );
 
-            assert!(!storage.has_password(&PasswordId::new("example.org", "blubber", ""), HMAC_SECRET));
-            assert!(matches!(storage.get_password(&PasswordId::new("example.org", "blubber", ""), HMAC_SECRET, ENCRYPTION_KEY).expect_err("Password should be missing"), Error::KeyMissing { .. }));
+            assert!(
+                !storage.has_password(&PasswordId::new("example.org", "blubber", ""), HMAC_SECRET)
+            );
+            assert!(matches!(
+                storage
+                    .get_password(
+                        &PasswordId::new("example.org", "blubber", ""),
+                        HMAC_SECRET,
+                        ENCRYPTION_KEY
+                    )
+                    .expect_err("Password should be missing"),
+                Error::KeyMissing { .. }
+            ));
         }
 
         #[test]
-        fn get_alias()
-        {
+        fn get_alias() {
             let io = MemoryIO::new(default_data());
             let storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
-            assert!(matches!(storage.get_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Alias shouldn't be present"), Error::NoSuchAlias { .. }));
-            assert_eq!(storage.get_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Alias should be present"), "example.com");
+            assert!(matches!(
+                storage
+                    .get_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                    .expect_err("Alias shouldn't be present"),
+                Error::NoSuchAlias { .. }
+            ));
+            assert_eq!(
+                storage
+                    .get_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY)
+                    .expect("Alias should be present"),
+                "example.com"
+            );
         }
 
         #[test]
-        fn resolve_site()
-        {
+        fn resolve_site() {
             let io = MemoryIO::new(default_data());
             let storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
             assert_eq!(storage.normalize_site("example.com"), "example.com");
-            assert_eq!(storage.resolve_site("example.com", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+            assert_eq!(
+                storage.resolve_site("example.com", HMAC_SECRET, ENCRYPTION_KEY),
+                "example.com"
+            );
 
             assert_eq!(storage.normalize_site("www.example.com"), "example.com");
-            assert_eq!(storage.resolve_site("www.example.com", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+            assert_eq!(
+                storage.resolve_site("www.example.com", HMAC_SECRET, ENCRYPTION_KEY),
+                "example.com"
+            );
 
-            assert_eq!(storage.normalize_site("www2.example.com"), "www2.example.com");
-            assert_eq!(storage.resolve_site("www2.example.com", HMAC_SECRET, ENCRYPTION_KEY), "www2.example.com");
+            assert_eq!(
+                storage.normalize_site("www2.example.com"),
+                "www2.example.com"
+            );
+            assert_eq!(
+                storage.resolve_site("www2.example.com", HMAC_SECRET, ENCRYPTION_KEY),
+                "www2.example.com"
+            );
 
             assert_eq!(storage.normalize_site("www.example.net"), "example.net");
-            assert_eq!(storage.resolve_site("www.example.net", HMAC_SECRET, ENCRYPTION_KEY), "example.net");
+            assert_eq!(
+                storage.resolve_site("www.example.net", HMAC_SECRET, ENCRYPTION_KEY),
+                "example.net"
+            );
 
             assert_eq!(storage.normalize_site("example.org"), "example.org");
-            assert_eq!(storage.resolve_site("example.org", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+            assert_eq!(
+                storage.resolve_site("example.org", HMAC_SECRET, ENCRYPTION_KEY),
+                "example.com"
+            );
 
             assert_eq!(storage.normalize_site("www.example.org"), "example.org");
-            assert_eq!(storage.resolve_site("www.example.org", HMAC_SECRET, ENCRYPTION_KEY), "example.com");
+            assert_eq!(
+                storage.resolve_site("www.example.org", HMAC_SECRET, ENCRYPTION_KEY),
+                "example.com"
+            );
         }
     }
 
-    mod addition
-    {
+    mod addition {
         use super::*;
 
         #[test]
-        fn add_passwords()
-        {
+        fn add_passwords() {
             let io = MemoryIO::new(empty_data());
             let mut storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
-            storage.ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
-            storage.ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
+            storage
+                .ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Adding site data should succeed");
+            storage
+                .ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Adding site data should succeed");
 
-            storage.set_generated(serde_json::from_str(r#"{
+            storage
+                .set_generated(
+                    serde_json::from_str(
+                        r#"{
                 "site": "example.com",
                 "name": "blubber",
                 "revision": "",
@@ -624,28 +779,66 @@ mod tests
                 "number": true,
                 "symbol": true,
                 "notes": "whatever"
-            }"#).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+            }"#,
+                    )
+                    .unwrap(),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Adding password should succeed");
 
-            let mut password = storage.get_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
+            let mut password = storage
+                .get_password(
+                    &PasswordId::new("example.com", "blubber", ""),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Password should be present");
             password.set_notes("");
-            storage.set_password(password, HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+            storage
+                .set_password(password, HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Adding password should succeed");
 
-            storage.set_stored(serde_json::from_str(r#"{
+            storage
+                .set_stored(
+                    serde_json::from_str(
+                        r#"{
                 "site": "example.com",
                 "name": "blabber",
                 "revision": "2",
                 "password": "asdf",
                 "notes": "hi!"
-            }"#).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+            }"#,
+                    )
+                    .unwrap(),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Adding password should succeed");
 
-            let mut password = storage.get_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
+            let mut password = storage
+                .get_password(
+                    &PasswordId::new("example.com", "blabber", "2"),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Password should be present");
             password.set_notes("hi there!");
-            storage.set_password(password, HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+            storage
+                .set_password(password, HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Adding password should succeed");
 
-            storage.ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
-            storage.ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
+            storage
+                .ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Adding site data should succeed");
+            storage
+                .ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Adding site data should succeed");
 
-            storage.set_generated(serde_json::from_str(r#"{
+            storage
+                .set_generated(
+                    serde_json::from_str(
+                        r#"{
                 "site": "example.info",
                 "name": "test",
                 "revision": "yet another",
@@ -654,17 +847,39 @@ mod tests
                 "upper": false,
                 "number": true,
                 "symbol": false
-            }"#).unwrap(), HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+            }"#,
+                    )
+                    .unwrap(),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Adding password should succeed");
 
-            let mut password = storage.get_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET, ENCRYPTION_KEY).expect("Password should be present");
+            let mut password = storage
+                .get_password(
+                    &PasswordId::new("example.info", "test", "yet another"),
+                    HMAC_SECRET,
+                    ENCRYPTION_KEY,
+                )
+                .expect("Password should be present");
             password.set_notes("nothing here");
-            storage.set_password(password, HMAC_SECRET, ENCRYPTION_KEY).expect("Adding password should succeed");
+            storage
+                .set_password(password, HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Adding password should succeed");
 
-            let result = storage.set_alias("example.com", "example.com", HMAC_SECRET, ENCRYPTION_KEY);
-            assert!(matches!(result.expect_err("Setting an alias to itself should fail"), Error::AliasToSelf { .. }));
+            let result =
+                storage.set_alias("example.com", "example.com", HMAC_SECRET, ENCRYPTION_KEY);
+            assert!(matches!(
+                result.expect_err("Setting an alias to itself should fail"),
+                Error::AliasToSelf { .. }
+            ));
 
-            storage.set_alias("example.org", "example.com", HMAC_SECRET, ENCRYPTION_KEY).expect("Setting alias should succeed");
-            storage.ensure_site_data("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Adding site data should succeed");
+            storage
+                .set_alias("example.org", "example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Setting alias should succeed");
+            storage
+                .ensure_site_data("example.org", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Adding site data should succeed");
 
             storage.flush().expect("Flush should succeed");
 
@@ -672,27 +887,55 @@ mod tests
         }
     }
 
-    mod removal
-    {
+    mod removal {
         use super::*;
 
         #[test]
-        fn remove_passwords()
-        {
+        fn remove_passwords() {
             let io = MemoryIO::new(default_data());
             let mut storage = Storage::new(io).expect("Creating Storage instance should succeed");
 
-            assert!(matches!(storage.remove_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));
-            assert!(matches!(storage.remove_alias("example.net", HMAC_SECRET, ENCRYPTION_KEY).expect_err("Removing alias should fail"), Error::NoSuchAlias { .. }));
-            assert!(matches!(storage.remove_password(&PasswordId::new("example.info", "blubber", ""), HMAC_SECRET).expect_err("Removing password should fail"), Error::KeyMissing { .. }));
+            assert!(matches!(
+                storage
+                    .remove_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                    .expect_err("Removing alias should fail"),
+                Error::NoSuchAlias { .. }
+            ));
+            assert!(matches!(
+                storage
+                    .remove_alias("example.net", HMAC_SECRET, ENCRYPTION_KEY)
+                    .expect_err("Removing alias should fail"),
+                Error::NoSuchAlias { .. }
+            ));
+            assert!(matches!(
+                storage
+                    .remove_password(&PasswordId::new("example.info", "blubber", ""), HMAC_SECRET)
+                    .expect_err("Removing password should fail"),
+                Error::KeyMissing { .. }
+            ));
 
-            storage.remove_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET).expect("Removing password should succeed");
-            storage.remove_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET).expect("Removing password should succeed");
-            storage.remove_password(&PasswordId::new("example.info", "test", "yet another"), HMAC_SECRET).expect("Removing password should succeed");
-            storage.remove_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY).expect("Removing alias should succeed");
+            storage
+                .remove_password(&PasswordId::new("example.com", "blubber", ""), HMAC_SECRET)
+                .expect("Removing password should succeed");
+            storage
+                .remove_password(&PasswordId::new("example.com", "blabber", "2"), HMAC_SECRET)
+                .expect("Removing password should succeed");
+            storage
+                .remove_password(
+                    &PasswordId::new("example.info", "test", "yet another"),
+                    HMAC_SECRET,
+                )
+                .expect("Removing password should succeed");
+            storage
+                .remove_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY)
+                .expect("Removing alias should succeed");
 
-            storage.remove_site("example.com", HMAC_SECRET).expect("Removing site should succeed");
-            storage.remove_site("example.info", HMAC_SECRET).expect("Removing site should succeed");
+            storage
+                .remove_site("example.com", HMAC_SECRET)
+                .expect("Removing site should succeed");
+            storage
+                .remove_site("example.info", HMAC_SECRET)
+                .expect("Removing site should succeed");
 
             storage.flush().expect("Flush should succeed");
 
