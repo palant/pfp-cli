@@ -18,8 +18,6 @@
 //! let passwords = Passwords::new(io);
 //! ```
 
-mod json;
-
 mod file;
 pub use file::FileIO;
 
@@ -32,8 +30,6 @@ use crate::error::Error;
 
 /// Methods to be exposed by the type wrapping access to the storage file.
 pub trait StorageIO {
-    /// Reads storage file.
-    fn load(&mut self) -> Result<(), Error>;
     /// Checks whether a particular key is present in the data.
     fn contains_key(&self, key: &str) -> bool;
     /// Gets the value associated with a particular key or returns `Error::KeyMissing` if the key

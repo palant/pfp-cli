@@ -17,13 +17,10 @@
 //! use pfp::storage_io::FileIO;
 //! use std::path::Path;
 //!
-//! // Attempt to read passwords from a file
+//! // Create an uninitialized Passwords instance for the given file
 //! let io = FileIO::new(Path::new("test.json"));
-//! Passwords::new(io).expect_err("Will error out with Error::FileReadFailure for missing file");
-//!
-//! // Create an uninitialized Passwords instance
-//! let io = FileIO::new(Path::new("test.json"));
-//! let mut passwords = Passwords::uninitialized(io);
+//! let mut passwords = Passwords::new(io);
+//! assert!(!passwords.initialized());
 //!
 //! // Initialize password storage with a new master password
 //! passwords.reset("my master password").unwrap();

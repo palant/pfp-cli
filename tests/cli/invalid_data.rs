@@ -94,8 +94,7 @@ fn empty_data() {
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":{}}"#);
     let mut session = setup.run(&["list"], None);
 
-    session.expect_str("Corrupt JSON data");
-    session.expect_str("missing field");
+    session.expect_str("Storage is missing data");
 }
 
 #[test]
@@ -104,9 +103,7 @@ fn missing_salt() {
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"hmac_secret":"abc"}}"#);
     let mut session = setup.run(&["list"], None);
 
-    session.expect_str("Corrupt JSON data");
-    session.expect_str("missing field");
-    session.expect_str("salt");
+    session.expect_str("Storage is missing data");
 }
 
 #[test]
@@ -115,9 +112,7 @@ fn missing_hmac_secret() {
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba"}}"#);
     let mut session = setup.run(&["list"], None);
 
-    session.expect_str("Corrupt JSON data");
-    session.expect_str("missing field");
-    session.expect_str("hmac-secret");
+    session.expect_str("Storage is missing data");
 }
 
 #[test]

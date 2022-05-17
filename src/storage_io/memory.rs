@@ -19,8 +19,8 @@ impl MemoryIO {
     /// Creates a new `MemoryIO` instance with some initial "file" data.
     pub fn new(data: HashMap<String, String>) -> Self {
         Self {
-            file_data: data,
-            data: HashMap::new(),
+            file_data: data.clone(),
+            data: data.clone(),
         }
     }
 
@@ -31,11 +31,6 @@ impl MemoryIO {
 }
 
 impl super::StorageIO for MemoryIO {
-    fn load(&mut self) -> Result<(), Error> {
-        self.data = self.file_data.clone();
-        Ok(())
-    }
-
     fn contains_key(&self, key: &str) -> bool {
         self.data.contains_key(key)
     }

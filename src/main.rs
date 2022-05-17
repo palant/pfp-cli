@@ -170,7 +170,7 @@ fn format_error(error: &Error) -> String {
         ),
         Error::FileWriteFailure { error } => format!("Failed writing storage file ({}).", error),
         Error::StorageNotInitialized => {
-            "Unexpected: Storage is being accessed before initialization.".to_string()
+            "Storage is missing data. Maybe use set-master subcommand first?".to_string()
         }
         Error::UnexpectedStorageFormat => "Unexpected storage file format.".to_string(),
         Error::PasswordsLocked => "Passwords are locked.".to_string(),
@@ -232,6 +232,10 @@ fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(
     passwords: &mut passwords::Passwords<IO>,
     stdin_passwords: bool,
 ) {
+    if !passwords.initialized() {
+        Err::<(), Error>(Error::StorageNotInitialized).handle_error();
+    }
+
     while !passwords.unlocked() {
         let master_password = prompt_password("Your master password: ", stdin_passwords);
         if master_password.len() < 6 {
@@ -312,9 +316,10 @@ fn main() {
         Some(value) => value,
         None => get_default_storage_path(),
     };
-    let mut passwords = if let Commands::SetMaster { assume_yes } = &args.command {
-        match passwords::Passwords::new(storage_io::FileIO::new(&storage_path)) {
-            Ok(passwords) => {
+
+    let io = if let Commands::SetMaster { assume_yes } = &args.command {
+        match storage_io::FileIO::load(&storage_path) {
+            Ok(io) => {
                 if !assume_yes {
                     let allow = question::Question::new(
                         "Changing master password will remove all existing data. Continue?",
@@ -326,13 +331,14 @@ fn main() {
                         process::exit(0);
                     }
                 }
-                passwords
-            }
-            Err(_) => passwords::Passwords::uninitialized(storage_io::FileIO::new(&storage_path)),
+                io
+            },
+            Err(_) => storage_io::FileIO::new(&storage_path),
         }
     } else {
-        passwords::Passwords::new(storage_io::FileIO::new(&storage_path)).handle_error()
+        storage_io::FileIO::load(&storage_path).handle_error()
     };
+    let mut passwords = passwords::Passwords::new(io);
 
     match &args.command {
         Commands::SetMaster { .. } => {
