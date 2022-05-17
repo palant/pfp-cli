@@ -524,8 +524,7 @@ mod tests {
         #[test]
         fn unlock() {
             let io = MemoryIO::new(default_data());
-            let mut passwords =
-                Passwords::new(io);
+            let mut passwords = Passwords::new(io);
 
             assert!(matches!(
                 passwords
@@ -607,8 +606,7 @@ mod tests {
         #[test]
         fn reset_initialized() {
             let io = MemoryIO::new(default_data());
-            let mut passwords =
-                Passwords::new(io);
+            let mut passwords = Passwords::new(io);
             passwords
                 .reset(MASTER_PASSWORD)
                 .expect("Reset should succeed");
@@ -691,8 +689,7 @@ mod tests {
         #[test]
         fn list_sites_wildcards() {
             let io = MemoryIO::new(default_data());
-            let mut passwords =
-                Passwords::new(io);
+            let mut passwords = Passwords::new(io);
             passwords
                 .unlock(MASTER_PASSWORD)
                 .expect("Passwords should unlock");
@@ -718,8 +715,7 @@ mod tests {
         #[test]
         fn list_passwords_wildcards() {
             let io = MemoryIO::new(default_data());
-            let mut passwords =
-                Passwords::new(io);
+            let mut passwords = Passwords::new(io);
             passwords
                 .unlock(MASTER_PASSWORD)
                 .expect("Passwords should unlock");
@@ -822,8 +818,7 @@ mod tests {
         #[test]
         fn query_passwords() {
             let io = MemoryIO::new(default_data());
-            let mut passwords =
-                Passwords::new(io);
+            let mut passwords = Passwords::new(io);
             passwords
                 .unlock(MASTER_PASSWORD)
                 .expect("Passwords should unlock");
@@ -948,8 +943,7 @@ mod tests {
         #[test]
         fn add_passwords() {
             let io = MemoryIO::new(empty_data());
-            let mut passwords =
-                Passwords::new(io);
+            let mut passwords = Passwords::new(io);
             passwords
                 .unlock(MASTER_PASSWORD)
                 .expect("Passwords should unlock");
@@ -1040,8 +1034,7 @@ mod tests {
         #[test]
         fn notes() {
             let io = MemoryIO::new(default_data());
-            let mut passwords =
-                Passwords::new(io);
+            let mut passwords = Passwords::new(io);
             passwords
                 .unlock(MASTER_PASSWORD)
                 .expect("Passwords should unlock");
@@ -1120,8 +1113,7 @@ mod tests {
         #[test]
         fn remove_passwords() {
             let io = MemoryIO::new(default_data());
-            let mut passwords =
-                Passwords::new(io);
+            let mut passwords = Passwords::new(io);
             passwords
                 .unlock(MASTER_PASSWORD)
                 .expect("Passwords should unlock");

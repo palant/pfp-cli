@@ -332,7 +332,7 @@ fn main() {
                     }
                 }
                 io
-            },
+            }
             Err(_) => storage_io::FileIO::new(&storage_path),
         }
     } else {

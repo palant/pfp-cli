@@ -374,9 +374,7 @@ mod tests {
             let io = MemoryIO::new(HashMap::new());
             let storage = Storage::new(io);
             assert!(matches!(
-                storage
-                    .get_salt()
-                    .expect_err("Getting salt should fail"),
+                storage.get_salt().expect_err("Getting salt should fail"),
                 Error::StorageNotInitialized
             ));
             assert!(matches!(

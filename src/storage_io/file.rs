@@ -94,10 +94,7 @@ impl super::StorageIO for FileIO {
     }
 
     fn remove(&mut self, key: &str) -> Result<(), Error> {
-        self.data
-            .remove(key)
-            .map(|_| ())
-            .ok_or(Error::KeyMissing)
+        self.data.remove(key).map(|_| ()).ok_or(Error::KeyMissing)
     }
 
     fn keys(&self) -> Box<dyn Iterator<Item = &String> + '_> {
@@ -109,8 +106,7 @@ impl super::StorageIO for FileIO {
     }
 
     fn flush(&mut self) -> Result<(), Error> {
-        let contents =
-            serde_json::to_string(self).map_err(|error| Error::InvalidJson { error })?;
+        let contents = serde_json::to_string(self).map_err(|error| Error::InvalidJson { error })?;
 
         let parent = self.path.parent();
         if let Some(parent) = parent {
