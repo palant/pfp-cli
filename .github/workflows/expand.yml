@@ -1,0 +1,32 @@
+name: Expand macros
+
+on:
+  push:
+    branches: [ expand ]
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  expand:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: nightly
+    - uses: actions-rs/cargo@v1
+      with:
+        command: install
+        args: cargo-expand
+    - uses: actions-rs/cargo@v1
+      with:
+        command: expand
+        args: --lib --target-dir=expand_out
+    - name: Upload artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: expand_out
+        path: expand_out
