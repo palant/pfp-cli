@@ -247,15 +247,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "directories"
-version = "4.0.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f51c5d4ddabd36886dd3e1438cb358cdcb0d7c499cb99cb4ac2e38e18b5cb210"
-dependencies = [
- "dirs-sys",
-]
-
-[[package]]
 name = "dirs"
 version = "4.0.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -487,27 +478,35 @@ dependencies = [
 ]
 
 [[package]]
-name = "pfp-cli"
+name = "pfp"
 version = "0.1.0"
 dependencies = [
  "aes-gcm",
- "app_dirs2",
  "base64",
- "clap",
- "directories",
  "enumset",
  "hmac",
- "qrcodegen",
- "question",
  "rand",
- "rpassword",
  "scrypt",
  "serde",
  "serde_json",
  "sha2",
+ "wildmatch",
+]
+
+[[package]]
+name = "pfp-cli"
+version = "0.1.0"
+dependencies = [
+ "app_dirs2",
+ "clap",
+ "pfp",
+ "qrcodegen",
+ "question",
+ "rpassword",
+ "serde",
+ "serde_json",
  "subprocess",
  "tempfile",
- "wildmatch",
 ]
 
 [[package]]
@@ -739,9 +738,9 @@ checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
 
 [[package]]
 name = "subprocess"
-version = "0.2.8"
+version = "0.2.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "055cf3ebc2981ad8f0a5a17ef6652f652d87831f79fddcba2ac57bcb9a0aa407"
+checksum = "0c2e86926081dda636c546d8c5e641661049d7562a68f5488be4a1f7f66f6086"
 dependencies = [
  "libc",
  "winapi",
