@@ -5,44 +5,14 @@
  */
 
 use crate::error::Error;
+use crate::json::const_serializable;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path;
 
-#[derive(Serialize, Deserialize, Debug)]
-#[serde(rename_all = "lowercase")]
-enum ApplicationName {
-    Pfp,
-}
-
-#[derive(Serialize, Deserialize, Copy, Clone, Debug)]
-#[serde(try_from = "u8", into = "u8")]
-enum Format {
-    Current = 3,
-}
-
-impl From<Format> for u8 {
-    fn from(value: Format) -> u8 {
-        value as u8
-    }
-}
-
-impl TryFrom<u8> for Format {
-    type Error = String;
-
-    fn try_from(value: u8) -> Result<Self, Self::Error> {
-        if value == Self::Current as u8 {
-            Ok(Self::Current)
-        } else {
-            Err(format!(
-                "Unexpected format {}, expected {}",
-                value,
-                Self::Current as u8
-            ))
-        }
-    }
-}
+const_serializable!(ApplicationName: String = "pfp");
+const_serializable!(Format: u8 = 3);
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(deny_unknown_fields)]
@@ -62,8 +32,8 @@ impl FileIO {
     pub fn new(path: &path::Path) -> Self {
         Self {
             path: path.to_path_buf(),
-            application: ApplicationName::Pfp,
-            format: Format::Current,
+            application: ApplicationName,
+            format: Format,
             data: HashMap::new(),
         }
     }
