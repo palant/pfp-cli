@@ -29,9 +29,11 @@
 //! ```
 
 mod crypto;
+mod json;
+mod storage;
+
 pub mod error;
 pub mod passwords;
 pub mod recovery_codes;
-mod storage;
 pub mod storage_io;
 pub mod storage_types;

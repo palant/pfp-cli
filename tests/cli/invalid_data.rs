@@ -43,8 +43,8 @@ fn wrong_application() {
     let mut session = setup.run(&["list"], None);
 
     session.expect_str("Corrupt JSON data");
-    session.expect_str("unknown variant");
-    session.expect_str("pfp");
+    session.expect_str("Unexpected value");
+    session.expect_str("expected pfp");
 }
 
 #[test]
@@ -54,7 +54,7 @@ fn wrong_format() {
     let mut session = setup.run(&["list"], None);
 
     session.expect_str("Corrupt JSON data");
-    session.expect_str("Unexpected format");
+    session.expect_str("Unexpected value");
     session.expect_str("expected 3");
 }
 
