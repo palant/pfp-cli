@@ -43,8 +43,8 @@ pub enum Error {
     },
     /// JSON decoding failed.
     InvalidJson {
-        /// Underlying serde error
-        error: serde_json::Error,
+        /// Underlying JSON error
+        error: json::Error,
     },
     /// UTF-8 decoding failed.
     InvalidUtf8 {

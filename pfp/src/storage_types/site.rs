@@ -4,10 +4,10 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use serde::{Deserialize, Serialize};
+use json::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(deny_unknown_fields)]
+#[serde(crate = "json", deny_unknown_fields)]
 /// A website entry in storage.
 pub struct Site {
     #[serde(rename = "site")]

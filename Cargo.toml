@@ -2,6 +2,7 @@
 members = [
   "pfp",
   "cli",
+  "json_serde",
 ]
 
 [profile.dev]

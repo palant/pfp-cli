@@ -5,9 +5,10 @@
  */
 
 use super::CharacterSet;
-use serde::{Deserialize, Serialize};
+use json::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(crate = "json")]
 /// A password identifier, no two passwords with identical identifiers are allowed in storage.
 pub struct PasswordId {
     site: String,
@@ -49,6 +50,7 @@ impl PasswordId {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(crate = "json")]
 /// A generated password, generated from master password and various password parameters when
 /// needed.
 pub struct GeneratedPassword {
@@ -119,6 +121,7 @@ impl GeneratedPassword {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(crate = "json")]
 /// A stored password, with the password value stored verbatim in storage.
 pub struct StoredPassword {
     #[serde(flatten)]
@@ -161,7 +164,7 @@ impl StoredPassword {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(tag = "type")]
+#[serde(crate = "json", tag = "type")]
 /// The type used by functions that can handle both generated and stored passwords.
 pub enum Password {
     #[serde(rename = "generated2")]

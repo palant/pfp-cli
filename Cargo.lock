@@ -424,6 +424,14 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8eaf4bc02d17cbdd7ff4c7438cafcdf7fb9a4613313ad11b4f8fefe7d3fa0130"
 
 [[package]]
+name = "json"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -485,10 +493,9 @@ dependencies = [
  "base64",
  "enumset",
  "hmac",
+ "json",
  "rand",
  "scrypt",
- "serde",
- "serde_json",
  "sha2",
  "wildmatch",
 ]
@@ -503,8 +510,6 @@ dependencies = [
  "qrcodegen",
  "question",
  "rpassword",
- "serde",
- "serde_json",
  "subprocess",
  "tempfile",
 ]

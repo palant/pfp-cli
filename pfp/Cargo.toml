@@ -8,9 +8,8 @@ aes-gcm = "0.9.4"
 base64 = "0.13"
 enumset = "1.0.11"
 hmac = "0.12.1"
+json = { path = "../json_serde" }
 rand = "0.8.5"
 scrypt = { version = "0.10.0", default-features = false }
-serde = { version = "1.0.137", features = ["derive"] }
-serde_json = "1.0.81"
 sha2 = "0.10.2"
 wildmatch = "2.1.0"

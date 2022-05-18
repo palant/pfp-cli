@@ -49,18 +49,18 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
 
     fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
     where
-        T: for<'de> serde::de::Deserialize<'de>,
+        T: for<'de> json::Deserializable<'de>,
     {
         let value = self.io.get(key)?;
         let decrypted = crypto::decrypt_data(value, encryption_key)?;
-        serde_json::from_str(&decrypted).map_err(|error| Error::InvalidJson { error })
+        json::from_str(&decrypted).map_err(|error| Error::InvalidJson { error })
     }
 
     fn set<T>(&mut self, key: &str, value: &T, encryption_key: &[u8]) -> Result<(), Error>
     where
-        T: serde::ser::Serialize,
+        T: json::Serializable,
     {
-        let serialized = serde_json::to_vec(value).map_err(|error| Error::InvalidJson { error })?;
+        let serialized = json::to_vec(value).map_err(|error| Error::InvalidJson { error })?;
         self.io.set(
             key.to_string(),
             crypto::encrypt_data(&serialized, encryption_key),
@@ -90,13 +90,13 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
             .get(HMAC_SECRET_KEY)
             .map_err(|_| Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
-        let hmac_secret = serde_json::from_str::<String>(&decrypted)
+        let hmac_secret = json::from_str::<String>(&decrypted)
             .map_err(|error| Error::InvalidJson { error })?;
         base64::decode(hmac_secret).map_err(|error| Error::InvalidBase64 { error })
     }
 
     fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error> {
-        let stringified = serde_json::to_string(&base64::encode(hmac_secret))
+        let stringified = json::to_string(&base64::encode(hmac_secret))
             .map_err(|error| Error::InvalidJson { error })?;
         let encrypted = crypto::encrypt_data(stringified.as_bytes(), encryption_key);
         self.io.set(HMAC_SECRET_KEY.to_string(), encrypted);
@@ -341,7 +341,7 @@ mod tests {
         ]).iter().map(|(key, value)| (key.to_string(), value.to_string())).collect();
     }
 
-    fn decrypt_entries(data: &HashMap<String, String>) -> HashMap<String, serde_json::Value> {
+    fn decrypt_entries(data: &HashMap<String, String>) -> HashMap<String, json::Value> {
         let mut decrypted = HashMap::new();
         for (key, value) in data.iter() {
             if key.starts_with("site:") {
@@ -350,7 +350,7 @@ mod tests {
 
                 decrypted.insert(
                     key.to_owned(),
-                    serde_json::from_str(&entry).expect("Should be valid JSON"),
+                    json::from_str(&entry).expect("Should be valid JSON"),
                 );
             }
         }
@@ -361,9 +361,9 @@ mod tests {
         assert_eq!(decrypt_entries(data1), decrypt_entries(data2));
     }
 
-    fn to_json_value<T: serde::ser::Serialize>(value: &T) -> serde_json::Value {
-        let serialized = serde_json::to_string(value).unwrap();
-        serde_json::from_str(&serialized).unwrap()
+    fn to_json_value<T: json::Serializable>(value: &T) -> json::Value {
+        let serialized = json::to_string(value).unwrap();
+        json::from_str(&serialized).unwrap()
     }
 
     mod initialization {
@@ -467,7 +467,7 @@ mod tests {
 
     mod retrieval {
         use super::*;
-        use serde_json::json;
+        use json::json;
 
         fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String> {
             let mut vec = storage
@@ -478,11 +478,11 @@ mod tests {
             return vec;
         }
 
-        fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<serde_json::Value> {
+        fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<json::Value> {
             let mut vec = storage
                 .list_passwords(site, HMAC_SECRET, ENCRYPTION_KEY)
                 .map(|password| to_json_value(&password))
-                .collect::<Vec<serde_json::Value>>();
+                .collect::<Vec<json::Value>>();
             vec.sort_by_key(|password| password["name"].as_str().unwrap().to_owned());
             return vec;
         }
@@ -756,7 +756,7 @@ mod tests {
 
             storage
                 .set_generated(
-                    serde_json::from_str(
+                    json::from_str(
                         r#"{
                 "site": "example.com",
                 "name": "blubber",
@@ -789,7 +789,7 @@ mod tests {
 
             storage
                 .set_stored(
-                    serde_json::from_str(
+                    json::from_str(
                         r#"{
                 "site": "example.com",
                 "name": "blabber",
@@ -825,7 +825,7 @@ mod tests {
 
             storage
                 .set_generated(
-                    serde_json::from_str(
+                    json::from_str(
                         r#"{
                 "site": "example.info",
                 "name": "test",
