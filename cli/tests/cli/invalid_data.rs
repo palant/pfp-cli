@@ -128,6 +128,7 @@ fn missing_bracket() {
 }
 
 #[test]
+#[cfg(not(feature = "sizeoptimized"))]
 fn extra_field() {
     let setup = Setup::new();
     setup.set_file_data(r#"{"application":"pfp","format":3,"data":{"salt":"cba","hmac-secret":"abc"},"something":2}"#);

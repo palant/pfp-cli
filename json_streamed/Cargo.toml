@@ -1,7 +1,11 @@
 [package]
-name = "json"
+name = "json_streamed"
 version = "0.1.0"
 edition = "2021"
+
+[lib]
+test = false
+doctest = false
 
 [dependencies]
 serde = { version = "1.0.137", features = ["derive"] }

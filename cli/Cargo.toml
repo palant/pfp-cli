@@ -3,6 +3,14 @@ name = "pfp-cli"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "pfp-cli"
+test = false
+doc = false
+
+[features]
+sizeoptimized = ["pfp/sizeoptimized"]
+
 [dependencies]
 app_dirs2 = "2.4"
 clap = { version = "3.1.12", features = ["derive"] }

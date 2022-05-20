@@ -1,0 +1,13 @@
+[package]
+name = "json_sizeoptimized"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+test = false
+doctest = false
+
+[dependencies]
+json_sizeoptimized_derive = { path = "../json_sizeoptimized_derive" }
+serde = "1.0.137"
+serde_json = "1.0.81"

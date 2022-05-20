@@ -4,8 +4,13 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+#[cfg(not(feature = "sizeoptimized"))]
+use json_streamed as json;
+#[cfg(feature = "sizeoptimized")]
+use json_sizeoptimized as json;
+
 use crate::error::Error;
-use json::{Deserialize, Serialize, const_serializable};
+use json::{const_serializable, Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path;
@@ -42,8 +47,8 @@ impl FileIO {
         let contents =
             fs::read_to_string(path).map_err(|error| Error::FileReadFailure { error })?;
 
-        let mut result = json::from_str::<Self>(&contents)
-            .map_err(|error| Error::InvalidJson { error })?;
+        let mut result =
+            json::from_str::<Self>(&contents).map_err(|error| Error::InvalidJson { error })?;
         result.path = path.to_path_buf();
         Ok(result)
     }

@@ -46,3 +46,14 @@ jobs:
         path: target/release/${{ matrix.target_name }}
     - name: Run tests
       run: cargo test --verbose
+    - name: Build (size-optimized)
+      run: cargo build --release --verbose --features sizeoptimized
+    - name: Strip symbols (size-optimized)
+      run: strip target/release/${{ matrix.target_name }}
+    - name: Upload pfp-cli-sizeoptimized artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: ${{ matrix.target_name }}-sizeoptimized ${{ matrix.os }}
+        path: target/release/${{ matrix.target_name }}
+    - name: Run tests (size-optimized)
+      run: cargo test --verbose --features sizeoptimized

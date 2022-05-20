@@ -4,10 +4,10 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-pub use serde::ser::Serialize as Serializable;
 pub use serde::de::Deserialize as Deserializable;
+pub use serde::ser::Serialize as Serializable;
 pub use serde::*;
-pub use serde_json::{from_str, to_string, to_vec, Value, Error, json};
+pub use serde_json::{from_str, json, to_string, to_vec, Error, Value};
 
 mod macros;
 pub use macros::*;

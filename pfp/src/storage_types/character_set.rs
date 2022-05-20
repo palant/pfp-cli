@@ -4,6 +4,11 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+#[cfg(not(feature = "sizeoptimized"))]
+use json_streamed as json;
+#[cfg(feature = "sizeoptimized")]
+use json_sizeoptimized as json;
+
 use json::enumset_serialization;
 
 #[derive(enumset::EnumSetType, Debug)]
@@ -22,4 +27,9 @@ pub enum CharacterType {
 /// A set of character types to generate a password from.
 pub type CharacterSet = enumset::EnumSet<CharacterType>;
 
-enumset_serialization!(CharacterType: Lower = "lower", Upper = "upper", Digit = "number", Symbol = "symbol");
+enumset_serialization!(
+    CharacterType: Lower = "lower",
+    Upper = "upper",
+    Digit = "number",
+    Symbol = "symbol"
+);

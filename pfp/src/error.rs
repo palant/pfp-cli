@@ -6,6 +6,11 @@
 
 //! Holds the error type returned by all of this crate's operations.
 
+#[cfg(not(feature = "sizeoptimized"))]
+use json_streamed as json;
+#[cfg(feature = "sizeoptimized")]
+use json_sizeoptimized as json;
+
 #[derive(Debug)]
 /// A list of all error types returned by this crate's operations.
 pub enum Error {

@@ -9,6 +9,11 @@ use super::error::Error;
 use super::storage_io;
 use super::storage_types::{GeneratedPassword, Password, PasswordId, Site, StoredPassword};
 
+#[cfg(not(feature = "sizeoptimized"))]
+use json_streamed as json;
+#[cfg(feature = "sizeoptimized")]
+use json_sizeoptimized as json;
+
 const SALT_KEY: &str = "salt";
 const HMAC_SECRET_KEY: &str = "hmac-secret";
 const STORAGE_PREFIX: &str = "site:";
@@ -90,8 +95,8 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
             .get(HMAC_SECRET_KEY)
             .map_err(|_| Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
-        let hmac_secret = json::from_str::<String>(&decrypted)
-            .map_err(|error| Error::InvalidJson { error })?;
+        let hmac_secret =
+            json::from_str::<String>(&decrypted).map_err(|error| Error::InvalidJson { error })?;
         base64::decode(hmac_secret).map_err(|error| Error::InvalidBase64 { error })
     }
 
