@@ -27,7 +27,7 @@ jobs:
           target_name: 'pfp-cli'
         - variant: regular
           opt_level: 3
-          features:
+          features: ','
         - variant: sizeoptimized
           opt_level: z
           features: sizeoptimized
@@ -47,7 +47,7 @@ jobs:
           target/
         key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.opt_level }}-${{ matrix.features }}
     - name: Build
-      run: cargo build --release --verbose --features "${{ matrix.features }}"
+      run: cargo build --release --verbose --features ${{ matrix.features }}
     - name: Strip symbols
       run: strip target/release/${{ matrix.target_name }}
     - name: Upload pfp-cli artifact
@@ -56,4 +56,4 @@ jobs:
         name: ${{ matrix.target_name }} ${{ matrix.os }}
         path: target/release/${{ matrix.target_name }}
     - name: Run tests
-      run: cargo test --verbose --features "${{ matrix.features }}"
+      run: cargo test --verbose --features ${{ matrix.features }}
