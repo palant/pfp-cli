@@ -48,6 +48,8 @@ jobs:
       run: cargo test --verbose
     - name: Build (size-optimized)
       run: cargo build --release --verbose --features sizeoptimized
+      env:
+        CARGO_PROFILE_RELEASE_OPT_LEVEL: z
     - name: Strip symbols (size-optimized)
       run: strip target/release/${{ matrix.target_name }}
     - name: Upload pfp-cli-sizeoptimized artifact

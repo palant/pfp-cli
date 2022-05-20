@@ -4,7 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::attrs::get_attrs;
+use crate::attrs::get_attrs ;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{ExprPath, Ident, Lit};
