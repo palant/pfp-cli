@@ -16,6 +16,8 @@ jobs:
 
     strategy:
       matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        variant: [regular, sizeoptimized]
         include:
         - os: ubuntu-latest
           target_name: 'pfp-cli'
@@ -23,6 +25,15 @@ jobs:
           target_name: 'pfp-cli.exe'
         - os: macos-latest
           target_name: 'pfp-cli'
+        - variant: regular
+          opt_level: 3
+          features:
+        - variant: sizeoptimized
+          opt_level: z
+          features: sizeoptimized
+
+    env:
+      CARGO_PROFILE_RELEASE_OPT_LEVEL: ${{ matrix.opt_level }}
 
     steps:
     - uses: actions/checkout@v3
@@ -34,9 +45,9 @@ jobs:
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
           target/
-        key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+        key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.opt_level }}-${{ matrix.features }}
     - name: Build
-      run: cargo build --release --verbose
+      run: cargo build --release --verbose --features ${{ matrix.features }}
     - name: Strip symbols
       run: strip target/release/${{ matrix.target_name }}
     - name: Upload pfp-cli artifact
@@ -45,17 +56,4 @@ jobs:
         name: ${{ matrix.target_name }} ${{ matrix.os }}
         path: target/release/${{ matrix.target_name }}
     - name: Run tests
-      run: cargo test --verbose
-    - name: Build (size-optimized)
-      run: cargo build --release --verbose --features sizeoptimized
-      env:
-        CARGO_PROFILE_RELEASE_OPT_LEVEL: z
-    - name: Strip symbols (size-optimized)
-      run: strip target/release/${{ matrix.target_name }}
-    - name: Upload pfp-cli-sizeoptimized artifact
-      uses: actions/upload-artifact@v2
-      with:
-        name: ${{ matrix.target_name }}-sizeoptimized ${{ matrix.os }}
-        path: target/release/${{ matrix.target_name }}
-    - name: Run tests (size-optimized)
-      run: cargo test --verbose --features sizeoptimized
+      run: cargo test --verbose --features ${{ matrix.features }}
