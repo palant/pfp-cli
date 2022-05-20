@@ -45,7 +45,7 @@ jobs:
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
           target/
-        key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.opt_level }}-${{ matrix.features }}
+        key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.variant }}
     - name: Build
       run: cargo build --release --verbose --features ${{ matrix.features }}
     - name: Strip symbols
