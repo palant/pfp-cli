@@ -86,7 +86,7 @@ impl EnumContainer
         if let Some(tag) = tag {
             Ok(Self {
                 ident: ident.clone(),
-                tag: tag,
+                tag,
                 variants:
                     value
                         .variants

@@ -50,7 +50,7 @@ impl TryFrom<&syn::Variant> for Variant {
 
         Ok(Self {
             ident: value.ident.clone(),
-            rename: rename,
+            rename,
         })
     }
 }
