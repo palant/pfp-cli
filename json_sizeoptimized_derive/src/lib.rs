@@ -6,10 +6,10 @@
 
 mod attrs;
 mod container;
-mod field;
-mod variant;
 mod deserialize;
+mod field;
 mod serialize;
+mod variant;
 
 use proc_macro::TokenStream;
 use syn::{parse_macro_input, DeriveInput};

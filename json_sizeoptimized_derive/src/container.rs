@@ -21,8 +21,16 @@ impl TryFrom<&DeriveInput> for Container {
 
     fn try_from(input: &DeriveInput) -> Result<Self, Self::Error> {
         match &input.data {
-            Data::Struct(value) => Ok(Self::Struct(StructContainer::new(value, &input.ident, &input.attrs)?)),
-            Data::Enum(value) => Ok(Self::Enum(EnumContainer::new(value, &input.ident, &input.attrs)?)),
+            Data::Struct(value) => Ok(Self::Struct(StructContainer::new(
+                value,
+                &input.ident,
+                &input.attrs,
+            )?)),
+            Data::Enum(value) => Ok(Self::Enum(EnumContainer::new(
+                value,
+                &input.ident,
+                &input.attrs,
+            )?)),
             Data::Union(_) => Err(syn::Error::new_spanned(input, "Unions aren't supported")),
         }
     }
@@ -47,12 +55,11 @@ impl StructContainer {
 
         Ok(Self {
             ident: ident.clone(),
-            fields:
-                value
-                    .fields
-                    .iter()
-                    .map(Field::try_from)
-                    .collect::<Result<Vec<Field>, syn::Error>>()?,
+            fields: value
+                .fields
+                .iter()
+                .map(Field::try_from)
+                .collect::<Result<Vec<Field>, syn::Error>>()?,
         })
     }
 }
@@ -63,8 +70,7 @@ pub struct EnumContainer {
     pub variants: Vec<Variant>,
 }
 
-impl EnumContainer
-{
+impl EnumContainer {
     pub fn new(value: &DataEnum, ident: &Ident, attrs: &[Attribute]) -> Result<Self, syn::Error> {
         let mut tag = None;
 
@@ -74,9 +80,11 @@ impl EnumContainer
             } else if attr.name.is_ident("tag") {
                 if let Some(value) = attr.value {
                     tag = Some(value.to_token_stream());
-                }
-                else {
-                    return Err(syn::Error::new_spanned(attr.token, "tag attribute should have a value"));
+                } else {
+                    return Err(syn::Error::new_spanned(
+                        attr.token,
+                        "tag attribute should have a value",
+                    ));
                 }
             } else {
                 return Err(syn::Error::new_spanned(attr.token, "Unsupported attribute"));
@@ -87,14 +95,13 @@ impl EnumContainer
             Ok(Self {
                 ident: ident.clone(),
                 tag,
-                variants:
-                    value
-                        .variants
-                        .iter()
-                        .map(Variant::try_from)
-                        .collect::<Result<Vec<Variant>, syn::Error>>()?
+                variants: value
+                    .variants
+                    .iter()
+                    .map(Variant::try_from)
+                    .collect::<Result<Vec<Variant>, syn::Error>>()?,
             })
-        } else  {
+        } else {
             Err(syn::Error::new_spanned(
                 value.enum_token,
                 "Only internally tagged enums are supported",

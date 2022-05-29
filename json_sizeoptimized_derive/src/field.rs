@@ -4,7 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::attrs::get_attrs ;
+use crate::attrs::get_attrs;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
 use syn::{ExprPath, Ident, Lit};
@@ -30,11 +30,10 @@ impl TryFrom<&syn::Field> for Field {
     type Error = syn::Error;
 
     fn try_from(value: &syn::Field) -> Result<Self, Self::Error> {
-        let ident =
-            value
-                .ident
-                .as_ref()
-                .ok_or_else(|| syn::Error::new_spanned(value, "Field has no name"))?;
+        let ident = value
+            .ident
+            .as_ref()
+            .ok_or_else(|| syn::Error::new_spanned(value, "Field has no name"))?;
         let mut skip = false;
         let mut flatten = false;
         let mut default = false;
@@ -47,19 +46,28 @@ impl TryFrom<&syn::Field> for Field {
                 if let Some(value) = &attr.value {
                     rename = Some(value.to_token_stream());
                 } else {
-                    return Err(syn::Error::new_spanned(attr.token, "rename attribute should have a value"));
+                    return Err(syn::Error::new_spanned(
+                        attr.token,
+                        "rename attribute should have a value",
+                    ));
                 }
             } else if attr.name.is_ident("skip_serializing_if") {
                 if let Some(value) = &attr.value {
                     skip_if = Some(parse_path(value)?);
                 } else {
-                    return Err(syn::Error::new_spanned(attr.token, "rename attribute should have a value"));
+                    return Err(syn::Error::new_spanned(
+                        attr.token,
+                        "rename attribute should have a value",
+                    ));
                 }
             } else if attr.name.is_ident("with") {
                 if let Some(value) = &attr.value {
                     with = Some(parse_path(value)?);
                 } else {
-                    return Err(syn::Error::new_spanned(attr.token, "with attribute should have a value"));
+                    return Err(syn::Error::new_spanned(
+                        attr.token,
+                        "with attribute should have a value",
+                    ));
                 }
             } else if attr.name.is_ident("skip") {
                 skip = true;

@@ -9,10 +9,10 @@ use super::error::Error;
 use super::storage_io;
 use super::storage_types::{GeneratedPassword, Password, PasswordId, Site, StoredPassword};
 
-#[cfg(not(feature = "sizeoptimized"))]
-use json_streamed as json;
 #[cfg(feature = "sizeoptimized")]
 use json_sizeoptimized as json;
+#[cfg(not(feature = "sizeoptimized"))]
+use json_streamed as json;
 
 const SALT_KEY: &str = "salt";
 const HMAC_SECRET_KEY: &str = "hmac-secret";

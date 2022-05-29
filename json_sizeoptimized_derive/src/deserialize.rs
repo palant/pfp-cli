@@ -4,7 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::container::{Container, StructContainer, EnumContainer};
+use crate::container::{Container, EnumContainer, StructContainer};
 use proc_macro2::TokenStream;
 use quote::{quote, ToTokens};
 use syn::DeriveInput;

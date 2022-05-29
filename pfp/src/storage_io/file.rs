@@ -4,10 +4,10 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-#[cfg(not(feature = "sizeoptimized"))]
-use json_streamed as json;
 #[cfg(feature = "sizeoptimized")]
 use json_sizeoptimized as json;
+#[cfg(not(feature = "sizeoptimized"))]
+use json_streamed as json;
 
 use crate::error::Error;
 use json::{const_serializable, Deserialize, Serialize};

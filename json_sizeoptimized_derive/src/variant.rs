@@ -41,7 +41,10 @@ impl TryFrom<&syn::Variant> for Variant {
                 if let Some(value) = &attr.value {
                     rename = Some(value.to_token_stream());
                 } else {
-                    return Err(syn::Error::new_spanned(attr.token, "rename attribute should have a value"));
+                    return Err(syn::Error::new_spanned(
+                        attr.token,
+                        "rename attribute should have a value",
+                    ));
                 }
             } else {
                 return Err(syn::Error::new_spanned(attr.token, "Unsupported attribute"));
