@@ -20,6 +20,10 @@ pub trait Deserializable<'de> {
         Self: Sized;
 }
 
+pub fn from_slice<'de, T: Deserializable<'de>>(slice: &'de [u8]) -> Result<T, Error> {
+    T::deserialize(&serde_json::from_slice(slice)?)
+}
+
 pub fn from_str<'de, T: Deserializable<'de>>(string: &str) -> Result<T, Error> {
     T::deserialize(&serde_json::from_str(string)?)
 }

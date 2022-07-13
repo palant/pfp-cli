@@ -15,9 +15,15 @@ fn process_struct(container: StructContainer) -> Result<TokenStream, syn::Error>
     for field in &container.fields {
         let ident = &field.ident;
         if field.skip {
-            field_deserializers.push(quote! {
-                #ident: Default::default(),
-            });
+            if let Some(default_path) = &field.default {
+                field_deserializers.push(quote! {
+                    #ident: #default_path(),
+                });
+            } else {
+                field_deserializers.push(quote! {
+                    #ident: Default::default(),
+                });
+            }
             continue;
         }
 
@@ -50,10 +56,10 @@ fn process_struct(container: StructContainer) -> Result<TokenStream, syn::Error>
             quote! { json }
         };
 
-        let deserializer = if field.skip_if.is_some() {
+        let deserializer = if let Some(default_path) = &field.default {
             quote! {
                 #ident: match #source_value {
-                    json::Value::Null => Default::default(),
+                    json::Value::Null => #default_path(),
                     other => #path::deserialize(other)?,
                 },
             }

@@ -10,7 +10,10 @@ use pfp::recovery_codes;
 use pfp::storage_types::{CharacterSet, CharacterType, Password, Site};
 use pfp::{passwords, storage_io};
 use std::path;
-use std::process;
+
+use io_streams::{StreamReader, StreamWriter};
+use secrecy::{ExposeSecret, SecretString, SecretVec};
+use std::io::{Read, Write};
 
 /// PfP: Pain-free Passwords, command line edition
 #[derive(Parser)]
@@ -22,6 +25,9 @@ struct Args {
     /// Integration tests only: read passwords from stdin
     #[clap(long, hide = true)]
     stdin_passwords: bool,
+    /// Integration tests only: lock passwords and wait when done
+    #[clap(long, hide = true)]
+    wait: bool,
     #[clap(subcommand)]
     command: Commands,
 }
@@ -146,17 +152,33 @@ enum Commands {
     },
 }
 
-fn prompt_password(prompt: &str, stdin_passwords: bool) -> String {
-    if stdin_passwords {
-        use std::io::Write;
-        let mut input = String::new();
-        std::io::stdout().write_all(prompt.as_bytes()).unwrap();
-        std::io::stdout().flush().unwrap();
-        std::io::stdin().read_line(&mut input).unwrap();
-        input.trim().to_string()
+fn prompt_password(prompt: &str, stdin_passwords: bool) -> SecretString {
+    let secret = if stdin_passwords {
+        StreamWriter::stdout()
+            .unwrap()
+            .write_all(prompt.as_bytes())
+            .unwrap();
+
+        let mut byte_buffer = [0];
+        let mut buffer = Vec::with_capacity(1024);
+        let mut stdin = StreamReader::stdin().unwrap();
+        while let Ok(1) = stdin.read(&mut byte_buffer) {
+            if byte_buffer[0] == b'\n' {
+                break;
+            }
+            buffer.push(byte_buffer[0]);
+        }
+
+        let input = SecretVec::new(buffer);
+        SecretString::new(
+            std::str::from_utf8(input.expose_secret().as_slice())
+                .unwrap()
+                .to_owned(),
+        )
     } else {
-        rpassword::prompt_password(prompt).unwrap()
-    }
+        SecretString::new(rpassword::prompt_password(prompt).unwrap())
+    };
+    SecretString::new(secret.expose_secret().trim().to_owned())
 }
 
 fn format_error(error: &Error) -> String {
@@ -202,18 +224,39 @@ fn format_error(error: &Error) -> String {
     }
 }
 
-trait HandleError<T> {
-    fn handle_error(self) -> T;
+trait ConvertError<T> {
+    fn convert_error(self) -> Result<T, String>;
 }
 
-impl<T> HandleError<T> for Result<T, Error> {
-    fn handle_error(self) -> T {
+impl<T> ConvertError<T> for Result<T, Error> {
+    fn convert_error(self) -> Result<T, String> {
         match self {
-            Ok(value) => value,
-            Err(error) => {
-                eprintln!("{}", format_error(&error));
-                process::exit(1);
-            }
+            Ok(value) => Ok(value),
+            Err(error) => Err(format_error(&error)),
+        }
+    }
+}
+
+struct Shutdown {
+    wait: bool,
+}
+
+impl Shutdown {
+    pub fn new(wait: bool) -> Self {
+        Self { wait }
+    }
+}
+
+impl Drop for Shutdown {
+    fn drop(&mut self) {
+        if self.wait {
+            StreamWriter::stdout()
+                .unwrap()
+                .write_all(b"Waiting...\n")
+                .unwrap();
+
+            let mut _input = String::new();
+            std::io::stdin().read_line(&mut _input).unwrap();
         }
     }
 }
@@ -231,21 +274,22 @@ fn get_default_storage_path() -> path::PathBuf {
 fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(
     passwords: &mut passwords::Passwords<IO>,
     stdin_passwords: bool,
-) {
+) -> Result<(), String> {
     if !passwords.initialized() {
-        Err::<(), Error>(Error::StorageNotInitialized).handle_error();
+        return Err(format_error(&Error::StorageNotInitialized));
     }
 
     while !passwords.unlocked() {
         let master_password = prompt_password("Your master password: ", stdin_passwords);
-        if master_password.len() < 6 {
+        if master_password.expose_secret().len() < 6 {
             eprintln!("Master password length should be at least 6 characters.");
         } else {
             passwords
-                .unlock(&master_password)
+                .unlock(master_password)
                 .unwrap_or_else(|error| eprintln!("{}", format_error(&error)));
         }
     }
+    Ok(())
 }
 
 fn validate_length(arg: &str) -> Result<(), String> {
@@ -257,20 +301,22 @@ fn validate_length(arg: &str) -> Result<(), String> {
     Ok(())
 }
 
-fn prompt_recovery_code<IO: storage_io::StorageIO>(passwords: &passwords::Passwords<IO>) -> String {
+fn prompt_recovery_code<IO: storage_io::StorageIO>(
+    passwords: &passwords::Passwords<IO>,
+) -> Result<SecretString, String> {
     let mut accepted = String::new();
     loop {
         if let Some(question::Answer::RESPONSE(line)) =
             question::Question::new("Next line of your recovery code (empty line to abort):").ask()
         {
             if line.is_empty() {
-                process::exit(0);
+                return Err(String::new());
             }
 
             let code = String::from(&accepted) + &line;
             let formatted = recovery_codes::format_code(code.as_bytes(), true);
             match passwords.decode_recovery_code(&code) {
-                Ok(value) => return value,
+                Ok(value) => return Ok(value),
                 Err(error) => match error {
                     Error::RecoveryCodeExtraData { line } => {
                         accepted = formatted.split('\n').collect::<Vec<&str>>()[..line].join("\n");
@@ -281,9 +327,9 @@ fn prompt_recovery_code<IO: storage_io::StorageIO>(passwords: &passwords::Passwo
                             .show_defaults()
                             .confirm();
                         if accept == question::Answer::YES {
-                            return passwords.decode_recovery_code(&accepted).handle_error();
+                            return passwords.decode_recovery_code(&accepted).convert_error();
                         } else {
-                            process::exit(0);
+                            return Err(String::new());
                         }
                     }
                     Error::RecoveryCodeChecksumMismatch { line } => {
@@ -301,8 +347,7 @@ fn prompt_recovery_code<IO: storage_io::StorageIO>(passwords: &passwords::Passwo
                         eprintln!("Line accepted. The recovery code is still incomplete, please enter more data.\n");
                     }
                     unknown_error => {
-                        eprintln!("{}", format_error(&unknown_error));
-                        process::exit(1);
+                        return Err(format_error(&unknown_error));
                     }
                 },
             }
@@ -310,8 +355,7 @@ fn prompt_recovery_code<IO: storage_io::StorageIO>(passwords: &passwords::Passwo
     }
 }
 
-fn main() {
-    let args = Args::parse();
+fn main_inner(args: Args) -> Result<(), String> {
     let storage_path = match args.storage {
         Some(value) => value,
         None => get_default_storage_path(),
@@ -328,7 +372,7 @@ fn main() {
                     .show_defaults()
                     .confirm();
                     if allow == question::Answer::NO {
-                        process::exit(0);
+                        return Ok(());
                     }
                 }
                 io
@@ -336,26 +380,24 @@ fn main() {
             Err(_) => storage_io::FileIO::new(&storage_path),
         }
     } else {
-        storage_io::FileIO::load(&storage_path).handle_error()
+        storage_io::FileIO::load(&storage_path).convert_error()?
     };
     let mut passwords = passwords::Passwords::new(io);
 
     match &args.command {
         Commands::SetMaster { .. } => {
             let master_password = prompt_password("New master password: ", args.stdin_passwords);
-            if master_password.len() < 6 {
-                eprintln!("Master password length should be at least 6 characters.");
-                process::exit(1);
+            if master_password.expose_secret().len() < 6 {
+                return Err("Master password length should be at least 6 characters.".to_owned());
             }
 
             let master_password2 =
                 prompt_password("Repeat master password: ", args.stdin_passwords);
-            if master_password != master_password2 {
-                eprintln!("Master passwords don't match.");
-                process::exit(1);
+            if master_password.expose_secret() != master_password2.expose_secret() {
+                return Err("Master passwords don't match.".to_owned());
             }
 
-            passwords.reset(&master_password).handle_error();
+            passwords.reset(master_password).convert_error()?;
             println!(
                 "New master password set for {}.",
                 storage_path.to_string_lossy()
@@ -373,7 +415,7 @@ fn main() {
             no_symbol,
             assume_yes,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
             let mut charset = CharacterSet::empty();
             if !no_lower {
@@ -389,8 +431,7 @@ fn main() {
                 charset.insert(CharacterType::Symbol);
             }
             if charset.is_empty() {
-                eprintln!("You need to allow at least one character set.");
-                process::exit(1);
+                return Err("You need to allow at least one character set.".to_owned());
             }
 
             if !assume_yes && passwords.has(domain, name, revision).unwrap_or(false) {
@@ -399,13 +440,13 @@ fn main() {
                         .show_defaults()
                         .confirm();
                 if allow == question::Answer::NO {
-                    process::exit(0);
+                    return Ok(());
                 }
             }
 
             passwords
                 .set_generated(domain, name, revision, *length, charset)
-                .handle_error();
+                .convert_error()?;
             println!("Password added.");
         }
 
@@ -416,7 +457,7 @@ fn main() {
             recovery,
             assume_yes,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
             if !assume_yes && passwords.has(domain, name, revision).unwrap_or(false) {
                 let allow = question::Question::new("A password with this domain/name/revision combination already exists. Overwrite?")
@@ -424,18 +465,18 @@ fn main() {
                         .show_defaults()
                         .confirm();
                 if allow == question::Answer::NO {
-                    process::exit(0);
+                    return Ok(());
                 }
             }
 
             let password = if *recovery {
-                prompt_recovery_code(&passwords)
+                prompt_recovery_code(&passwords)?
             } else {
                 prompt_password("Password to be stored: ", args.stdin_passwords)
             };
             passwords
-                .set_stored(domain, name, revision, &password)
-                .handle_error();
+                .set_stored(domain, name, revision, password)
+                .convert_error()?;
             println!("Password added.");
         }
 
@@ -444,9 +485,9 @@ fn main() {
             name,
             revision,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
-            passwords.remove(domain, name, revision).handle_error();
+            passwords.remove(domain, name, revision).convert_error()?;
             println!("Password removed.");
         }
 
@@ -456,31 +497,39 @@ fn main() {
             revision,
             qrcode,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
-            let password = passwords.get(domain, name, revision).handle_error();
+            let password = passwords.get(domain, name, revision).convert_error()?;
             println!("Password retrieved.");
             if *qrcode {
-                const BLOCKS: [char; 4] = [' ', '\u{2580}', '\u{2584}', '\u{2588}'];
+                const BLOCKS: [&str; 4] = [" ", "\u{2580}", "\u{2584}", "\u{2588}"];
 
-                match qrcodegen::QrCode::encode_text(&password, qrcodegen::QrCodeEcc::Low) {
+                match qrcodegen::QrCode::encode_text(
+                    password.expose_secret(),
+                    qrcodegen::QrCodeEcc::Low,
+                ) {
                     Ok(qr) => {
                         for y in (0..qr.size()).step_by(2) {
                             for x in 0..qr.size() {
                                 let index = if qr.get_module(x, y) { 1 } else { 0 }
                                     | if qr.get_module(x, y + 1) { 2 } else { 0 };
-                                print!("{}", BLOCKS[index]);
+                                StreamWriter::stdout()
+                                    .unwrap()
+                                    .write_all(BLOCKS[index].as_bytes())
+                                    .unwrap();
                             }
                             println!();
                         }
                     }
                     Err(error) => {
-                        eprintln!("Error generating QR code: {}", error);
-                        process::exit(1);
+                        return Err(format!("Error generating QR code: {}", error));
                     }
                 }
             } else {
-                println!("{}", password);
+                StreamWriter::stdout()
+                    .unwrap()
+                    .write_all(password.expose_secret().as_bytes())
+                    .unwrap();
             }
         }
 
@@ -490,23 +539,26 @@ fn main() {
             revision,
             set,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
-            let notes = passwords.get_notes(domain, name, revision).handle_error();
-            if notes.is_empty() {
+            let notes = passwords
+                .get_notes(domain, name, revision)
+                .convert_error()?;
+            if notes.expose_secret().is_empty() {
                 println!("Currently no notes are stored for this password.");
             } else {
-                println!("Notes for this password: {}", notes);
+                println!("Notes for this password: {}", notes.expose_secret());
             }
 
             if *set {
                 if let Some(question::Answer::RESPONSE(notes)) =
                     question::Question::new("Please enter new notes to be stored:").ask()
                 {
+                    let removing = notes.is_empty();
                     passwords
-                        .set_notes(domain, name, revision, &notes)
-                        .handle_error();
-                    if notes.is_empty() {
+                        .set_notes(domain, name, revision, SecretString::new(notes))
+                        .convert_error()?;
+                    if removing {
                         println!("Notes removed.");
                     } else {
                         println!("Notes stored.");
@@ -522,7 +574,7 @@ fn main() {
             recovery,
             verbose,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
             let mut empty_sites = Vec::new();
 
@@ -594,7 +646,10 @@ fn main() {
                     if *show {
                         println!(
                             "        {}",
-                            passwords.get(site.name(), &name, &revision).handle_error()
+                            passwords
+                                .get(site.name(), &name, &revision)
+                                .convert_error()?
+                                .expose_secret()
                         );
                     }
 
@@ -603,7 +658,7 @@ fn main() {
                             println!("        Recovery code:");
                             for line in passwords
                                 .get_recovery_code(password)
-                                .handle_error()
+                                .convert_error()?
                                 .split('\n')
                             {
                                 println!("        {}", line);
@@ -613,8 +668,8 @@ fn main() {
 
                     if *verbose {
                         let notes = password.notes();
-                        if !notes.is_empty() {
-                            println!("        Notes: {}", notes);
+                        if !notes.expose_secret().is_empty() {
+                            println!("        Notes: {}", notes.expose_secret());
                         }
 
                         if let Password::Generated(password) = &password {
@@ -639,7 +694,7 @@ fn main() {
                 }
             }
 
-            passwords.remove_sites(&empty_sites).handle_error();
+            passwords.remove_sites(&empty_sites).convert_error()?;
 
             if !found {
                 println!("No matching passwords found.");
@@ -647,17 +702,29 @@ fn main() {
         }
 
         Commands::SetAlias { domain, alias } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
-            passwords.set_alias(domain, alias).handle_error();
+            passwords.set_alias(domain, alias).convert_error()?;
             println!("Alias added.");
         }
 
         Commands::RemoveAlias { domain } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords);
+            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
-            passwords.remove_alias(domain).handle_error();
+            passwords.remove_alias(domain).convert_error()?;
             println!("Alias removed.");
         }
+    }
+    Ok(())
+}
+
+fn main() -> std::process::ExitCode {
+    let args = Args::parse();
+    let _shutdown = Shutdown::new(args.wait);
+    if let Err(error) = main_inner(args) {
+        eprintln!("{}", error);
+        std::process::ExitCode::FAILURE
+    } else {
+        std::process::ExitCode::SUCCESS
     }
 }

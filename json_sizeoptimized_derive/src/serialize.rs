@@ -40,7 +40,7 @@ fn process_struct(container: StructContainer) -> Result<TokenStream, syn::Error>
 
             let value = if let Some(module) = &field.with {
                 quote! {
-                    #module.serialize(self.#ident)
+                    #module::serialize(&self.#ident)
                 }
             } else {
                 quote! {

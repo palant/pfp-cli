@@ -54,7 +54,7 @@ pub enum Error {
     /// UTF-8 decoding failed.
     InvalidUtf8 {
         /// Underlying UTF8 error
-        error: std::string::FromUtf8Error,
+        error: std::str::Utf8Error,
     },
     /// Decryption failed, probably due to wrong master password.
     DecryptionFailure,

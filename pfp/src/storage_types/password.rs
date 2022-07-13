@@ -11,6 +11,11 @@ use json_streamed as json;
 
 use super::CharacterSet;
 use json::{Deserialize, Serialize};
+use secrecy::{ExposeSecret, SecretString};
+
+fn empty_secret(str: &SecretString) -> bool {
+    str.expose_secret().is_empty()
+}
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(crate = "json")]
@@ -64,8 +69,12 @@ pub struct GeneratedPassword {
     length: usize,
     #[serde(with = "super::character_set", flatten)]
     charset: CharacterSet,
-    #[serde(skip_serializing_if = "String::is_empty", default)]
-    notes: String,
+    #[serde(
+        skip_serializing_if = "empty_secret",
+        default = "json::secret_serialization::default",
+        with = "json::secret_serialization"
+    )]
+    notes: SecretString,
 }
 
 impl GeneratedPassword {
@@ -82,7 +91,7 @@ impl GeneratedPassword {
             id: PasswordId::new(site, name, revision),
             length,
             charset,
-            notes: String::new(),
+            notes: SecretString::new(String::new()),
         }
     }
 
@@ -115,13 +124,13 @@ impl GeneratedPassword {
     }
 
     /// Retrieves the notes stored with the password if any.
-    pub fn notes(&self) -> &str {
+    pub fn notes(&self) -> &SecretString {
         &self.notes
     }
 
     /// Sets the notes for the password.
-    pub fn set_notes(&mut self, notes: &str) {
-        self.notes = notes.to_string();
+    pub fn set_notes(&mut self, notes: SecretString) {
+        self.notes = notes;
     }
 }
 
@@ -131,19 +140,24 @@ impl GeneratedPassword {
 pub struct StoredPassword {
     #[serde(flatten)]
     id: PasswordId,
-    password: String,
-    #[serde(skip_serializing_if = "String::is_empty", default)]
-    notes: String,
+    #[serde(with = "json::secret_serialization")]
+    password: SecretString,
+    #[serde(
+        skip_serializing_if = "empty_secret",
+        default = "json::secret_serialization::default",
+        with = "json::secret_serialization"
+    )]
+    notes: SecretString,
 }
 
 impl StoredPassword {
     /// Creates a password with given site name, password name, password revision and actual
     /// password value.
-    pub fn new(site: &str, name: &str, revision: &str, password: &str) -> StoredPassword {
+    pub fn new(site: &str, name: &str, revision: &str, password: SecretString) -> StoredPassword {
         StoredPassword {
             id: PasswordId::new(site, name, revision),
-            password: password.to_string(),
-            notes: String::new(),
+            password,
+            notes: SecretString::new(String::new()),
         }
     }
 
@@ -153,18 +167,18 @@ impl StoredPassword {
     }
 
     /// Retrieves the password's value.
-    pub fn password(&self) -> &str {
+    pub fn password(&self) -> &SecretString {
         &self.password
     }
 
     /// Retrieves the notes stored with the password if any.
-    pub fn notes(&self) -> &str {
+    pub fn notes(&self) -> &SecretString {
         &self.notes
     }
 
     /// Sets the notes for the password.
-    pub fn set_notes(&mut self, notes: &str) {
-        self.notes = notes.to_string();
+    pub fn set_notes(&mut self, notes: SecretString) {
+        self.notes = notes;
     }
 }
 
@@ -190,7 +204,7 @@ impl Password {
     }
 
     /// Retrieves the notes stored with the password if any.
-    pub fn notes(&self) -> &str {
+    pub fn notes(&self) -> &SecretString {
         match self {
             Self::Generated(password) => password.notes(),
             Self::Stored(password) => password.notes(),
@@ -198,7 +212,7 @@ impl Password {
     }
 
     /// Sets the notes for the password.
-    pub fn set_notes(&mut self, notes: &str) {
+    pub fn set_notes(&mut self, notes: SecretString) {
         match self {
             Self::Generated(password) => password.set_notes(notes),
             Self::Stored(password) => password.set_notes(notes),

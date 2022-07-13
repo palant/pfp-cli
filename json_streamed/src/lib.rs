@@ -7,7 +7,9 @@
 pub use serde::de::Deserialize as Deserializable;
 pub use serde::ser::Serialize as Serializable;
 pub use serde::*;
-pub use serde_json::{from_str, json, to_string, to_vec, Error, Value};
+pub use serde_json::{from_slice, from_str, json, to_string, to_vec, Error, Value};
 
 mod macros;
 pub use macros::*;
+
+pub mod secret_serialization;

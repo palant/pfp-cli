@@ -7,6 +7,7 @@
 use crate::common::Setup;
 
 const MASTER_PASSWORD: &str = "foobar";
+const SECRETS: &[&[u8]] = &[MASTER_PASSWORD.as_bytes()];
 
 #[test]
 fn uninitialized() {
@@ -20,36 +21,53 @@ fn uninitialized() {
 
 #[test]
 fn add_remove() {
-    let setup = Setup::new();
+    let mut setup = Setup::new();
+    setup.set_secrets(SECRETS);
     setup.initialize(MASTER_PASSWORD);
 
-    let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
-    session.expect_str("Password added");
+    {
+        let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
+        session.expect_str("Password added");
+    }
 
-    session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
-    session.expect_str("No such value");
+    {
+        let mut session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
+        session.expect_str("No such value");
+    }
 
-    session = setup.run(
-        &["set-alias", "example.info", "example.com"],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("Alias added");
+    {
+        let mut session = setup.run(
+            &["set-alias", "example.info", "example.com"],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("Alias added");
+    }
 
-    session = setup.run(
-        &["set-alias", "example.net", "example.com"],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("Alias added");
+    {
+        let mut session = setup.run(
+            &["set-alias", "example.net", "example.com"],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("Alias added");
+    }
 
-    session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
-    session.expect_str("Password retrieved");
+    {
+        let mut session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
+        session.expect_str("Password retrieved");
+    }
 
-    session = setup.run(&["remove-alias", "example.info"], Some(MASTER_PASSWORD));
-    session.expect_str("Alias removed");
+    {
+        let mut session = setup.run(&["remove-alias", "example.info"], Some(MASTER_PASSWORD));
+        session.expect_str("Alias removed");
+    }
 
-    session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
-    session.expect_str("No such value");
+    {
+        let mut session = setup.run(&["show", "example.info", "blubber"], Some(MASTER_PASSWORD));
+        session.expect_str("No such value");
+    }
 
-    session = setup.run(&["show", "example.net", "blubber"], Some(MASTER_PASSWORD));
-    session.expect_str("Password retrieved");
+    {
+        let mut session = setup.run(&["show", "example.net", "blubber"], Some(MASTER_PASSWORD));
+        session.expect_str("Password retrieved");
+    }
 }

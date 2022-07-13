@@ -5,7 +5,7 @@
  */
 
 #![deny(unsafe_code, nonstandard_style)]
-#![warn(missing_debug_implementations, missing_docs)]
+#![warn(missing_docs)]
 #![forbid(rust_2021_compatibility)]
 
 //! Functionality required to work with JSON files produced as data exports by the
@@ -15,6 +15,7 @@
 //! ```no_run
 //! use pfp::passwords::Passwords;
 //! use pfp::storage_io::FileIO;
+//! use secrecy::SecretString;
 //! use std::path::Path;
 //!
 //! // Create an uninitialized Passwords instance for the given file
@@ -23,7 +24,8 @@
 //! assert!(!passwords.initialized());
 //!
 //! // Initialize password storage with a new master password
-//! passwords.reset("my master password").unwrap();
+//! let master_password = SecretString::new("my master password".to_owned());
+//! passwords.reset(master_password).unwrap();
 //!
 //! // At this point test.json file should exist.
 //! ```

@@ -14,6 +14,7 @@ mod macros;
 pub use macros::*;
 
 mod types;
+pub mod secret_serialization;
 
 pub fn deserialize<'de, T: Deserializable<'de>>(value: &Value) -> Result<T, Error> {
     T::deserialize(value)

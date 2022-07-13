@@ -9,6 +9,8 @@ use super::error::Error;
 use super::storage_io;
 use super::storage_types::{GeneratedPassword, Password, PasswordId, Site, StoredPassword};
 
+use secrecy::{ExposeSecret, SecretVec};
+
 #[cfg(feature = "sizeoptimized")]
 use json_sizeoptimized as json;
 #[cfg(not(feature = "sizeoptimized"))]
@@ -32,7 +34,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &mut self,
         salt: &[u8],
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<(), Error> {
         self.io.clear();
         self.set_salt(salt);
@@ -52,20 +54,21 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         self.io.contains_key(key)
     }
 
-    fn get<T>(&self, key: &str, encryption_key: &[u8]) -> Result<T, Error>
+    fn get<T>(&self, key: &str, encryption_key: &SecretVec<u8>) -> Result<T, Error>
     where
         T: for<'de> json::Deserializable<'de>,
     {
         let value = self.io.get(key)?;
         let decrypted = crypto::decrypt_data(value, encryption_key)?;
-        json::from_str(&decrypted).map_err(|error| Error::InvalidJson { error })
+        json::from_slice(decrypted.expose_secret()).map_err(|error| Error::InvalidJson { error })
     }
 
-    fn set<T>(&mut self, key: &str, value: &T, encryption_key: &[u8]) -> Result<(), Error>
+    fn set<T>(&mut self, key: &str, value: &T, encryption_key: &SecretVec<u8>) -> Result<(), Error>
     where
         T: json::Serializable,
     {
-        let serialized = json::to_vec(value).map_err(|error| Error::InvalidJson { error })?;
+        let serialized =
+            SecretVec::new(json::to_vec(value).map_err(|error| Error::InvalidJson { error })?);
         self.io.set(
             key.to_string(),
             crypto::encrypt_data(&serialized, encryption_key),
@@ -89,21 +92,27 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         self.io.set(SALT_KEY.to_string(), base64::encode(salt));
     }
 
-    pub fn get_hmac_secret(&self, encryption_key: &[u8]) -> Result<Vec<u8>, Error> {
+    pub fn get_hmac_secret(&self, encryption_key: &SecretVec<u8>) -> Result<Vec<u8>, Error> {
         let ciphertext = self
             .io
             .get(HMAC_SECRET_KEY)
             .map_err(|_| Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
-        let hmac_secret =
-            json::from_str::<String>(&decrypted).map_err(|error| Error::InvalidJson { error })?;
+        let hmac_secret = json::from_slice::<String>(decrypted.expose_secret())
+            .map_err(|error| Error::InvalidJson { error })?;
         base64::decode(hmac_secret).map_err(|error| Error::InvalidBase64 { error })
     }
 
-    fn set_hmac_secret(&mut self, hmac_secret: &[u8], encryption_key: &[u8]) -> Result<(), Error> {
-        let stringified = json::to_string(&base64::encode(hmac_secret))
-            .map_err(|error| Error::InvalidJson { error })?;
-        let encrypted = crypto::encrypt_data(stringified.as_bytes(), encryption_key);
+    fn set_hmac_secret(
+        &mut self,
+        hmac_secret: &[u8],
+        encryption_key: &SecretVec<u8>,
+    ) -> Result<(), Error> {
+        let stringified = SecretVec::new(
+            json::to_vec(&base64::encode(hmac_secret))
+                .map_err(|error| Error::InvalidJson { error })?,
+        );
+        let encrypted = crypto::encrypt_data(&stringified, encryption_key);
         self.io.set(HMAC_SECRET_KEY.to_string(), encrypted);
         Ok(())
     }
@@ -137,7 +146,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &self,
         site: &str,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<String, Error> {
         let site = self.get_site(site, hmac_secret, encryption_key)?;
         site.alias()
@@ -149,7 +158,12 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         site.strip_prefix("www.").unwrap_or(site).to_string()
     }
 
-    pub fn resolve_site(&self, site: &str, hmac_secret: &[u8], encryption_key: &[u8]) -> String {
+    pub fn resolve_site(
+        &self,
+        site: &str,
+        hmac_secret: &[u8],
+        encryption_key: &SecretVec<u8>,
+    ) -> String {
         let normalized = self.normalize_site(site);
         self.get_alias(&normalized, hmac_secret, encryption_key)
             .unwrap_or(normalized)
@@ -159,7 +173,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &mut self,
         site: &str,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<(), Error> {
         let key = self.get_site_key(site, hmac_secret);
         if self.get::<Site>(&key, encryption_key).is_err() {
@@ -174,7 +188,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         site: &str,
         alias: &str,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<(), Error> {
         if site == alias {
             return Err(Error::AliasToSelf);
@@ -188,7 +202,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &self,
         site: &str,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<Site, Error> {
         let key = self.get_site_key(site, hmac_secret);
         self.get(&key, encryption_key)
@@ -198,7 +212,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &mut self,
         site: &str,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<(), Error> {
         let key = self.get_site_key(site, hmac_secret);
         let site: Site = self.get(&key, encryption_key).or(Err(Error::NoSuchAlias))?;
@@ -223,7 +237,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &mut self,
         password: GeneratedPassword,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<(), Error> {
         let key = self.get_password_key(password.id(), hmac_secret);
         self.set(&key, &Password::Generated(password), encryption_key)
@@ -233,7 +247,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &mut self,
         password: StoredPassword,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<(), Error> {
         let key = self.get_password_key(password.id(), hmac_secret);
         self.set(&key, &Password::Stored(password), encryption_key)
@@ -243,7 +257,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &self,
         id: &PasswordId,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<Password, Error> {
         let key = self.get_password_key(id, hmac_secret);
         self.get(&key, encryption_key)
@@ -253,7 +267,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &mut self,
         password: Password,
         hmac_secret: &[u8],
-        encryption_key: &[u8],
+        encryption_key: &SecretVec<u8>,
     ) -> Result<(), Error> {
         let key = self.get_password_key(password.id(), hmac_secret);
         self.set(&key, &password, encryption_key)
@@ -268,7 +282,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         &'a self,
         site: &str,
         hmac_secret: &[u8],
-        encryption_key: &'a [u8],
+        encryption_key: &'a SecretVec<u8>,
     ) -> impl Iterator<Item = Password> + 'a {
         let prefix = self.get_site_prefix(site, hmac_secret);
         self.io.keys().filter_map(move |key| {
@@ -280,7 +294,10 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         })
     }
 
-    pub fn list_sites<'a>(&'a self, encryption_key: &'a [u8]) -> impl Iterator<Item = Site> + 'a {
+    pub fn list_sites<'a>(
+        &'a self,
+        encryption_key: &'a SecretVec<u8>,
+    ) -> impl Iterator<Item = Site> + 'a {
         self.io.keys().filter_map(move |key| {
             if key.starts_with(STORAGE_PREFIX) && key[STORAGE_PREFIX.len()..].find(':').is_none() {
                 self.get(key, encryption_key).ok()
@@ -294,11 +311,16 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use secrecy::SecretString;
     use std::collections::HashMap;
     use storage_io::MemoryIO;
 
     const HMAC_SECRET: &[u8] = b"abc";
     const ENCRYPTION_KEY: &[u8] = b"abcdefghijklmnopqrstuvwxyz123456";
+
+    fn enc_key() -> SecretVec<u8> {
+        SecretVec::new(ENCRYPTION_KEY.to_vec())
+    }
 
     fn empty_data() -> HashMap<String, String> {
         return HashMap::from([
@@ -350,12 +372,12 @@ mod tests {
         let mut decrypted = HashMap::new();
         for (key, value) in data.iter() {
             if key.starts_with("site:") {
-                let entry = crypto::decrypt_data(value, ENCRYPTION_KEY)
-                    .expect("Value should be decryptable");
+                let entry =
+                    crypto::decrypt_data(value, &enc_key()).expect("Value should be decryptable");
 
                 decrypted.insert(
                     key.to_owned(),
-                    json::from_str(&entry).expect("Should be valid JSON"),
+                    json::from_slice(entry.expose_secret()).expect("Should be valid JSON"),
                 );
             }
         }
@@ -384,7 +406,7 @@ mod tests {
             ));
             assert!(matches!(
                 storage
-                    .get_hmac_secret(ENCRYPTION_KEY)
+                    .get_hmac_secret(&enc_key())
                     .expect_err("Getting HMAC secret should fail"),
                 Error::StorageNotInitialized
             ));
@@ -395,7 +417,7 @@ mod tests {
             let io = MemoryIO::new(HashMap::from([("salt".to_string(), "asdf".to_string())]));
             assert!(matches!(
                 Storage::new(io)
-                    .get_hmac_secret(ENCRYPTION_KEY)
+                    .get_hmac_secret(&enc_key())
                     .expect_err("Getting HMAC secret should fail"),
                 Error::StorageNotInitialized
             ));
@@ -426,7 +448,7 @@ mod tests {
             );
             assert_eq!(
                 storage
-                    .get_hmac_secret(ENCRYPTION_KEY)
+                    .get_hmac_secret(&enc_key())
                     .expect("Storage should be initialized"),
                 HMAC_SECRET
             );
@@ -443,10 +465,10 @@ mod tests {
             assert_eq!(storage.initialized(), false);
 
             storage
-                .clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY)
+                .clear(b"cba", HMAC_SECRET, &enc_key())
                 .expect("Clearing storage should succeed");
             assert_eq!(storage.initialized(), true);
-            assert_eq!(storage.list_sites(ENCRYPTION_KEY).count(), 0);
+            assert_eq!(storage.list_sites(&enc_key()).count(), 0);
 
             storage.flush().expect("Flush should succeed");
 
@@ -459,10 +481,10 @@ mod tests {
             let mut storage = Storage::new(io);
 
             storage
-                .clear(b"cba", HMAC_SECRET, ENCRYPTION_KEY)
+                .clear(b"cba", HMAC_SECRET, &enc_key())
                 .expect("Clearing storage should succeed");
             assert_eq!(storage.initialized(), true);
-            assert_eq!(storage.list_sites(ENCRYPTION_KEY).count(), 0);
+            assert_eq!(storage.list_sites(&enc_key()).count(), 0);
 
             storage.flush().expect("Flush should succeed");
 
@@ -476,7 +498,7 @@ mod tests {
 
         fn list_sites(storage: &Storage<MemoryIO>) -> Vec<String> {
             let mut vec = storage
-                .list_sites(ENCRYPTION_KEY)
+                .list_sites(&enc_key())
                 .map(|site| site.name().to_string())
                 .collect::<Vec<String>>();
             vec.sort();
@@ -485,7 +507,7 @@ mod tests {
 
         fn list_passwords(storage: &Storage<MemoryIO>, site: &str) -> Vec<json::Value> {
             let mut vec = storage
-                .list_passwords(site, HMAC_SECRET, ENCRYPTION_KEY)
+                .list_passwords(site, HMAC_SECRET, &enc_key())
                 .map(|password| to_json_value(&password))
                 .collect::<Vec<json::Value>>();
             vec.sort_by_key(|password| password["name"].as_str().unwrap().to_owned());
@@ -556,7 +578,7 @@ mod tests {
             let storage = Storage::new(io);
 
             let site1 = storage
-                .get_site("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                .get_site("example.com", HMAC_SECRET, &enc_key())
                 .expect("Site should be present");
             assert_eq!(
                 to_json_value(&site1),
@@ -565,7 +587,7 @@ mod tests {
                 })
             );
             let site2 = storage
-                .get_site("example.info", HMAC_SECRET, ENCRYPTION_KEY)
+                .get_site("example.info", HMAC_SECRET, &enc_key())
                 .expect("Site should be present");
             assert_eq!(
                 to_json_value(&site2),
@@ -574,7 +596,7 @@ mod tests {
                 })
             );
             let site3 = storage
-                .get_site("example.org", HMAC_SECRET, ENCRYPTION_KEY)
+                .get_site("example.org", HMAC_SECRET, &enc_key())
                 .expect("Site should be present");
             assert_eq!(
                 to_json_value(&site3),
@@ -585,7 +607,7 @@ mod tests {
             );
             assert!(matches!(
                 storage
-                    .get_site("example.net", HMAC_SECRET, ENCRYPTION_KEY)
+                    .get_site("example.net", HMAC_SECRET, &enc_key())
                     .expect_err("Site should be missing"),
                 Error::KeyMissing { .. }
             ));
@@ -597,7 +619,7 @@ mod tests {
                 .get_password(
                     &PasswordId::new("example.com", "blabber", "2"),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Password should be present");
             assert_eq!(
@@ -619,7 +641,7 @@ mod tests {
                 .get_password(
                     &PasswordId::new("example.com", "blubber", ""),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Password should be present");
             assert_eq!(
@@ -645,7 +667,7 @@ mod tests {
                 .get_password(
                     &PasswordId::new("example.info", "test", "yet another"),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Password should be present");
             assert_eq!(
@@ -672,7 +694,7 @@ mod tests {
                     .get_password(
                         &PasswordId::new("example.org", "blubber", ""),
                         HMAC_SECRET,
-                        ENCRYPTION_KEY
+                        &enc_key()
                     )
                     .expect_err("Password should be missing"),
                 Error::KeyMissing { .. }
@@ -686,13 +708,13 @@ mod tests {
 
             assert!(matches!(
                 storage
-                    .get_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                    .get_alias("example.com", HMAC_SECRET, &enc_key())
                     .expect_err("Alias shouldn't be present"),
                 Error::NoSuchAlias { .. }
             ));
             assert_eq!(
                 storage
-                    .get_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY)
+                    .get_alias("example.org", HMAC_SECRET, &enc_key())
                     .expect("Alias should be present"),
                 "example.com"
             );
@@ -705,13 +727,13 @@ mod tests {
 
             assert_eq!(storage.normalize_site("example.com"), "example.com");
             assert_eq!(
-                storage.resolve_site("example.com", HMAC_SECRET, ENCRYPTION_KEY),
+                storage.resolve_site("example.com", HMAC_SECRET, &enc_key()),
                 "example.com"
             );
 
             assert_eq!(storage.normalize_site("www.example.com"), "example.com");
             assert_eq!(
-                storage.resolve_site("www.example.com", HMAC_SECRET, ENCRYPTION_KEY),
+                storage.resolve_site("www.example.com", HMAC_SECRET, &enc_key()),
                 "example.com"
             );
 
@@ -720,25 +742,25 @@ mod tests {
                 "www2.example.com"
             );
             assert_eq!(
-                storage.resolve_site("www2.example.com", HMAC_SECRET, ENCRYPTION_KEY),
+                storage.resolve_site("www2.example.com", HMAC_SECRET, &enc_key()),
                 "www2.example.com"
             );
 
             assert_eq!(storage.normalize_site("www.example.net"), "example.net");
             assert_eq!(
-                storage.resolve_site("www.example.net", HMAC_SECRET, ENCRYPTION_KEY),
+                storage.resolve_site("www.example.net", HMAC_SECRET, &enc_key()),
                 "example.net"
             );
 
             assert_eq!(storage.normalize_site("example.org"), "example.org");
             assert_eq!(
-                storage.resolve_site("example.org", HMAC_SECRET, ENCRYPTION_KEY),
+                storage.resolve_site("example.org", HMAC_SECRET, &enc_key()),
                 "example.com"
             );
 
             assert_eq!(storage.normalize_site("www.example.org"), "example.org");
             assert_eq!(
-                storage.resolve_site("www.example.org", HMAC_SECRET, ENCRYPTION_KEY),
+                storage.resolve_site("www.example.org", HMAC_SECRET, &enc_key()),
                 "example.com"
             );
         }
@@ -753,10 +775,10 @@ mod tests {
             let mut storage = Storage::new(io);
 
             storage
-                .ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                .ensure_site_data("example.com", HMAC_SECRET, &enc_key())
                 .expect("Adding site data should succeed");
             storage
-                .ensure_site_data("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                .ensure_site_data("example.com", HMAC_SECRET, &enc_key())
                 .expect("Adding site data should succeed");
 
             storage
@@ -776,7 +798,7 @@ mod tests {
                     )
                     .unwrap(),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Adding password should succeed");
 
@@ -784,12 +806,12 @@ mod tests {
                 .get_password(
                     &PasswordId::new("example.com", "blubber", ""),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Password should be present");
-            password.set_notes("");
+            password.set_notes(SecretString::new(String::new()));
             storage
-                .set_password(password, HMAC_SECRET, ENCRYPTION_KEY)
+                .set_password(password, HMAC_SECRET, &enc_key())
                 .expect("Adding password should succeed");
 
             storage
@@ -805,7 +827,7 @@ mod tests {
                     )
                     .unwrap(),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Adding password should succeed");
 
@@ -813,19 +835,19 @@ mod tests {
                 .get_password(
                     &PasswordId::new("example.com", "blabber", "2"),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Password should be present");
-            password.set_notes("hi there!");
+            password.set_notes(SecretString::new("hi there!".to_owned()));
             storage
-                .set_password(password, HMAC_SECRET, ENCRYPTION_KEY)
+                .set_password(password, HMAC_SECRET, &enc_key())
                 .expect("Adding password should succeed");
 
             storage
-                .ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY)
+                .ensure_site_data("example.info", HMAC_SECRET, &enc_key())
                 .expect("Adding site data should succeed");
             storage
-                .ensure_site_data("example.info", HMAC_SECRET, ENCRYPTION_KEY)
+                .ensure_site_data("example.info", HMAC_SECRET, &enc_key())
                 .expect("Adding site data should succeed");
 
             storage
@@ -844,7 +866,7 @@ mod tests {
                     )
                     .unwrap(),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Adding password should succeed");
 
@@ -852,26 +874,25 @@ mod tests {
                 .get_password(
                     &PasswordId::new("example.info", "test", "yet another"),
                     HMAC_SECRET,
-                    ENCRYPTION_KEY,
+                    &enc_key(),
                 )
                 .expect("Password should be present");
-            password.set_notes("nothing here");
+            password.set_notes(SecretString::new("nothing here".to_owned()));
             storage
-                .set_password(password, HMAC_SECRET, ENCRYPTION_KEY)
+                .set_password(password, HMAC_SECRET, &enc_key())
                 .expect("Adding password should succeed");
 
-            let result =
-                storage.set_alias("example.com", "example.com", HMAC_SECRET, ENCRYPTION_KEY);
+            let result = storage.set_alias("example.com", "example.com", HMAC_SECRET, &enc_key());
             assert!(matches!(
                 result.expect_err("Setting an alias to itself should fail"),
                 Error::AliasToSelf { .. }
             ));
 
             storage
-                .set_alias("example.org", "example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                .set_alias("example.org", "example.com", HMAC_SECRET, &enc_key())
                 .expect("Setting alias should succeed");
             storage
-                .ensure_site_data("example.org", HMAC_SECRET, ENCRYPTION_KEY)
+                .ensure_site_data("example.org", HMAC_SECRET, &enc_key())
                 .expect("Adding site data should succeed");
 
             storage.flush().expect("Flush should succeed");
@@ -890,13 +911,13 @@ mod tests {
 
             assert!(matches!(
                 storage
-                    .remove_alias("example.com", HMAC_SECRET, ENCRYPTION_KEY)
+                    .remove_alias("example.com", HMAC_SECRET, &enc_key())
                     .expect_err("Removing alias should fail"),
                 Error::NoSuchAlias { .. }
             ));
             assert!(matches!(
                 storage
-                    .remove_alias("example.net", HMAC_SECRET, ENCRYPTION_KEY)
+                    .remove_alias("example.net", HMAC_SECRET, &enc_key())
                     .expect_err("Removing alias should fail"),
                 Error::NoSuchAlias { .. }
             ));
@@ -920,7 +941,7 @@ mod tests {
                 )
                 .expect("Removing password should succeed");
             storage
-                .remove_alias("example.org", HMAC_SECRET, ENCRYPTION_KEY)
+                .remove_alias("example.org", HMAC_SECRET, &enc_key())
                 .expect("Removing alias should succeed");
 
             storage

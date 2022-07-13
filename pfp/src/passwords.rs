@@ -14,20 +14,21 @@ use crate::storage_io;
 use crate::storage_types::{
     CharacterSet, GeneratedPassword, Password, PasswordId, Site, StoredPassword,
 };
+
 use rand::Rng;
+use secrecy::{SecretString, SecretVec};
 
 /// Generates the storage data encryption key.
 ///
 /// The encryption key is always derived from a particular secret master password. Salt should be a
 /// random value to prevent rainbow table attacks. The salt is not considered a secret and is
 /// stored as plain text in the storage file.
-pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8> {
+pub fn get_encryption_key(master_password: &SecretString, salt: &[u8]) -> SecretVec<u8> {
     // Replicate salt being converted to UTF-8 as done by JS code
     let salt_str = String::from_iter(salt.iter().map(|&byte| byte as char));
     crypto::derive_key(master_password, salt_str.as_bytes())
 }
 
-#[derive(Debug)]
 /// The type providing access to the passwords storage, allowing to retrieve and manipulate its
 /// data.
 ///
@@ -37,6 +38,7 @@ pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8> {
 /// use pfp::passwords::Passwords;
 /// use pfp::storage_io::FileIO;
 /// use pfp::storage_types::CharacterSet;
+/// use secrecy::{SecretString, ExposeSecret};
 /// use std::path::Path;
 ///
 /// // Create an uninitialized Passwords instance for the given file
@@ -45,19 +47,20 @@ pub fn get_encryption_key(master_password: &str, salt: &[u8]) -> Vec<u8> {
 /// assert!(!passwords.initialized());
 ///
 /// // Initialize password storage with a new master password
-/// passwords.reset("my master password").unwrap();
+/// let master_password = SecretString::new("my master password".to_owned());
+/// passwords.reset(master_password).unwrap();
 ///
 /// // At this point test.json file should exist.
 /// // Add a generated password for example.com
 /// passwords.set_generated("example.com", "me", "1", 16, CharacterSet::all()).unwrap();
 ///
 /// // Get generated password
-/// assert_eq!(passwords.get("example.com", "me", "1").unwrap(), "sWEdAx<E<Gd_kaa2");
-pub struct Passwords<IO> {
+/// assert_eq!(passwords.get("example.com", "me", "1").unwrap().expose_secret(), "sWEdAx<E<Gd_kaa2");
+pub struct Passwords<IO: storage_io::StorageIO> {
     storage: storage::Storage<IO>,
-    key: Option<Vec<u8>>,
+    key: Option<SecretVec<u8>>,
     hmac_secret: Option<Vec<u8>>,
-    master_password: Option<String>,
+    master_password: Option<SecretString>,
 }
 
 impl<IO: storage_io::StorageIO> Passwords<IO> {
@@ -100,9 +103,9 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     /// be unlocked implicitly, calling `unlock()` isn't required.
     ///
     /// This only produces errors related to writing out the storage data to disk.
-    pub fn reset(&mut self, master_password: &str) -> Result<(), Error> {
+    pub fn reset(&mut self, master_password: SecretString) -> Result<(), Error> {
         let salt = crypto::get_rng().gen::<[u8; 16]>();
-        let key = get_encryption_key(master_password, &salt);
+        let key = get_encryption_key(&master_password, &salt);
         let hmac_secret = crypto::get_rng().gen::<[u8; 32]>();
 
         self.storage.clear(&salt, &hmac_secret, &key)?;
@@ -110,7 +113,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
 
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret.to_vec());
-        self.master_password = Some(master_password.to_string());
+        self.master_password = Some(master_password);
         Ok(())
     }
 
@@ -121,18 +124,17 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     /// [Error::StorageNotInitialized](../error/enum.Error.html#variant.StorageNotInitialized).
     /// Calling this method with a wrong master password will result in
     /// [Error::DecryptionFailure](../error/enum.Error.html#variant.DecryptionFailure).
-    pub fn unlock(&mut self, master_password: &str) -> Result<(), Error> {
+    pub fn unlock(&mut self, master_password: SecretString) -> Result<(), Error> {
         let salt = self.storage.get_salt()?;
-        let key = get_encryption_key(master_password, &salt);
+        let key = get_encryption_key(&master_password, &salt);
 
         let hmac_secret = self.storage.get_hmac_secret(&key)?;
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret);
-        self.master_password = Some(master_password.to_string());
+        self.master_password = Some(master_password);
         Ok(())
     }
 
-    #[allow(dead_code)]
     /// Locks the passwords storage, forgetting anything it knows about the master password.
     ///
     /// After this call, passwords will no longer be accessible until [unlock()](#method.unlock)
@@ -253,7 +255,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
         site: &str,
         name: &str,
         revision: &str,
-        password: &str,
+        password: SecretString,
     ) -> Result<(), Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -294,7 +296,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     ///
     /// If the password does not exist, the call will result in
     /// [Error::KeyMissing error](../error/enum.Error.html#variant.KeyMissing).
-    pub fn get(&self, site: &str, name: &str, revision: &str) -> Result<String, Error> {
+    pub fn get(&self, site: &str, name: &str, revision: &str) -> Result<SecretString, Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
         let master_password = self
@@ -316,7 +318,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
                 password.length(),
                 password.charset(),
             )),
-            Password::Stored(password) => Ok(password.password().to_string()),
+            Password::Stored(password) => Ok(password.password().clone()),
         }
     }
 
@@ -333,7 +335,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     ///
     /// This will produce the same errors as
     /// [recovery_codes::decode()](../recovery_codes/fn.decode.html).
-    pub fn decode_recovery_code(&self, code: &str) -> Result<String, Error> {
+    pub fn decode_recovery_code(&self, code: &str) -> Result<SecretString, Error> {
         let master_password = self
             .master_password
             .as_ref()
@@ -345,7 +347,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     ///
     /// No notes will produce an empty string. This can fail if passwords are locked or the
     /// password doesn't exist.
-    pub fn get_notes(&self, site: &str, name: &str, revision: &str) -> Result<String, Error> {
+    pub fn get_notes(&self, site: &str, name: &str, revision: &str) -> Result<SecretString, Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
 
@@ -355,7 +357,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
             hmac_secret,
             key,
         )?;
-        Ok(password.notes().to_string())
+        Ok(password.notes().clone())
     }
 
     /// Changes notes for a given site/name/revision combination. `notes` parameter can be an
@@ -367,7 +369,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
         site: &str,
         name: &str,
         revision: &str,
-        notes: &str,
+        notes: SecretString,
     ) -> Result<(), Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
@@ -442,13 +444,25 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     }
 }
 
+impl<IO: storage_io::StorageIO> Drop for Passwords<IO> {
+    fn drop(&mut self) {
+        self.lock();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use secrecy::ExposeSecret;
     use std::collections::HashMap;
     use storage_io::MemoryIO;
 
     const MASTER_PASSWORD: &str = "foobar";
+
+    fn master_pass() -> SecretString {
+        SecretString::new(MASTER_PASSWORD.to_owned())
+    }
 
     fn empty_data() -> HashMap<String, String> {
         HashMap::from([
@@ -528,12 +542,12 @@ mod tests {
 
             assert!(matches!(
                 passwords
-                    .unlock("asdfyxcv")
+                    .unlock(SecretString::new("asdfyxcv".to_owned()))
                     .expect_err("Passwords shouldn't unlock"),
                 Error::DecryptionFailure { .. }
             ));
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
         }
     }
@@ -548,7 +562,7 @@ mod tests {
             assert_eq!(passwords.initialized(), false);
 
             passwords
-                .reset(MASTER_PASSWORD)
+                .reset(master_pass())
                 .expect("Reset should succeed");
             assert_eq!(passwords.initialized(), true);
             assert_eq!(passwords.unlocked(), true);
@@ -572,13 +586,14 @@ mod tests {
                 passwords
                     .master_password
                     .as_ref()
-                    .expect("Master password should be present"),
+                    .expect("Master password should be present")
+                    .expose_secret(),
                 MASTER_PASSWORD
             );
 
             passwords.lock();
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
             assert_eq!(
                 passwords
@@ -598,7 +613,8 @@ mod tests {
                 passwords
                     .master_password
                     .as_ref()
-                    .expect("Master password should be present"),
+                    .expect("Master password should be present")
+                    .expose_secret(),
                 MASTER_PASSWORD
             );
         }
@@ -608,7 +624,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .reset(MASTER_PASSWORD)
+                .reset(master_pass())
                 .expect("Reset should succeed");
 
             assert_eq!(passwords.initialized(), true);
@@ -633,13 +649,14 @@ mod tests {
                 passwords
                     .master_password
                     .as_ref()
-                    .expect("Master password should be present"),
+                    .expect("Master password should be present")
+                    .expose_secret(),
                 MASTER_PASSWORD
             );
 
             passwords.lock();
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
             assert_eq!(
                 passwords
@@ -659,7 +676,8 @@ mod tests {
                 passwords
                     .master_password
                     .as_ref()
-                    .expect("Master password should be present"),
+                    .expect("Master password should be present")
+                    .expose_secret(),
                 MASTER_PASSWORD
             );
         }
@@ -691,7 +709,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
 
             assert_eq!(
@@ -717,7 +735,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
 
             assert_eq!(
@@ -820,7 +838,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
 
             assert!(passwords
@@ -829,7 +847,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("example.com", "blubber", "")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "SUDJjn&%:nBe}cr8"
             );
             assert!(passwords
@@ -838,7 +857,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("www.example.com", "blubber", "")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "SUDJjn&%:nBe}cr8"
             );
             assert!(passwords
@@ -847,7 +867,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("example.org", "blubber", "")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "SUDJjn&%:nBe}cr8"
             );
             assert!(passwords
@@ -856,7 +877,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("www.example.org", "blubber", "")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "SUDJjn&%:nBe}cr8"
             );
 
@@ -866,7 +888,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("example.com", "blabber", "2")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "asdf"
             );
             assert!(passwords
@@ -875,7 +898,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("www.example.com", "blabber", "2")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "asdf"
             );
             assert!(passwords
@@ -884,7 +908,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("example.org", "blabber", "2")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "asdf"
             );
             assert!(passwords
@@ -893,7 +918,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("www.example.org", "blabber", "2")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "asdf"
             );
 
@@ -903,7 +929,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("example.info", "test", "yet another")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "rjtfxqf4"
             );
             assert!(passwords
@@ -912,7 +939,8 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("www.example.info", "test", "yet another")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "rjtfxqf4"
             );
             assert!(!passwords
@@ -945,7 +973,7 @@ mod tests {
             let io = MemoryIO::new(empty_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
 
             assert!(matches!(
@@ -968,7 +996,12 @@ mod tests {
                 .set_generated("example.com", "blubber", "", 16, CharacterSet::all())
                 .expect("Adding password should succeed");
             passwords
-                .set_stored("example.com", "blabber", "2", "asdf")
+                .set_stored(
+                    "example.com",
+                    "blabber",
+                    "2",
+                    SecretString::new("asdf".to_owned()),
+                )
                 .expect("Adding password should succeed");
             passwords
                 .set_generated(
@@ -990,33 +1023,38 @@ mod tests {
             assert_eq!(
                 passwords
                     .get("example.com", "blubber", "")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "SUDJjn&%:nBe}cr8"
             );
             assert_eq!(
                 passwords
                     .get("example.org", "blubber", "")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "SUDJjn&%:nBe}cr8"
             );
 
             assert_eq!(
                 passwords
                     .get("www.example.com", "blabber", "2")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "asdf"
             );
             assert_eq!(
                 passwords
                     .get("www.example.org", "blabber", "2")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "asdf"
             );
 
             assert_eq!(
                 passwords
                     .get("example.info", "test", "yet another")
-                    .expect("Retrieval should succeed"),
+                    .expect("Retrieval should succeed")
+                    .expose_secret(),
                 "rjtfxqf4"
             );
             assert!(matches!(
@@ -1036,25 +1074,28 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
 
             assert_eq!(
                 passwords
                     .get_notes("www.example.com", "blubber", "")
-                    .expect("Getting notes should succeed"),
+                    .expect("Getting notes should succeed")
+                    .expose_secret(),
                 ""
             );
             assert_eq!(
                 passwords
                     .get_notes("www.example.com", "blabber", "2")
-                    .expect("Getting notes should succeed"),
+                    .expect("Getting notes should succeed")
+                    .expose_secret(),
                 "hi there!"
             );
             assert_eq!(
                 passwords
                     .get_notes("example.info", "test", "yet another")
-                    .expect("Getting notes should succeed"),
+                    .expect("Getting notes should succeed")
+                    .expose_secret(),
                 "nothing here"
             );
             assert!(matches!(
@@ -1065,17 +1106,37 @@ mod tests {
             ));
 
             passwords
-                .set_notes("example.com", "blubber", "", "hey!")
+                .set_notes(
+                    "example.com",
+                    "blubber",
+                    "",
+                    SecretString::new("hey!".to_owned()),
+                )
                 .expect("Setting notes should succeed");
             passwords
-                .set_notes("example.com", "blabber", "2", "")
+                .set_notes(
+                    "example.com",
+                    "blabber",
+                    "2",
+                    SecretString::new("".to_owned()),
+                )
                 .expect("Setting notes should succeed");
             passwords
-                .set_notes("www.example.info", "test", "yet another", "something here")
+                .set_notes(
+                    "www.example.info",
+                    "test",
+                    "yet another",
+                    SecretString::new("something here".to_owned()),
+                )
                 .expect("Setting notes should succeed");
             assert!(matches!(
                 passwords
-                    .set_notes("example.info", "blubber", "", "")
+                    .set_notes(
+                        "example.info",
+                        "blubber",
+                        "",
+                        SecretString::new("".to_owned())
+                    )
                     .expect_err("Getting notes should fail"),
                 Error::KeyMissing { .. }
             ));
@@ -1083,19 +1144,22 @@ mod tests {
             assert_eq!(
                 passwords
                     .get_notes("www.example.com", "blubber", "")
-                    .expect("Getting notes should succeed"),
+                    .expect("Getting notes should succeed")
+                    .expose_secret(),
                 "hey!"
             );
             assert_eq!(
                 passwords
                     .get_notes("www.example.com", "blabber", "2")
-                    .expect("Getting notes should succeed"),
+                    .expect("Getting notes should succeed")
+                    .expose_secret(),
                 ""
             );
             assert_eq!(
                 passwords
                     .get_notes("example.info", "test", "yet another")
-                    .expect("Getting notes should succeed"),
+                    .expect("Getting notes should succeed")
+                    .expose_secret(),
                 "something here"
             );
             assert!(matches!(
@@ -1115,7 +1179,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(MASTER_PASSWORD)
+                .unlock(master_pass())
                 .expect("Passwords should unlock");
 
             assert!(matches!(

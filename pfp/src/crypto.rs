@@ -10,6 +10,7 @@ use aes_gcm::aead::{Aead, NewAead};
 use hmac::Mac;
 use rand::Rng;
 use scrypt::scrypt;
+use secrecy::{ExposeSecret, SecretString, SecretVec};
 
 const AES_KEY_SIZE: usize = 256;
 const AES_NONCE_SIZE: usize = 96;
@@ -32,29 +33,36 @@ const CHARS_MAPPING: [(CharacterType, &[u8]); 4] = [
 // ambiguous characters: 0, 1, O, I.
 pub const BASE32_ALPHABET: &[u8] = b"ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
 
-pub fn derive_bits(password: &[u8], salt: &[u8], size: usize) -> Vec<u8> {
+pub fn derive_bits(password: &SecretString, salt: &[u8], size: usize) -> SecretVec<u8> {
     let params = scrypt::Params::new(15, 8, 1).unwrap();
     let mut bytes: Vec<u8> = Vec::new();
     bytes.resize(size, 0);
-    scrypt(password, salt, &params, bytes.as_mut_slice()).unwrap();
-    bytes
+    scrypt(
+        password.expose_secret().as_bytes(),
+        salt,
+        &params,
+        bytes.as_mut_slice(),
+    )
+    .unwrap();
+    SecretVec::new(bytes)
 }
 
 pub fn derive_password(
-    master_password: &str,
+    master_password: &SecretString,
     salt: &str,
     length: usize,
     charset: CharacterSet,
-) -> String {
-    let bytes = derive_bits(master_password.as_bytes(), salt.as_bytes(), length);
-    to_password(&bytes, charset)
+) -> SecretString {
+    let bytes = derive_bits(master_password, salt.as_bytes(), length);
+    to_password(bytes, charset)
 }
 
-fn to_password(bytes: &[u8], charset: CharacterSet) -> String {
-    let mut result = String::with_capacity(bytes.len());
+fn to_password(bytes: SecretVec<u8>, charset: CharacterSet) -> SecretString {
+    let len = bytes.expose_secret().len();
+    let mut result = String::with_capacity(len);
     let mut seen = CharacterSet::empty();
-    for (i, &byte) in bytes.iter().enumerate() {
-        let allowed = if charset.len() - seen.len() >= bytes.len() - i {
+    for (i, &byte) in bytes.expose_secret().iter().enumerate() {
+        let allowed = if charset.len() - seen.len() >= len - i {
             charset - seen
         } else {
             charset
@@ -79,11 +87,11 @@ fn to_password(bytes: &[u8], charset: CharacterSet) -> String {
             }
         }
     }
-    result
+    SecretString::new(result)
 }
 
-pub fn derive_key(master_password: &str, salt: &[u8]) -> Vec<u8> {
-    derive_bits(master_password.as_bytes(), salt, AES_KEY_SIZE / 8)
+pub fn derive_key(master_password: &SecretString, salt: &[u8]) -> SecretVec<u8> {
+    derive_bits(master_password, salt, AES_KEY_SIZE / 8)
 }
 
 #[cfg(not(test))]
@@ -96,19 +104,23 @@ pub fn get_rng() -> rand::rngs::mock::StepRng {
     rand::rngs::mock::StepRng::new(97, 1)
 }
 
-pub fn encrypt_data(value: &[u8], encryption_key: &[u8]) -> String {
-    let key = aes_gcm::Key::from_slice(encryption_key);
+pub fn encrypt_data(value: &SecretVec<u8>, encryption_key: &SecretVec<u8>) -> String {
+    let key = aes_gcm::Key::from_slice(encryption_key.expose_secret());
     let cipher = aes_gcm::Aes256Gcm::new(key);
     let nonce_data = get_rng().gen::<[u8; AES_NONCE_SIZE / 8]>();
     let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
     let mut result = base64::encode(nonce_data);
     result.push('_');
-    result.push_str(&base64::encode(cipher.encrypt(nonce, value).unwrap()));
+    result.push_str(&base64::encode(
+        cipher
+            .encrypt(nonce, value.expose_secret().as_slice())
+            .unwrap(),
+    ));
     result
 }
 
-pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Result<String, Error> {
-    let key = aes_gcm::Key::from_slice(encryption_key);
+pub fn decrypt_data(value: &str, encryption_key: &SecretVec<u8>) -> Result<SecretVec<u8>, Error> {
+    let key = aes_gcm::Key::from_slice(encryption_key.expose_secret());
     let cipher = aes_gcm::Aes256Gcm::new(key);
 
     let (nonce_base64, ciphertext_base64) =
@@ -118,10 +130,11 @@ pub fn decrypt_data(value: &str, encryption_key: &[u8]) -> Result<String, Error>
     let nonce = aes_gcm::Nonce::from_slice(&nonce_data);
     let ciphertext =
         base64::decode(ciphertext_base64).map_err(|error| Error::InvalidBase64 { error })?;
-    let decrypted = cipher
-        .decrypt(nonce, ciphertext.as_slice())
-        .or(Err(Error::DecryptionFailure))?;
-    String::from_utf8(decrypted).map_err(|error| Error::InvalidUtf8 { error })
+    Ok(SecretVec::new(
+        cipher
+            .decrypt(nonce, ciphertext.as_slice())
+            .or(Err(Error::DecryptionFailure))?,
+    ))
 }
 
 pub fn get_digest(hmac_secret: &[u8], data: &str) -> String {

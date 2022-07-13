@@ -9,6 +9,7 @@
 use super::crypto;
 use super::error::Error;
 use super::passwords;
+use secrecy::{ExposeSecret, SecretString, SecretVec};
 
 const BLOCK_SIZE: usize = 14;
 const LINE_SIZE: usize = (BLOCK_SIZE + 1) / 5 * 8;
@@ -30,11 +31,14 @@ const TAG_SIZE: usize = 16;
 ///
 /// ```
 /// use pfp::recovery_codes;
+/// use secrecy::{SecretString, SecretVec};
 ///
+/// let password = SecretString::new("asdf".to_owned());
+/// let encryption_key = SecretVec::new(b"abcdefghijklmnopqrstuvwxyz123456".to_vec());
 /// let code = recovery_codes::generate(
-///     "asdf",
+///     &password,
 ///     b"abcdefghijklmnop",
-///     b"abcdefghijklmnopqrstuvwxyz123456"
+///     &encryption_key
 /// ).unwrap();
 ///
 /// // Will produce something like (actual output depends on a random nonce):
@@ -44,18 +48,32 @@ const TAG_SIZE: usize = 16;
 /// // GK6N-MXKF-GTMT:MKLU-CNZE-ES85
 /// println!("{}", code);
 /// ```
-pub fn generate(password: &str, salt: &[u8], encryption_key: &[u8]) -> Result<String, Error> {
+pub fn generate(
+    password: &SecretString,
+    salt: &[u8],
+    encryption_key: &SecretVec<u8>,
+) -> Result<String, Error> {
     if salt.len() != SALT_SIZE {
         return Err(Error::UnexpectedData);
     }
 
     // Zero-pad passwords to fill up the row (don't allow deducing password
     // length from size of encrypted data)
-    let mut password_vec = password.as_bytes().to_vec();
-    while (VERSION_SIZE + SALT_SIZE + NONCE_SIZE + TAG_SIZE + password_vec.len()) % BLOCK_SIZE != 0
-    {
-        password_vec.push(b'\0');
-    }
+    let password_len = password.expose_secret().len();
+    let fill_bytes =
+        match (VERSION_SIZE + SALT_SIZE + NONCE_SIZE + TAG_SIZE + password_len) % BLOCK_SIZE {
+            0 => 0,
+            rest => BLOCK_SIZE - rest,
+        };
+
+    let password_vec = SecretVec::<u8>::new({
+        let mut vec = Vec::<u8>::with_capacity(password_len + fill_bytes);
+        vec.extend_from_slice(password.expose_secret().as_bytes());
+        for _ in 0..fill_bytes {
+            vec.push(b'\0');
+        }
+        vec
+    });
 
     let encrypted = crypto::encrypt_data(&password_vec, encryption_key);
     let (nonce_base64, ciphertext_base64) =
@@ -68,7 +86,7 @@ pub fn generate(password: &str, salt: &[u8], encryption_key: &[u8]) -> Result<St
 
     let ciphertext =
         base64::decode(ciphertext_base64).map_err(|error| Error::InvalidBase64 { error })?;
-    if ciphertext.len() != password_vec.len() + TAG_SIZE {
+    if ciphertext.len() != password_len + fill_bytes + TAG_SIZE {
         return Err(Error::UnexpectedData);
     }
 
@@ -160,15 +178,16 @@ pub fn format_code(code: &[u8], insert_punctuation: bool) -> String {
 /// ```
 /// use pfp::recovery_codes;
 /// use pfp::error::Error;
+/// use secrecy::SecretString;
 ///
-/// let master_password = "my master password";
-/// let result = recovery_codes::decode("ABCD-EFGH", master_password);
+/// let master_password = SecretString::new("my master password".to_owned());
+/// let result = recovery_codes::decode("ABCD-EFGH", &master_password);
 /// if let Err(Error::RecoveryCodeIncomplete) = result
 /// {
 ///     eprintln!("Please enter more recovery code lines.");
 /// }
 /// ```
-pub fn decode(code: &str, master_password: &str) -> Result<String, Error> {
+pub fn decode(code: &str, master_password: &SecretString) -> Result<SecretString, Error> {
     let decoded = validate(code)?;
 
     let without_checksums = decoded
@@ -200,16 +219,24 @@ pub fn decode(code: &str, master_password: &str) -> Result<String, Error> {
     encrypted.push_str(&base64::encode(ciphertext));
 
     let encryption_key = passwords::get_encryption_key(master_password, salt);
-    let mut decrypted = crypto::decrypt_data(&encrypted, &encryption_key)?;
-    while decrypted
-        .as_bytes()
-        .last()
-        .and_then(|&byte| if byte == 0 { Some(()) } else { None })
-        .is_some()
-    {
-        decrypted.pop();
+    let decrypted = crypto::decrypt_data(&encrypted, &encryption_key)?;
+    let decrypted_len = decrypted.expose_secret().len();
+    let mut end_pos = decrypted_len;
+    while let Some(&byte) = decrypted.expose_secret().get(end_pos - 1) {
+        if byte != 0 {
+            break;
+        }
+        end_pos -= 1;
     }
-    Ok(decrypted)
+    let stripped = if end_pos == decrypted_len {
+        decrypted
+    } else {
+        SecretVec::<u8>::new(decrypted.expose_secret()[..end_pos].to_vec())
+    };
+
+    let decrypted_str = std::str::from_utf8(stripped.expose_secret())
+        .map_err(|error| Error::InvalidUtf8 { error })?;
+    Ok(SecretString::new(decrypted_str.to_owned()))
 }
 
 fn validate(code: &str) -> Result<Vec<u8>, Error> {
@@ -257,6 +284,14 @@ mod tests {
     const ENCRYPTION_KEY: &[u8] = b"abcdefghijklmnopqrstuvwxyz123456";
     const MASTER_PASSWORD: &str = "foobar";
 
+    fn enc_key() -> SecretVec<u8> {
+        SecretVec::new(ENCRYPTION_KEY.to_vec())
+    }
+
+    fn master_pass() -> SecretString {
+        SecretString::new(MASTER_PASSWORD.to_owned())
+    }
+
     #[test]
     fn formatting() {
         assert_eq!(
@@ -284,17 +319,17 @@ mod tests {
     #[test]
     fn generation() {
         assert_eq!(
-            generate("asdf", SALT, ENCRYPTION_KEY).expect("Generating code should succeed"),
+            generate(&SecretString::new("asdf".to_owned()), SALT, &enc_key()).expect("Generating code should succeed"),
             "AFSY-E25E-NXVG:Q4DK-PKXY-25KP\nP3ZZ-A2MC-NPUG:L3VH-PBWY-W48F\nPTST-72NZ-ENV2:8U57-4DJQ-XDFB\nGK6N-MXKF-GTMT:MKLU-CNZE-ES85"
         );
 
         assert_eq!(
-            generate("01234567890", SALT, ENCRYPTION_KEY).expect("Generating code should succeed"),
+            generate(&SecretString::new("01234567890".to_owned()), SALT, &enc_key()).expect("Generating code should succeed"),
             "AFSY-E25E-NXVG:Q4DK-PKXY-25KP\nP3ZZ-A2MC-NPUG:L3VH-PBWY-W48F\nPS2F-3P8C-C6KM:U9CF-7HSN-A9HG\n8WLJ-UJFY-QF3W:36EF-7TP2-H6RP"
         );
 
         assert_eq!(
-            generate("012345678901", SALT, ENCRYPTION_KEY).expect("Generating code should succeed"),
+            generate(&SecretString::new("012345678901".to_owned()), SALT, &enc_key()).expect("Generating code should succeed"),
             "AFSY-E25E-NXVG:Q4DK-PKXY-25KP\nP3ZZ-A2MC-NPUG:L3VH-PBWY-W48F\nPS2F-3P8C-C6KM:U9CF-7HSE-3E5P\nUSDD-W6XY-GW6H:MKQB-K35Z-ULUW\nW6KA-BV2P-W3TG:TUUJ-NJDD-R6KX"
         );
     }
@@ -309,9 +344,10 @@ mod tests {
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                     ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
                 ",
-                MASTER_PASSWORD
+                &master_pass()
             )
-            .expect("Password recovery should succeed"),
+            .expect("Password recovery should succeed")
+            .expose_secret(),
             "asdf"
         );
 
@@ -323,9 +359,10 @@ mod tests {
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                     ELVM-RQ44-vb8t:VGPW-AW6K-DUQD
                 ",
-                MASTER_PASSWORD
+                &master_pass()
             )
-            .expect("Password recovery should succeed"),
+            .expect("Password recovery should succeed")
+            .expose_secret(),
             "asdf"
         );
 
@@ -336,7 +373,7 @@ mod tests {
                 4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
                 ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
             ",
-            MASTER_PASSWORD,
+            &master_pass(),
         )
         .expect_err("Password recovery should fail");
         if let Error::RecoveryCodeChecksumMismatch { line, .. } = err1 {
@@ -352,7 +389,7 @@ mod tests {
                 2VCY-YK9C-5BUX:NH86-RDC6-QYMY
                 ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
             ",
-            MASTER_PASSWORD,
+            &master_pass(),
         )
         .expect_err("Password recovery should fail");
         if let Error::RecoveryCodeChecksumMismatch { line, .. } = err2 {
@@ -369,7 +406,7 @@ mod tests {
                 ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
                 ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
             ",
-            MASTER_PASSWORD,
+            &master_pass(),
         )
         .expect_err("Password recovery should fail");
         if let Error::RecoveryCodeExtraData { line, .. } = err3 {
@@ -386,7 +423,7 @@ mod tests {
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                     ELVM-RQ44-VB8T:
                 ",
-                MASTER_PASSWORD
+                &master_pass()
             )
             .expect_err("Password recovery should fail"),
             Error::RecoveryCodeIncomplete { .. }
@@ -400,7 +437,7 @@ mod tests {
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                     ELVM-RQ44-
                 ",
-                MASTER_PASSWORD
+                &master_pass()
             )
             .expect_err("Password recovery should fail"),
             Error::RecoveryCodeIncomplete { .. }
@@ -413,7 +450,7 @@ mod tests {
                     4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                 ",
-                MASTER_PASSWORD
+                &master_pass()
             )
             .expect_err("Password recovery should fail"),
             Error::RecoveryCodeIncomplete { .. }

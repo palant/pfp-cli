@@ -7,7 +7,7 @@
 use crate::attrs::get_attrs;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
-use syn::{ExprPath, Ident, Lit};
+use syn::{ExprPath, Ident, Lit, LitStr, spanned::Spanned};
 
 fn parse_path(lit: &Lit) -> Result<ExprPath, syn::Error> {
     match lit {
@@ -20,7 +20,7 @@ pub struct Field {
     pub ident: Ident,
     pub skip: bool,
     pub flatten: bool,
-    pub default: bool,
+    pub default: Option<ExprPath>,
     pub rename: Option<TokenStream>,
     pub skip_if: Option<ExprPath>,
     pub with: Option<ExprPath>,
@@ -36,7 +36,7 @@ impl TryFrom<&syn::Field> for Field {
             .ok_or_else(|| syn::Error::new_spanned(value, "Field has no name"))?;
         let mut skip = false;
         let mut flatten = false;
-        let mut default = false;
+        let mut default = None;
         let mut rename = None;
         let mut skip_if = None;
         let mut with = None;
@@ -74,7 +74,11 @@ impl TryFrom<&syn::Field> for Field {
             } else if attr.name.is_ident("flatten") {
                 flatten = true;
             } else if attr.name.is_ident("default") {
-                default = true;
+                if let Some(value) = &attr.value {
+                    default = Some(parse_path(value)?);
+                } else {
+                    default = Some(LitStr::new("Default::default", attr.token.span()).parse()?);
+                }
             } else {
                 return Err(syn::Error::new_spanned(attr.token, "Unsupported attribute"));
             }
