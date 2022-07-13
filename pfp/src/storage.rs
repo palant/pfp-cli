@@ -98,10 +98,13 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
             .get(HMAC_SECRET_KEY)
             .map_err(|_| Error::StorageNotInitialized)?;
         let decrypted = crypto::decrypt_data(ciphertext, encryption_key)?;
-        let hmac_secret = SecretString::new(json::from_slice::<String>(decrypted.expose_secret())
-            .map_err(|error| Error::InvalidJson { error })?);
+        let hmac_secret = SecretString::new(
+            json::from_slice::<String>(decrypted.expose_secret())
+                .map_err(|error| Error::InvalidJson { error })?,
+        );
 
-        let decoded = base64::decode(hmac_secret.expose_secret()).map_err(|error| Error::InvalidBase64 { error })?;
+        let decoded = base64::decode(hmac_secret.expose_secret())
+            .map_err(|error| Error::InvalidBase64 { error })?;
         Ok(SecretVec::new(decoded))
     }
 
@@ -112,8 +115,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
     ) -> Result<(), Error> {
         let encoded = SecretString::new(base64::encode(hmac_secret.expose_secret()));
         let stringified = SecretVec::new(
-            json::to_vec(encoded.expose_secret())
-                .map_err(|error| Error::InvalidJson { error })?,
+            json::to_vec(encoded.expose_secret()).map_err(|error| Error::InvalidJson { error })?,
         );
         let encrypted = crypto::encrypt_data(&stringified, encryption_key);
         self.io.set(HMAC_SECRET_KEY.to_string(), encrypted);
@@ -276,7 +278,11 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         self.set(&key, &password, encryption_key)
     }
 
-    pub fn remove_password(&mut self, id: &PasswordId, hmac_secret: &SecretVec<u8>) -> Result<(), Error> {
+    pub fn remove_password(
+        &mut self,
+        id: &PasswordId,
+        hmac_secret: &SecretVec<u8>,
+    ) -> Result<(), Error> {
         let key = self.get_password_key(id, hmac_secret);
         self.remove(&key)
     }
@@ -614,9 +620,10 @@ mod tests {
                 Error::KeyMissing { .. }
             ));
 
-            assert!(
-                storage.has_password(&PasswordId::new("example.com", "blabber", "2"), &hmac_secret())
-            );
+            assert!(storage.has_password(
+                &PasswordId::new("example.com", "blabber", "2"),
+                &hmac_secret()
+            ));
             let password1 = storage
                 .get_password(
                     &PasswordId::new("example.com", "blabber", "2"),
@@ -636,9 +643,10 @@ mod tests {
                 })
             );
 
-            assert!(
-                storage.has_password(&PasswordId::new("example.com", "blubber", ""), &hmac_secret())
-            );
+            assert!(storage.has_password(
+                &PasswordId::new("example.com", "blubber", ""),
+                &hmac_secret()
+            ));
             let password2 = storage
                 .get_password(
                     &PasswordId::new("example.com", "blubber", ""),
@@ -688,9 +696,10 @@ mod tests {
                 })
             );
 
-            assert!(
-                !storage.has_password(&PasswordId::new("example.org", "blubber", ""), &hmac_secret())
-            );
+            assert!(!storage.has_password(
+                &PasswordId::new("example.org", "blubber", ""),
+                &hmac_secret()
+            ));
             assert!(matches!(
                 storage
                     .get_password(
@@ -884,7 +893,8 @@ mod tests {
                 .set_password(password, &hmac_secret(), &enc_key())
                 .expect("Adding password should succeed");
 
-            let result = storage.set_alias("example.com", "example.com", &hmac_secret(), &enc_key());
+            let result =
+                storage.set_alias("example.com", "example.com", &hmac_secret(), &enc_key());
             assert!(matches!(
                 result.expect_err("Setting an alias to itself should fail"),
                 Error::AliasToSelf { .. }
@@ -925,16 +935,25 @@ mod tests {
             ));
             assert!(matches!(
                 storage
-                    .remove_password(&PasswordId::new("example.info", "blubber", ""), &hmac_secret())
+                    .remove_password(
+                        &PasswordId::new("example.info", "blubber", ""),
+                        &hmac_secret()
+                    )
                     .expect_err("Removing password should fail"),
                 Error::KeyMissing { .. }
             ));
 
             storage
-                .remove_password(&PasswordId::new("example.com", "blubber", ""), &hmac_secret())
+                .remove_password(
+                    &PasswordId::new("example.com", "blubber", ""),
+                    &hmac_secret(),
+                )
                 .expect("Removing password should succeed");
             storage
-                .remove_password(&PasswordId::new("example.com", "blabber", "2"), &hmac_secret())
+                .remove_password(
+                    &PasswordId::new("example.com", "blabber", "2"),
+                    &hmac_secret(),
+                )
                 .expect("Removing password should succeed");
             storage
                 .remove_password(
