@@ -59,7 +59,7 @@ pub fn get_encryption_key(primary_password: &SecretString, salt: &[u8]) -> Secre
 pub struct Passwords<IO: storage_io::StorageIO> {
     storage: storage::Storage<IO>,
     key: Option<SecretVec<u8>>,
-    hmac_secret: Option<Vec<u8>>,
+    hmac_secret: Option<SecretVec<u8>>,
     primary_password: Option<SecretString>,
 }
 
@@ -106,13 +106,13 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     pub fn reset(&mut self, primary_password: SecretString) -> Result<(), Error> {
         let salt = crypto::get_rng().gen::<[u8; 16]>();
         let key = get_encryption_key(&primary_password, &salt);
-        let hmac_secret = crypto::get_rng().gen::<[u8; 32]>();
+        let hmac_secret = SecretVec::new(crypto::get_rng().gen::<[u8; 32]>().to_vec());
 
         self.storage.clear(&salt, &hmac_secret, &key)?;
         self.storage.flush()?;
 
         self.key = Some(key);
-        self.hmac_secret = Some(hmac_secret.to_vec());
+        self.hmac_secret = Some(hmac_secret);
         self.primary_password = Some(primary_password);
         Ok(())
     }
@@ -579,7 +579,8 @@ mod tests {
                 passwords
                     .hmac_secret
                     .as_ref()
-                    .expect("HMAC secret should be present"),
+                    .expect("HMAC secret should be present")
+                    .expose_secret(),
                 b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80"
             );
             assert_eq!(
@@ -606,7 +607,8 @@ mod tests {
                 passwords
                     .hmac_secret
                     .as_ref()
-                    .expect("HMAC secret should be present"),
+                    .expect("HMAC secret should be present")
+                    .expose_secret(),
                 b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80"
             );
             assert_eq!(
@@ -642,7 +644,8 @@ mod tests {
                 passwords
                     .hmac_secret
                     .as_ref()
-                    .expect("HMAC secret should be present"),
+                    .expect("HMAC secret should be present")
+                    .expose_secret(),
                 b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80"
             );
             assert_eq!(
@@ -669,7 +672,8 @@ mod tests {
                 passwords
                     .hmac_secret
                     .as_ref()
-                    .expect("HMAC secret should be present"),
+                    .expect("HMAC secret should be present")
+                    .expose_secret(),
                 b"abcdefghijklmnopqrstuvwxyz{|}~\x7F\x80"
             );
             assert_eq!(

@@ -137,8 +137,8 @@ pub fn decrypt_data(value: &str, encryption_key: &SecretVec<u8>) -> Result<Secre
     ))
 }
 
-pub fn get_digest(hmac_secret: &[u8], data: &str) -> String {
-    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(hmac_secret).unwrap();
+pub fn get_digest(hmac_secret: &SecretVec<u8>, data: &str) -> String {
+    let mut mac = hmac::Hmac::<sha2::Sha256>::new_from_slice(hmac_secret.expose_secret()).unwrap();
     mac.update(data.as_bytes());
     let result = mac.finalize().into_bytes();
     base64::encode(result)
