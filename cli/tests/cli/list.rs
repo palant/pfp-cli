@@ -9,6 +9,15 @@ use crate::common::Setup;
 const MASTER_PASSWORD: &str = "foobar";
 const STORED_PASSWORD: &str = "asdf";
 const ANOTHER_STORED_PASSWORD: &str = "yxcv";
+const SECRETS: &[&[u8]] = &[
+    MASTER_PASSWORD.as_bytes(),
+    ANOTHER_STORED_PASSWORD.as_bytes(),
+    STORED_PASSWORD.as_bytes(),
+    b"SUDJjn&%:nBe}cr8",
+    b"&>?DR",
+    b"8svhxq86pwfc87qwvx9g",
+    b"Now some notes stored here",
+];
 
 #[test]
 fn uninitialized() {
@@ -19,99 +28,119 @@ fn uninitialized() {
 
 #[test]
 fn list() {
-    let setup = Setup::new();
+    let mut setup = Setup::new();
+    setup.set_secrets(SECRETS);
     setup.initialize(MASTER_PASSWORD);
 
-    let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
-    session.expect_str("Password added");
+    {
+        let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
+        session.expect_str("Password added");
 
-    session = setup.run(
-        &[
-            "add",
-            "example.com",
-            "blubber",
-            "-r",
-            "2",
-            "--no-lower",
-            "--no-digit",
-            "--length",
-            "5",
-        ],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("Password added");
+        session = setup.run(
+            &[
+                "add",
+                "example.com",
+                "blubber",
+                "-r",
+                "2",
+                "--no-lower",
+                "--no-digit",
+                "--length",
+                "5",
+            ],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("Password added");
+    }
 
-    session = setup.run(
-        &[
-            "add",
-            "example.com",
-            "blubber",
-            "-r",
-            "8",
-            "--no-upper",
-            "--no-symbol",
-            "--length",
-            "20",
-        ],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("Password added");
+    {
+        let mut session = setup.run(
+            &[
+                "add",
+                "example.com",
+                "blubber",
+                "-r",
+                "8",
+                "--no-upper",
+                "--no-symbol",
+                "--length",
+                "20",
+            ],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("Password added");
+    }
 
-    session = setup.run(
-        &["add-stored", "example.net", "blabber"],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("Password to be stored");
-    session.send_line(STORED_PASSWORD);
-    session.expect_str("Password added");
+    {
+        let mut session = setup.run(
+            &["add-stored", "example.net", "blabber"],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("Password to be stored");
+        session.send_line(STORED_PASSWORD);
+        session.expect_str("Password added");
+    }
 
-    session = setup.run(
-        &["add-stored", "example.com", "blabber", "-r", "another"],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("Password to be stored");
-    session.send_line(ANOTHER_STORED_PASSWORD);
-    session.expect_str("Password added");
+    {
+        let mut session = setup.run(
+            &["add-stored", "example.com", "blabber", "-r", "another"],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("Password to be stored");
+        session.send_line(ANOTHER_STORED_PASSWORD);
+        session.expect_str("Password added");
+    }
 
-    session = setup.run(
-        &["set-alias", "example.info", "example.com"],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("Alias added");
+    {
+        let mut session = setup.run(
+            &["set-alias", "example.info", "example.com"],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("Alias added");
+    }
 
-    session = setup.run(
-        &["set-alias", "example.org", "example.com"],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("Alias added");
+    {
+        let mut session = setup.run(
+            &["set-alias", "example.org", "example.com"],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("Alias added");
+    }
 
-    session = setup.run(
-        &["notes", "www.example.com", "blubber", "-r", "8", "-s"],
-        Some(MASTER_PASSWORD),
-    );
-    session.expect_str("no notes are stored");
-    session.expect_str("enter new notes");
-    session.send_line("Now some notes stored here");
-    session.expect_str("Notes stored");
+    {
+        let mut session = setup.run(
+            &["notes", "www.example.com", "blubber", "-r", "8", "-s"],
+            Some(MASTER_PASSWORD),
+        );
+        session.expect_str("no notes are stored");
+        session.expect_str("enter new notes");
+        session.send_line("Now some notes stored here");
+        session.expect_str("Notes stored");
+    }
 
-    session = setup.run(&["list", "-v", "foo.example.com"], Some(MASTER_PASSWORD));
-    session.expect_str("No matching passwords");
+    {
+        let mut session = setup.run(&["list", "-v", "foo.example.com"], Some(MASTER_PASSWORD));
+        session.expect_str("No matching passwords");
+    }
 
-    session = setup.run(&["list", "-v", "example.com", "x*"], Some(MASTER_PASSWORD));
-    session.expect_str("No matching passwords");
+    {
+        let mut session = setup.run(&["list", "-v", "example.com", "x*"], Some(MASTER_PASSWORD));
+        session.expect_str("No matching passwords");
+    }
 
-    session = setup.run(&["list", "-v", "-s"], Some(MASTER_PASSWORD));
-    assert_eq!(
-        session.read_to_eof().trim(),
-        ("
+    {
+        let mut session = setup.run(&["list", "-v", "-s"], Some(MASTER_PASSWORD));
+        assert_eq!(
+            session.read_to_empty_line().trim(),
+            ("
 Passwords for example.com:
     Aliases: example.info,
              example.org
     blabber (stored, revision: another)
         "
-        .to_string()
-            + ANOTHER_STORED_PASSWORD
-            + "
+            .to_string()
+                + ANOTHER_STORED_PASSWORD
+                + "
     blubber (generated)
         SUDJjn&%:nBe}cr8
         Length: 16
@@ -128,28 +157,32 @@ Passwords for example.com:
 Passwords for example.net:
     blabber (stored)
         " + STORED_PASSWORD
-            + "
+                + "
 ")
-        .trim()
-    );
+            .trim()
+        );
+    }
 
-    session = setup.run(&["list", "-v", "*.net"], Some(MASTER_PASSWORD));
-    assert_eq!(
-        session.read_to_eof().trim(),
-        "
+    {
+        let mut session = setup.run(&["list", "-v", "*.net"], Some(MASTER_PASSWORD));
+        assert_eq!(
+            session.read_to_empty_line().trim(),
+            "
 Passwords for example.net:
     blabber (stored)
 "
-        .trim()
-    );
+            .trim()
+        );
+    }
 
-    session = setup.run(
-        &["list", "-v", "example.com", "*ub*"],
-        Some(MASTER_PASSWORD),
-    );
-    assert_eq!(
-        session.read_to_eof().trim(),
-        "
+    {
+        let mut session = setup.run(
+            &["list", "-v", "example.com", "*ub*"],
+            Some(MASTER_PASSWORD),
+        );
+        assert_eq!(
+            session.read_to_empty_line().trim(),
+            "
 Passwords for example.com:
     Aliases: example.info,
              example.org
@@ -164,28 +197,32 @@ Passwords for example.com:
         Length: 20
         Allowed characters: abc 789
 "
-        .trim()
-    );
+            .trim()
+        );
+    }
 
-    // Note: example.org alias isn't listed because our wildcard only catches example.info
-    session = setup.run(
-        &["list", "-v", "example.info", "blabber"],
-        Some(MASTER_PASSWORD),
-    );
-    assert_eq!(
-        session.read_to_eof().trim(),
-        "
+    {
+        // Note: example.org alias isn't listed because our wildcard only catches example.info
+        let mut session = setup.run(
+            &["list", "-v", "example.info", "blabber"],
+            Some(MASTER_PASSWORD),
+        );
+        assert_eq!(
+            session.read_to_empty_line().trim(),
+            "
 Passwords for example.com:
     Aliases: example.info
     blabber (stored, revision: another)
 "
-        .trim()
-    );
+            .trim()
+        );
+    }
 
-    session = setup.run(&["list", "-v", "*", "blabber"], Some(MASTER_PASSWORD));
-    assert_eq!(
-        session.read_to_eof().trim(),
-        "
+    {
+        let mut session = setup.run(&["list", "-v", "*", "blabber"], Some(MASTER_PASSWORD));
+        assert_eq!(
+            session.read_to_empty_line().trim(),
+            "
 Passwords for example.com:
     Aliases: example.info,
              example.org
@@ -193,6 +230,7 @@ Passwords for example.com:
 Passwords for example.net:
     blabber (stored)
 "
-        .trim()
-    );
+            .trim()
+        );
+    }
 }

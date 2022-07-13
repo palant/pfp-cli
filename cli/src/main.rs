@@ -250,9 +250,10 @@ impl Shutdown {
 impl Drop for Shutdown {
     fn drop(&mut self) {
         if self.wait {
+            std::io::stdout().flush().unwrap();
             StreamWriter::stdout()
                 .unwrap()
-                .write_all(b"Waiting...\n")
+                .write_all(b"\nWaiting...\n")
                 .unwrap();
 
             let mut _input = String::new();
@@ -500,7 +501,8 @@ fn main_inner(args: Args) -> Result<(), String> {
             ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
 
             let password = passwords.get(domain, name, revision).convert_error()?;
-            println!("Password retrieved.");
+            let mut stdout = StreamWriter::stdout().unwrap();
+            stdout.write_all(b"Password retrieved.").unwrap();
             if *qrcode {
                 const BLOCKS: [&str; 4] = [" ", "\u{2580}", "\u{2584}", "\u{2588}"];
 
@@ -513,12 +515,9 @@ fn main_inner(args: Args) -> Result<(), String> {
                             for x in 0..qr.size() {
                                 let index = if qr.get_module(x, y) { 1 } else { 0 }
                                     | if qr.get_module(x, y + 1) { 2 } else { 0 };
-                                StreamWriter::stdout()
-                                    .unwrap()
-                                    .write_all(BLOCKS[index].as_bytes())
-                                    .unwrap();
+                                stdout.write_all(BLOCKS[index].as_bytes()).unwrap();
                             }
-                            println!();
+                            stdout.write_all(b"\n").unwrap();
                         }
                     }
                     Err(error) => {
@@ -526,10 +525,8 @@ fn main_inner(args: Args) -> Result<(), String> {
                     }
                 }
             } else {
-                StreamWriter::stdout()
-                    .unwrap()
-                    .write_all(password.expose_secret().as_bytes())
-                    .unwrap();
+                stdout.write_all(password.expose_secret().as_bytes()).unwrap();
+                stdout.write_all(b"\n").unwrap();
             }
         }
 
@@ -547,7 +544,10 @@ fn main_inner(args: Args) -> Result<(), String> {
             if notes.expose_secret().is_empty() {
                 println!("Currently no notes are stored for this password.");
             } else {
-                println!("Notes for this password: {}", notes.expose_secret());
+                let mut stdout = StreamWriter::stdout().unwrap();
+                stdout.write_all(b"Notes for this password: ").unwrap();
+                stdout.write_all(notes.expose_secret().as_bytes()).unwrap();
+                stdout.write_all(b"\n").unwrap();
             }
 
             if *set {
@@ -629,12 +629,8 @@ fn main_inner(args: Args) -> Result<(), String> {
                     let name = password.id().name().to_owned();
                     let revision = password.id().revision().to_owned();
                     let password_type = match &password {
-                        Password::Generated(_) => {
-                            "generated"
-                        }
-                        Password::Stored(_) => {
-                            "stored"
-                        }
+                        Password::Generated(_) => "generated",
+                        Password::Stored(_) => "stored",
                     };
                     if !revision.is_empty() {
                         println!("    {} ({}, revision: {})", name, password_type, revision);
@@ -643,13 +639,19 @@ fn main_inner(args: Args) -> Result<(), String> {
                     }
 
                     if *show {
-                        println!(
-                            "        {}",
-                            passwords
-                                .get(site.name(), &name, &revision)
-                                .convert_error()?
-                                .expose_secret()
-                        );
+                        print!("        ");
+                        std::io::stdout().flush().unwrap();
+                        StreamWriter::stdout()
+                            .unwrap()
+                            .write_all(
+                                passwords
+                                    .get(site.name(), &name, &revision)
+                                    .convert_error()?
+                                    .expose_secret()
+                                    .as_bytes(),
+                            )
+                            .unwrap();
+                        println!();
                     }
 
                     if *recovery {
@@ -668,7 +670,13 @@ fn main_inner(args: Args) -> Result<(), String> {
                     if *verbose {
                         let notes = password.notes();
                         if !notes.expose_secret().is_empty() {
-                            println!("        Notes: {}", notes.expose_secret());
+                            print!("        Notes: ");
+                            std::io::stdout().flush().unwrap();
+                            StreamWriter::stdout()
+                                .unwrap()
+                                .write_all(notes.expose_secret().as_bytes())
+                                .unwrap();
+                            println!();
                         }
 
                         if let Password::Generated(password) = &password {

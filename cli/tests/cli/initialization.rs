@@ -8,6 +8,10 @@ use crate::common::Setup;
 
 const MASTER_PASSWORD: &str = "foobar";
 const ANOTHER_MASTER_PASSWORD: &str = "asdfyxcv";
+const SECRETS: &[&[u8]] = &[
+    MASTER_PASSWORD.as_bytes(),
+    ANOTHER_MASTER_PASSWORD.as_bytes(),
+];
 
 #[test]
 fn short_password() {
@@ -21,7 +25,8 @@ fn short_password() {
 
 #[test]
 fn mismatch() {
-    let setup = Setup::new();
+    let mut setup = Setup::new();
+    setup.set_secrets(SECRETS);
     let mut session = setup.run(&["set-master"], None);
 
     session.expect_str("New master password");
@@ -33,7 +38,8 @@ fn mismatch() {
 
 #[test]
 fn success() {
-    let setup = Setup::new();
+    let mut setup = Setup::new();
+    setup.set_secrets(SECRETS);
     setup.initialize(MASTER_PASSWORD);
 
     let mut session = setup.run(&["list"], Some(ANOTHER_MASTER_PASSWORD));
@@ -45,52 +51,62 @@ fn success() {
 
 #[test]
 fn reinitialization_aborted() {
-    let setup = Setup::new();
+    let mut setup = Setup::new();
+    setup.set_secrets(SECRETS);
     setup.initialize(MASTER_PASSWORD);
 
     let mut session = setup.run(&["set-master"], None);
     session.expect_str("remove all existing data");
     session.send_line("n");
-    session.read_to_eof();
 }
 
 #[test]
 fn reinitialization_accepted() {
-    let setup = Setup::new();
+    let mut setup = Setup::new();
+    setup.set_secrets(SECRETS);
     setup.initialize(MASTER_PASSWORD);
 
-    let mut session = setup.run(&["set-master"], None);
-    session.expect_str("remove all existing data");
-    session.send_line("y");
+    {
+        let mut session = setup.run(&["set-master"], None);
+        session.expect_str("remove all existing data");
+        session.send_line("y");
 
-    session.expect_str("New master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD);
-    session.expect_str("Repeat master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD);
-    session.expect_str("master password set");
+        session.expect_str("New master password");
+        session.send_line(ANOTHER_MASTER_PASSWORD);
+        session.expect_str("Repeat master password");
+        session.send_line(ANOTHER_MASTER_PASSWORD);
+        session.expect_str("master password set");
+    }
 
-    session = setup.run(&["list"], Some(MASTER_PASSWORD));
-    session.expect_str("Decryption failure");
-    session.expect_str("Your master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD);
-    session.expect_str("No matching passwords");
+    {
+        let mut session = setup.run(&["list"], Some(MASTER_PASSWORD));
+        session.expect_str("Decryption failure");
+        session.expect_str("Your master password");
+        session.send_line(ANOTHER_MASTER_PASSWORD);
+        session.expect_str("No matching passwords");
+    }
 }
 
 #[test]
 fn reinitialization_noninteractive() {
-    let setup = Setup::new();
+    let mut setup = Setup::new();
+    setup.set_secrets(SECRETS);
     setup.initialize(MASTER_PASSWORD);
 
-    let mut session = setup.run(&["set-master", "-y"], None);
-    session.expect_str("New master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD);
-    session.expect_str("Repeat master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD);
-    session.expect_str("master password set");
+    {
+        let mut session = setup.run(&["set-master", "-y"], None);
+        session.expect_str("New master password");
+        session.send_line(ANOTHER_MASTER_PASSWORD);
+        session.expect_str("Repeat master password");
+        session.send_line(ANOTHER_MASTER_PASSWORD);
+        session.expect_str("master password set");
+    }
 
-    session = setup.run(&["list"], Some(MASTER_PASSWORD));
-    session.expect_str("Decryption failure");
-    session.expect_str("Your master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD);
-    session.expect_str("No matching passwords");
+    {
+        let mut session = setup.run(&["list"], Some(MASTER_PASSWORD));
+        session.expect_str("Decryption failure");
+        session.expect_str("Your master password");
+        session.send_line(ANOTHER_MASTER_PASSWORD);
+        session.expect_str("No matching passwords");
+    }
 }

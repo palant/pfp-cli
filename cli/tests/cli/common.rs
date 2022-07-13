@@ -132,7 +132,7 @@ impl Session {
             .expect("Failed sending terminating newline to process input");
     }
 
-    pub fn read_to_eof(&mut self) -> String {
+    pub fn read_to_empty_line(&mut self) -> String {
         let start = std::time::Instant::now();
         let mut stdout = self
             .process
@@ -140,27 +140,17 @@ impl Session {
             .as_ref()
             .expect("Process should have stdout");
         let mut contents = Vec::new();
-        let mut buffer = [0u8; 1000];
-        loop {
-            assert!(start.elapsed() < Self::TIMEOUT, "Timed out waiting for EOF");
-            match stdout.read(&mut buffer) {
-                Ok(n) => {
-                    if n == 0 {
-                        break;
-                    } else {
-                        contents.extend_from_slice(&buffer[0..n]);
-                    }
-                }
-                Err(error) => {
-                    if error.kind() == std::io::ErrorKind::UnexpectedEof {
-                        break;
-                    } else if error.kind() == std::io::ErrorKind::Interrupted {
-                        continue;
-                    } else {
-                        panic!("Unexpected error waiting for EOF: {}", error);
-                    }
-                }
-            }
+        let mut buffer = [0u8; 1];
+        while !contents.ends_with(b"\n\n") {
+            assert!(
+                start.elapsed() < Self::TIMEOUT,
+                "Timed out waiting for empty line, instead received: '{}'",
+                String::from_utf8(contents).unwrap()
+            );
+            let n = stdout
+                .read(&mut buffer)
+                .expect("Failed waiting for empty line in process output");
+            contents.extend_from_slice(&buffer[0..n]);
         }
         String::from_utf8(contents)
             .expect("App output should be valid UTF-8")
