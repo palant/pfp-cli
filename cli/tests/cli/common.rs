@@ -180,6 +180,7 @@ impl Session {
         }
     }
 
+    #[cfg(not(target_os = "macos"))]
     pub fn check_secrets(&mut self) {
         self.expect_str("Waiting...");
 
@@ -222,6 +223,12 @@ impl Session {
         if !std::thread::panicking() {
             assert!(!secret_found);
         }
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn check_secrets(&mut self) {
+        self.expect_str("Waiting...");
+        self.send_line("");
     }
 
     pub fn kill(&mut self) {
