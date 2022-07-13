@@ -6,19 +6,19 @@
 
 use crate::common::Setup;
 
-const MASTER_PASSWORD: &str = "foobar";
-const ANOTHER_MASTER_PASSWORD: &str = "asdfyxcv";
+const PRIMARY_PASSWORD: &str = "foobar";
+const ANOTHER_PRIMARY_PASSWORD: &str = "asdfyxcv";
 const SECRETS: &[&[u8]] = &[
-    MASTER_PASSWORD.as_bytes(),
-    ANOTHER_MASTER_PASSWORD.as_bytes(),
+    PRIMARY_PASSWORD.as_bytes(),
+    ANOTHER_PRIMARY_PASSWORD.as_bytes(),
 ];
 
 #[test]
 fn short_password() {
     let setup = Setup::new();
-    let mut session = setup.run(&["set-master"], None);
+    let mut session = setup.run(&["set-primary"], None);
 
-    session.expect_str("New master password");
+    session.expect_str("New primary password");
     session.send_line("asdf");
     session.expect_str("at least 6 characters");
 }
@@ -27,12 +27,12 @@ fn short_password() {
 fn mismatch() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    let mut session = setup.run(&["set-master"], None);
+    let mut session = setup.run(&["set-primary"], None);
 
-    session.expect_str("New master password");
-    session.send_line(MASTER_PASSWORD);
-    session.expect_str("Repeat master password");
-    session.send_line(ANOTHER_MASTER_PASSWORD);
+    session.expect_str("New primary password");
+    session.send_line(PRIMARY_PASSWORD);
+    session.expect_str("Repeat primary password");
+    session.send_line(ANOTHER_PRIMARY_PASSWORD);
     session.expect_str("don't match");
 }
 
@@ -40,12 +40,12 @@ fn mismatch() {
 fn success() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
-    let mut session = setup.run(&["list"], Some(ANOTHER_MASTER_PASSWORD));
+    let mut session = setup.run(&["list"], Some(ANOTHER_PRIMARY_PASSWORD));
     session.expect_str("Decryption failure");
-    session.expect_str("Your master password");
-    session.send_line(MASTER_PASSWORD);
+    session.expect_str("Your primary password");
+    session.send_line(PRIMARY_PASSWORD);
     session.expect_str("No matching passwords");
 }
 
@@ -53,9 +53,9 @@ fn success() {
 fn reinitialization_aborted() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
-    let mut session = setup.run(&["set-master"], None);
+    let mut session = setup.run(&["set-primary"], None);
     session.expect_str("remove all existing data");
     session.send_line("n");
 }
@@ -64,25 +64,25 @@ fn reinitialization_aborted() {
 fn reinitialization_accepted() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
-        let mut session = setup.run(&["set-master"], None);
+        let mut session = setup.run(&["set-primary"], None);
         session.expect_str("remove all existing data");
         session.send_line("y");
 
-        session.expect_str("New master password");
-        session.send_line(ANOTHER_MASTER_PASSWORD);
-        session.expect_str("Repeat master password");
-        session.send_line(ANOTHER_MASTER_PASSWORD);
-        session.expect_str("master password set");
+        session.expect_str("New primary password");
+        session.send_line(ANOTHER_PRIMARY_PASSWORD);
+        session.expect_str("Repeat primary password");
+        session.send_line(ANOTHER_PRIMARY_PASSWORD);
+        session.expect_str("primary password set");
     }
 
     {
-        let mut session = setup.run(&["list"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list"], Some(PRIMARY_PASSWORD));
         session.expect_str("Decryption failure");
-        session.expect_str("Your master password");
-        session.send_line(ANOTHER_MASTER_PASSWORD);
+        session.expect_str("Your primary password");
+        session.send_line(ANOTHER_PRIMARY_PASSWORD);
         session.expect_str("No matching passwords");
     }
 }
@@ -91,22 +91,22 @@ fn reinitialization_accepted() {
 fn reinitialization_noninteractive() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
-        let mut session = setup.run(&["set-master", "-y"], None);
-        session.expect_str("New master password");
-        session.send_line(ANOTHER_MASTER_PASSWORD);
-        session.expect_str("Repeat master password");
-        session.send_line(ANOTHER_MASTER_PASSWORD);
-        session.expect_str("master password set");
+        let mut session = setup.run(&["set-primary", "-y"], None);
+        session.expect_str("New primary password");
+        session.send_line(ANOTHER_PRIMARY_PASSWORD);
+        session.expect_str("Repeat primary password");
+        session.send_line(ANOTHER_PRIMARY_PASSWORD);
+        session.expect_str("primary password set");
     }
 
     {
-        let mut session = setup.run(&["list"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list"], Some(PRIMARY_PASSWORD));
         session.expect_str("Decryption failure");
-        session.expect_str("Your master password");
-        session.send_line(ANOTHER_MASTER_PASSWORD);
+        session.expect_str("Your primary password");
+        session.send_line(ANOTHER_PRIMARY_PASSWORD);
         session.expect_str("No matching passwords");
     }
 }

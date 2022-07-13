@@ -48,12 +48,12 @@ pub fn derive_bits(password: &SecretString, salt: &[u8], size: usize) -> SecretV
 }
 
 pub fn derive_password(
-    master_password: &SecretString,
+    primary_password: &SecretString,
     salt: &str,
     length: usize,
     charset: CharacterSet,
 ) -> SecretString {
-    let bytes = derive_bits(master_password, salt.as_bytes(), length);
+    let bytes = derive_bits(primary_password, salt.as_bytes(), length);
     to_password(bytes, charset)
 }
 
@@ -90,8 +90,8 @@ fn to_password(bytes: SecretVec<u8>, charset: CharacterSet) -> SecretString {
     SecretString::new(result)
 }
 
-pub fn derive_key(master_password: &SecretString, salt: &[u8]) -> SecretVec<u8> {
-    derive_bits(master_password, salt, AES_KEY_SIZE / 8)
+pub fn derive_key(primary_password: &SecretString, salt: &[u8]) -> SecretVec<u8> {
+    derive_bits(primary_password, salt, AES_KEY_SIZE / 8)
 }
 
 #[cfg(not(test))]

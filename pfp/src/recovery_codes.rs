@@ -21,12 +21,12 @@ const TAG_SIZE: usize = 16;
 
 /// Generates a new recovery code for the password.
 ///
-/// The password is encrypted and can only be decrypted if the right master password is known.
+/// The password is encrypted and can only be decrypted if the right primary password is known.
 /// The ciphertext and auxiliary data are encoded via Base32 with additional characters added
 /// to simplify human entry from printout or the like.
 ///
 /// `password` is the password to be encoded in the recovery code. `salt` is a random salt used to
-/// derive `encryption_key` from the secret master password using
+/// derive `encryption_key` from the secret primary password using
 /// [get_encryption_key() function](../passwords/fn.get_encryption_key.html).
 ///
 /// ```
@@ -165,27 +165,27 @@ pub fn format_code(code: &[u8], insert_punctuation: bool) -> String {
     result
 }
 
-/// Tries to decode a recovery code using the specified master password.
+/// Tries to decode a recovery code using the specified primary password.
 ///
 /// This might produce a number of errors, most importantly
 /// [Error::RecoveryCodeIncomplete](../error/enum.Error.html#variant.RecoveryCodeIncomplete) for
 /// recovery codes that are missing part of their data and
 /// [Error::DecryptionFailure](../error/enum.Error.html#variant.DecryptionFailure) in case of a
-/// wrong master password.
+/// wrong primary password.
 ///
 /// ```
 /// use pfp::recovery_codes;
 /// use pfp::error::Error;
 /// use secrecy::SecretString;
 ///
-/// let master_password = SecretString::new("my master password".to_owned());
-/// let result = recovery_codes::decode("ABCD-EFGH", &master_password);
+/// let primary_password = SecretString::new("my primary password".to_owned());
+/// let result = recovery_codes::decode("ABCD-EFGH", &primary_password);
 /// if let Err(Error::RecoveryCodeIncomplete) = result
 /// {
 ///     eprintln!("Please enter more recovery code lines.");
 /// }
 /// ```
-pub fn decode(code: &str, master_password: &SecretString) -> Result<SecretString, Error> {
+pub fn decode(code: &str, primary_password: &SecretString) -> Result<SecretString, Error> {
     let decoded = validate(code)?;
 
     let without_checksums = decoded
@@ -216,7 +216,7 @@ pub fn decode(code: &str, master_password: &SecretString) -> Result<SecretString
     encrypted.push('_');
     encrypted.push_str(&base64::encode(ciphertext));
 
-    let encryption_key = passwords::get_encryption_key(master_password, salt);
+    let encryption_key = passwords::get_encryption_key(primary_password, salt);
     let decrypted = crypto::decrypt_data(&encrypted, &encryption_key)?;
     let decrypted_len = decrypted.expose_secret().len();
     let mut end_pos = decrypted_len;
@@ -280,14 +280,14 @@ mod tests {
 
     const SALT: &[u8] = b"abcdefghijklmnop";
     const ENCRYPTION_KEY: &[u8] = b"abcdefghijklmnopqrstuvwxyz123456";
-    const MASTER_PASSWORD: &str = "foobar";
+    const PRIMARY_PASSWORD: &str = "foobar";
 
     fn enc_key() -> SecretVec<u8> {
         SecretVec::new(ENCRYPTION_KEY.to_vec())
     }
 
-    fn master_pass() -> SecretString {
-        SecretString::new(MASTER_PASSWORD.to_owned())
+    fn primary_pass() -> SecretString {
+        SecretString::new(PRIMARY_PASSWORD.to_owned())
     }
 
     #[test]
@@ -342,7 +342,7 @@ mod tests {
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                     ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
                 ",
-                &master_pass()
+                &primary_pass()
             )
             .expect("Password recovery should succeed")
             .expose_secret(),
@@ -357,7 +357,7 @@ mod tests {
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                     ELVM-RQ44-vb8t:VGPW-AW6K-DUQD
                 ",
-                &master_pass()
+                &primary_pass()
             )
             .expect("Password recovery should succeed")
             .expose_secret(),
@@ -371,7 +371,7 @@ mod tests {
                 4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
                 ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
             ",
-            &master_pass(),
+            &primary_pass(),
         )
         .expect_err("Password recovery should fail");
         if let Error::RecoveryCodeChecksumMismatch { line, .. } = err1 {
@@ -387,7 +387,7 @@ mod tests {
                 2VCY-YK9C-5BUX:NH86-RDC6-QYMY
                 ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
             ",
-            &master_pass(),
+            &primary_pass(),
         )
         .expect_err("Password recovery should fail");
         if let Error::RecoveryCodeChecksumMismatch { line, .. } = err2 {
@@ -404,7 +404,7 @@ mod tests {
                 ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
                 ELVM-RQ44-VB8T:VGPW-AW6K-DUQD
             ",
-            &master_pass(),
+            &primary_pass(),
         )
         .expect_err("Password recovery should fail");
         if let Error::RecoveryCodeExtraData { line, .. } = err3 {
@@ -421,7 +421,7 @@ mod tests {
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                     ELVM-RQ44-VB8T:
                 ",
-                &master_pass()
+                &primary_pass()
             )
             .expect_err("Password recovery should fail"),
             Error::RecoveryCodeIncomplete { .. }
@@ -435,7 +435,7 @@ mod tests {
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                     ELVM-RQ44-
                 ",
-                &master_pass()
+                &primary_pass()
             )
             .expect_err("Password recovery should fail"),
             Error::RecoveryCodeIncomplete { .. }
@@ -448,7 +448,7 @@ mod tests {
                     4ASW-WSGA-2YMR:TMB7-5WZ5-MRZJ
                     2VCY-FK9C-5BUX:NH86-RDC6-QYMY
                 ",
-                &master_pass()
+                &primary_pass()
             )
             .expect_err("Password recovery should fail"),
             Error::RecoveryCodeIncomplete { .. }

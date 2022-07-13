@@ -61,7 +61,7 @@ impl PasswordId {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(crate = "json")]
-/// A generated password, generated from master password and various password parameters when
+/// A generated password, generated from primary password and various password parameters when
 /// needed.
 pub struct GeneratedPassword {
     #[serde(flatten)]
@@ -110,7 +110,7 @@ impl GeneratedPassword {
         self.charset
     }
 
-    /// Retrieves the password-specific salt used when deriving data from the master password for
+    /// Retrieves the password-specific salt used when deriving data from the primary password for
     /// password generation.
     pub fn salt(&self) -> String {
         let mut salt = self.id.site().to_string();

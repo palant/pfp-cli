@@ -6,11 +6,11 @@
 
 use crate::common::Setup;
 
-const MASTER_PASSWORD: &str = "foobar";
+const PRIMARY_PASSWORD: &str = "foobar";
 const STORED_PASSWORD: &str = "asdf";
 const ANOTHER_STORED_PASSWORD: &str = "yxcv";
 const SECRETS: &[&[u8]] = &[
-    MASTER_PASSWORD.as_bytes(),
+    PRIMARY_PASSWORD.as_bytes(),
     ANOTHER_STORED_PASSWORD.as_bytes(),
     STORED_PASSWORD.as_bytes(),
     b"SUDJjn&%:nBe}cr8",
@@ -39,10 +39,10 @@ fn uninitialized() {
 fn add() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
-        let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["add", "example.com", "blubber"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password added");
 
         session = setup.run(
@@ -57,7 +57,7 @@ fn add() {
                 "--length",
                 "5",
             ],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password added");
     }
@@ -75,7 +75,7 @@ fn add() {
                 "--length",
                 "20",
             ],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password added");
     }
@@ -83,7 +83,7 @@ fn add() {
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(STORED_PASSWORD);
@@ -93,7 +93,7 @@ fn add() {
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber", "-r", "another"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(ANOTHER_STORED_PASSWORD);
@@ -101,7 +101,7 @@ fn add() {
     }
 
     {
-        let mut session = setup.run(&["list", "-v"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v"], Some(PRIMARY_PASSWORD));
         assert_eq!(
             session.read_to_empty_line().trim(),
             "
@@ -125,7 +125,7 @@ Passwords for example.com:
     {
         let mut session = setup.run(
             &["show", "example.com", "blubber", "--revision", "1"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), "SUDJjn&%:nBe}cr8");
@@ -134,7 +134,7 @@ Passwords for example.com:
     {
         let mut session = setup.run(
             &["show", "example.com", "blubber", "-r", "2"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), "&>?DR");
@@ -143,7 +143,7 @@ Passwords for example.com:
     {
         let mut session = setup.run(
             &["show", "example.com", "blubber", "-r", "8"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), "8svhxq86pwfc87qwvx9g");
@@ -152,7 +152,7 @@ Passwords for example.com:
     {
         let mut session = setup.run(
             &["show", "-r", "1", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), STORED_PASSWORD);
@@ -161,7 +161,7 @@ Passwords for example.com:
     {
         let mut session = setup.run(
             &["show", "-r", "another", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), ANOTHER_STORED_PASSWORD);
@@ -172,10 +172,10 @@ Passwords for example.com:
 fn overwrite_aborted() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
-        let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["add", "example.com", "blubber"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password added");
 
         session = setup.run(
@@ -187,14 +187,14 @@ fn overwrite_aborted() {
                 "8",
                 "--no-lower",
             ],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("already exists");
         session.send_line("n");
     }
 
     {
-        let mut session = setup.run(&["list", "-v"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v"], Some(PRIMARY_PASSWORD));
         assert_eq!(
             session.read_to_empty_line().trim(),
             "
@@ -212,12 +212,12 @@ Passwords for example.com:
 fn overwrite_aborted_stored() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(STORED_PASSWORD);
@@ -227,14 +227,14 @@ fn overwrite_aborted_stored() {
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("already exists");
         session.send_line("n");
     }
 
     {
-        let mut session = setup.run(&["show", "example.com", "blabber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["show", "example.com", "blabber"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), STORED_PASSWORD);
     }
@@ -244,10 +244,10 @@ fn overwrite_aborted_stored() {
 fn overwrite_accepted() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
-        let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["add", "example.com", "blubber"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password added");
     }
 
@@ -261,7 +261,7 @@ fn overwrite_accepted() {
                 "8",
                 "--no-lower",
             ],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("already exists");
         session.send_line("y");
@@ -269,7 +269,7 @@ fn overwrite_accepted() {
     }
 
     {
-        let mut session = setup.run(&["list", "-v"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v"], Some(PRIMARY_PASSWORD));
         assert_eq!(
             session.read_to_empty_line().trim(),
             "
@@ -287,12 +287,12 @@ Passwords for example.com:
 fn overwrite_accepted_stored() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(STORED_PASSWORD);
@@ -302,7 +302,7 @@ fn overwrite_accepted_stored() {
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("already exists");
         session.send_line("y");
@@ -312,7 +312,7 @@ fn overwrite_accepted_stored() {
     }
 
     {
-        let mut session = setup.run(&["show", "example.com", "blabber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["show", "example.com", "blabber"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), ANOTHER_STORED_PASSWORD);
     }
@@ -322,12 +322,12 @@ fn overwrite_accepted_stored() {
 fn overwrite_noninteractive() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
         let mut session = setup.run(
             &["add", "-y", "example.com", "blubber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password added");
     }
@@ -343,13 +343,13 @@ fn overwrite_noninteractive() {
                 "8",
                 "--no-lower",
             ],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password added");
     }
 
     {
-        let mut session = setup.run(&["list", "-v"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v"], Some(PRIMARY_PASSWORD));
         assert_eq!(
             session.read_to_empty_line().trim(),
             "
@@ -367,12 +367,12 @@ Passwords for example.com:
 fn overwrite_noninteractive_stored() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
         let mut session = setup.run(
             &["add-stored", "-y", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(STORED_PASSWORD);
@@ -382,7 +382,7 @@ fn overwrite_noninteractive_stored() {
     {
         let mut session = setup.run(
             &["add-stored", "-y", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(ANOTHER_STORED_PASSWORD);
@@ -390,7 +390,7 @@ fn overwrite_noninteractive_stored() {
     }
 
     {
-        let mut session = setup.run(&["show", "example.com", "blabber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["show", "example.com", "blabber"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), ANOTHER_STORED_PASSWORD);
     }
@@ -400,12 +400,12 @@ fn overwrite_noninteractive_stored() {
 fn remove() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
         let mut session = setup.run(
             &["add", "example.com", "blubber", "-r", "5"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password added");
     }
@@ -413,7 +413,7 @@ fn remove() {
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(STORED_PASSWORD);
@@ -423,18 +423,21 @@ fn remove() {
     {
         let mut session = setup.run(
             &["remove", "example.com", "blubber", "-r", "5"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password removed");
     }
 
     {
-        let mut session = setup.run(&["remove", "example.com", "blabber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(
+            &["remove", "example.com", "blabber"],
+            Some(PRIMARY_PASSWORD),
+        );
         session.expect_str("Password removed");
     }
 
     {
-        let mut session = setup.run(&["list", "-v"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v"], Some(PRIMARY_PASSWORD));
         session.expect_str("No matching passwords");
     }
 }
@@ -443,12 +446,12 @@ fn remove() {
 fn recovery_codes() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(STORED_PASSWORD);
@@ -456,7 +459,7 @@ fn recovery_codes() {
     }
 
     let recovery_code = {
-        let mut session = setup.run(&["list", "-r"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-r"], Some(PRIMARY_PASSWORD));
         session.expect_str("Recovery code:");
         session.read_to_empty_line()
     };
@@ -464,7 +467,7 @@ fn recovery_codes() {
     {
         let mut session = setup.run(
             &["add-stored", "-c", "example.net", "test"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("line of your recovery code");
         session.send_line("");
@@ -473,7 +476,7 @@ fn recovery_codes() {
     {
         let mut session = setup.run(
             &["add-stored", "-c", "example.net", "test"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         for line in recovery_code.trim().split('\n') {
             session.expect_str("line of your recovery code");
@@ -483,7 +486,7 @@ fn recovery_codes() {
     }
 
     {
-        let mut session = setup.run(&["show", "example.net", "test"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["show", "example.net", "test"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password retrieved.");
         assert_eq!(session.read_to_empty_line().trim(), STORED_PASSWORD);
     }
@@ -493,12 +496,12 @@ fn recovery_codes() {
 fn show_qrcode() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(STORED_PASSWORD);
@@ -508,7 +511,7 @@ fn show_qrcode() {
     {
         let mut session = setup.run(
             &["show", "-q", "example.com", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password retrieved.");
         assert_eq!(
@@ -536,7 +539,7 @@ fn show_qrcode() {
 fn notes() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
         let mut session = setup.run(
@@ -551,7 +554,7 @@ fn notes() {
                 "--length",
                 "5",
             ],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password added");
     }
@@ -559,7 +562,7 @@ fn notes() {
     {
         let mut session = setup.run(
             &["notes", "example.com", "blubber", "-r", "2"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("no notes are stored");
     }
@@ -567,7 +570,7 @@ fn notes() {
     {
         let mut session = setup.run(
             &["notes", "example.com", "blubber", "-r", "2", "-s"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("no notes are stored");
         session.expect_str("enter new notes");
@@ -578,7 +581,7 @@ fn notes() {
     {
         let mut session = setup.run(
             &["notes", "example.com", "blubber", "-r", "2"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Notes for this password: hi there!");
     }
@@ -586,7 +589,7 @@ fn notes() {
     {
         let mut session = setup.run(
             &["notes", "example.com", "blubber", "-r", "2", "-s"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Notes for this password: hi there!");
         session.expect_str("enter new notes");
@@ -597,7 +600,7 @@ fn notes() {
     {
         let mut session = setup.run(
             &["notes", "example.com", "blubber", "-r", "2"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("no notes are stored");
     }

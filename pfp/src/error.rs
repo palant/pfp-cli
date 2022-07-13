@@ -56,7 +56,7 @@ pub enum Error {
         /// Underlying UTF8 error
         error: std::str::Utf8Error,
     },
-    /// Decryption failed, probably due to wrong master password.
+    /// Decryption failed, probably due to wrong primary password.
     DecryptionFailure,
     /// The alias requested doesn't exist.
     NoSuchAlias,

@@ -34,8 +34,8 @@ struct Args {
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Set a new master password
-    SetMaster {
+    /// Set a new primary password
+    SetPrimary {
         /// Do not prompt before overwriting data
         #[clap(short = 'y', long)]
         assume_yes: bool,
@@ -187,12 +187,12 @@ fn format_error(error: &Error) -> String {
             format!("Failed creating directory for storage ({}).", error)
         }
         Error::FileReadFailure { error } => format!(
-            "Failed reading storage file ({}). Maybe use set-master subcommand first?",
+            "Failed reading storage file ({}). Maybe use set-primary subcommand first?",
             error
         ),
         Error::FileWriteFailure { error } => format!("Failed writing storage file ({}).", error),
         Error::StorageNotInitialized => {
-            "Storage is missing data. Maybe use set-master subcommand first?".to_string()
+            "Storage is missing data. Maybe use set-primary subcommand first?".to_string()
         }
         Error::UnexpectedStorageFormat => "Unexpected storage file format.".to_string(),
         Error::PasswordsLocked => "Passwords are locked.".to_string(),
@@ -202,7 +202,7 @@ fn format_error(error: &Error) -> String {
         Error::InvalidBase64 { error } => format!("Corrupt Base64 data in storage ({}).", error),
         Error::InvalidJson { error } => format!("Corrupt JSON data in storage ({}).", error),
         Error::InvalidUtf8 { error } => format!("Corrupt UTF-8 data in storage ({}).", error),
-        Error::DecryptionFailure => "Decryption failure, wrong master password?".to_string(),
+        Error::DecryptionFailure => "Decryption failure, wrong primary password?".to_string(),
         Error::NoSuchAlias => "Site is not an alias.".to_string(),
         Error::AliasToSelf => "Cannot make a site an alias for itself.".to_string(),
         Error::SiteHasPasswords => {
@@ -281,12 +281,12 @@ fn ensure_unlocked_passwords<IO: storage_io::StorageIO>(
     }
 
     while !passwords.unlocked() {
-        let master_password = prompt_password("Your master password: ", stdin_passwords);
-        if master_password.expose_secret().len() < 6 {
-            eprintln!("Master password length should be at least 6 characters.");
+        let primary_password = prompt_password("Your primary password: ", stdin_passwords);
+        if primary_password.expose_secret().len() < 6 {
+            eprintln!("Primary password length should be at least 6 characters.");
         } else {
             passwords
-                .unlock(master_password)
+                .unlock(primary_password)
                 .unwrap_or_else(|error| eprintln!("{}", format_error(&error)));
         }
     }
@@ -362,12 +362,12 @@ fn main_inner(args: Args) -> Result<(), String> {
         None => get_default_storage_path(),
     };
 
-    let io = if let Commands::SetMaster { assume_yes } = &args.command {
+    let io = if let Commands::SetPrimary { assume_yes } = &args.command {
         match storage_io::FileIO::load(&storage_path) {
             Ok(io) => {
                 if !assume_yes {
                     let allow = question::Question::new(
-                        "Changing master password will remove all existing data. Continue?",
+                        "Changing primary password will remove all existing data. Continue?",
                     )
                     .default(question::Answer::NO)
                     .show_defaults()
@@ -386,21 +386,21 @@ fn main_inner(args: Args) -> Result<(), String> {
     let mut passwords = passwords::Passwords::new(io);
 
     match &args.command {
-        Commands::SetMaster { .. } => {
-            let master_password = prompt_password("New master password: ", args.stdin_passwords);
-            if master_password.expose_secret().len() < 6 {
-                return Err("Master password length should be at least 6 characters.".to_owned());
+        Commands::SetPrimary { .. } => {
+            let primary_password = prompt_password("New primary password: ", args.stdin_passwords);
+            if primary_password.expose_secret().len() < 6 {
+                return Err("Primary password length should be at least 6 characters.".to_owned());
             }
 
-            let master_password2 =
-                prompt_password("Repeat master password: ", args.stdin_passwords);
-            if master_password.expose_secret() != master_password2.expose_secret() {
-                return Err("Master passwords don't match.".to_owned());
+            let primary_password2 =
+                prompt_password("Repeat primary password: ", args.stdin_passwords);
+            if primary_password.expose_secret() != primary_password2.expose_secret() {
+                return Err("Primary passwords don't match.".to_owned());
             }
 
-            passwords.reset(master_password).convert_error()?;
+            passwords.reset(primary_password).convert_error()?;
             println!(
-                "New master password set for {}.",
+                "New primary password set for {}.",
                 storage_path.to_string_lossy()
             );
         }
@@ -525,7 +525,9 @@ fn main_inner(args: Args) -> Result<(), String> {
                     }
                 }
             } else {
-                stdout.write_all(password.expose_secret().as_bytes()).unwrap();
+                stdout
+                    .write_all(password.expose_secret().as_bytes())
+                    .unwrap();
                 stdout.write_all(b"\n").unwrap();
             }
         }

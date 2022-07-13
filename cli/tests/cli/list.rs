@@ -6,11 +6,11 @@
 
 use crate::common::Setup;
 
-const MASTER_PASSWORD: &str = "foobar";
+const PRIMARY_PASSWORD: &str = "foobar";
 const STORED_PASSWORD: &str = "asdf";
 const ANOTHER_STORED_PASSWORD: &str = "yxcv";
 const SECRETS: &[&[u8]] = &[
-    MASTER_PASSWORD.as_bytes(),
+    PRIMARY_PASSWORD.as_bytes(),
     ANOTHER_STORED_PASSWORD.as_bytes(),
     STORED_PASSWORD.as_bytes(),
     b"SUDJjn&%:nBe}cr8",
@@ -30,10 +30,10 @@ fn uninitialized() {
 fn list() {
     let mut setup = Setup::new();
     setup.set_secrets(SECRETS);
-    setup.initialize(MASTER_PASSWORD);
+    setup.initialize(PRIMARY_PASSWORD);
 
     {
-        let mut session = setup.run(&["add", "example.com", "blubber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["add", "example.com", "blubber"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password added");
 
         session = setup.run(
@@ -48,7 +48,7 @@ fn list() {
                 "--length",
                 "5",
             ],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password added");
     }
@@ -66,7 +66,7 @@ fn list() {
                 "--length",
                 "20",
             ],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password added");
     }
@@ -74,7 +74,7 @@ fn list() {
     {
         let mut session = setup.run(
             &["add-stored", "example.net", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(STORED_PASSWORD);
@@ -84,7 +84,7 @@ fn list() {
     {
         let mut session = setup.run(
             &["add-stored", "example.com", "blabber", "-r", "another"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Password to be stored");
         session.send_line(ANOTHER_STORED_PASSWORD);
@@ -94,7 +94,7 @@ fn list() {
     {
         let mut session = setup.run(
             &["set-alias", "example.info", "example.com"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Alias added");
     }
@@ -102,7 +102,7 @@ fn list() {
     {
         let mut session = setup.run(
             &["set-alias", "example.org", "example.com"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Alias added");
     }
@@ -110,7 +110,7 @@ fn list() {
     {
         let mut session = setup.run(
             &["notes", "www.example.com", "blubber", "-r", "8", "-s"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         session.expect_str("no notes are stored");
         session.expect_str("enter new notes");
@@ -119,17 +119,17 @@ fn list() {
     }
 
     {
-        let mut session = setup.run(&["list", "-v", "foo.example.com"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v", "foo.example.com"], Some(PRIMARY_PASSWORD));
         session.expect_str("No matching passwords");
     }
 
     {
-        let mut session = setup.run(&["list", "-v", "example.com", "x*"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v", "example.com", "x*"], Some(PRIMARY_PASSWORD));
         session.expect_str("No matching passwords");
     }
 
     {
-        let mut session = setup.run(&["list", "-v", "-s"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v", "-s"], Some(PRIMARY_PASSWORD));
         assert_eq!(
             session.read_to_empty_line().trim(),
             ("
@@ -164,7 +164,7 @@ Passwords for example.net:
     }
 
     {
-        let mut session = setup.run(&["list", "-v", "*.net"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v", "*.net"], Some(PRIMARY_PASSWORD));
         assert_eq!(
             session.read_to_empty_line().trim(),
             "
@@ -178,7 +178,7 @@ Passwords for example.net:
     {
         let mut session = setup.run(
             &["list", "-v", "example.com", "*ub*"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         assert_eq!(
             session.read_to_empty_line().trim(),
@@ -205,7 +205,7 @@ Passwords for example.com:
         // Note: example.org alias isn't listed because our wildcard only catches example.info
         let mut session = setup.run(
             &["list", "-v", "example.info", "blabber"],
-            Some(MASTER_PASSWORD),
+            Some(PRIMARY_PASSWORD),
         );
         assert_eq!(
             session.read_to_empty_line().trim(),
@@ -219,7 +219,7 @@ Passwords for example.com:
     }
 
     {
-        let mut session = setup.run(&["list", "-v", "*", "blabber"], Some(MASTER_PASSWORD));
+        let mut session = setup.run(&["list", "-v", "*", "blabber"], Some(PRIMARY_PASSWORD));
         assert_eq!(
             session.read_to_empty_line().trim(),
             "

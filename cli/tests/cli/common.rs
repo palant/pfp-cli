@@ -37,7 +37,7 @@ impl Setup {
             .expect("Writing to temporary file should succeed");
     }
 
-    pub fn run(&self, args: &[&str], master_password: Option<&str>) -> Session {
+    pub fn run(&self, args: &[&str], primary_password: Option<&str>) -> Session {
         let binary = env!("CARGO_BIN_EXE_pfp-cli");
 
         let process = subprocess::Exec::cmd(binary)
@@ -59,22 +59,22 @@ impl Setup {
             .expect("Running binary should succeed");
         let mut session = Session::new(process, &self.secrets);
 
-        if let Some(master_password) = master_password {
-            session.expect_str("Your master password:");
-            session.send_line(master_password);
+        if let Some(primary_password) = primary_password {
+            session.expect_str("Your primary password:");
+            session.send_line(primary_password);
         }
 
         session
     }
 
-    pub fn initialize(&self, master_password: &str) {
-        let mut session = self.run(&["set-master"], None);
+    pub fn initialize(&self, primary_password: &str) {
+        let mut session = self.run(&["set-primary"], None);
 
-        session.expect_str("New master password:");
-        session.send_line(master_password);
-        session.expect_str("Repeat master password:");
-        session.send_line(master_password);
-        session.expect_str("master password set");
+        session.expect_str("New primary password:");
+        session.send_line(primary_password);
+        session.expect_str("Repeat primary password:");
+        session.send_line(primary_password);
+        session.expect_str("primary password set");
     }
 }
 

@@ -20,13 +20,13 @@ use secrecy::{SecretString, SecretVec};
 
 /// Generates the storage data encryption key.
 ///
-/// The encryption key is always derived from a particular secret master password. Salt should be a
+/// The encryption key is always derived from a particular secret primary password. Salt should be a
 /// random value to prevent rainbow table attacks. The salt is not considered a secret and is
 /// stored as plain text in the storage file.
-pub fn get_encryption_key(master_password: &SecretString, salt: &[u8]) -> SecretVec<u8> {
+pub fn get_encryption_key(primary_password: &SecretString, salt: &[u8]) -> SecretVec<u8> {
     // Replicate salt being converted to UTF-8 as done by JS code
     let salt_str = String::from_iter(salt.iter().map(|&byte| byte as char));
-    crypto::derive_key(master_password, salt_str.as_bytes())
+    crypto::derive_key(primary_password, salt_str.as_bytes())
 }
 
 /// The type providing access to the passwords storage, allowing to retrieve and manipulate its
@@ -46,9 +46,9 @@ pub fn get_encryption_key(master_password: &SecretString, salt: &[u8]) -> Secret
 /// let mut passwords = Passwords::new(io);
 /// assert!(!passwords.initialized());
 ///
-/// // Initialize password storage with a new master password
-/// let master_password = SecretString::new("my master password".to_owned());
-/// passwords.reset(master_password).unwrap();
+/// // Initialize password storage with a new primary password
+/// let primary_password = SecretString::new("my primary password".to_owned());
+/// passwords.reset(primary_password).unwrap();
 ///
 /// // At this point test.json file should exist.
 /// // Add a generated password for example.com
@@ -60,7 +60,7 @@ pub struct Passwords<IO: storage_io::StorageIO> {
     storage: storage::Storage<IO>,
     key: Option<SecretVec<u8>>,
     hmac_secret: Option<Vec<u8>>,
-    master_password: Option<SecretString>,
+    primary_password: Option<SecretString>,
 }
 
 impl<IO: storage_io::StorageIO> Passwords<IO> {
@@ -71,7 +71,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
             storage: storage::Storage::new(io),
             key: None,
             hmac_secret: None,
-            master_password: None,
+            primary_password: None,
         }
     }
 
@@ -81,14 +81,14 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     /// disk successfully or reset using [reset() method](#method.reset).
     ///
     /// Note that this call returning `true` doesn't mean that passwords can be accessed. Password
-    /// data also needs to be unlocked with the right master password.
+    /// data also needs to be unlocked with the right primary password.
     pub fn initialized(&self) -> bool {
         self.storage.initialized()
     }
 
     /// Checks whether storage data is unlocked.
     ///
-    /// This method returns `true` if the master password is known and passwords can be accessed.
+    /// This method returns `true` if the primary password is known and passwords can be accessed.
     ///
     /// Passwords can be unlocked through calling either [unlock()](#method.unlock) or
     /// [reset()](#method.reset).
@@ -96,16 +96,16 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
         self.key.is_some()
     }
 
-    /// Clears the passwords storage and sets a new master password.
+    /// Clears the passwords storage and sets a new primary password.
     ///
     /// This method will succeed on both initialized and uninitialized storage. If storage is
     /// already initialized, all existing data will be removed. On success, passwords storage will
     /// be unlocked implicitly, calling `unlock()` isn't required.
     ///
     /// This only produces errors related to writing out the storage data to disk.
-    pub fn reset(&mut self, master_password: SecretString) -> Result<(), Error> {
+    pub fn reset(&mut self, primary_password: SecretString) -> Result<(), Error> {
         let salt = crypto::get_rng().gen::<[u8; 16]>();
-        let key = get_encryption_key(&master_password, &salt);
+        let key = get_encryption_key(&primary_password, &salt);
         let hmac_secret = crypto::get_rng().gen::<[u8; 32]>();
 
         self.storage.clear(&salt, &hmac_secret, &key)?;
@@ -113,36 +113,36 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
 
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret.to_vec());
-        self.master_password = Some(master_password);
+        self.primary_password = Some(primary_password);
         Ok(())
     }
 
-    /// Unlocks the passwords storage with a given master password.
+    /// Unlocks the passwords storage with a given primary password.
     ///
     /// If successful, it will be possible to access and manipulate passwords data after this call.
     /// Calling this method on uninitialized storage will result in
     /// [Error::StorageNotInitialized](../error/enum.Error.html#variant.StorageNotInitialized).
-    /// Calling this method with a wrong master password will result in
+    /// Calling this method with a wrong primary password will result in
     /// [Error::DecryptionFailure](../error/enum.Error.html#variant.DecryptionFailure).
-    pub fn unlock(&mut self, master_password: SecretString) -> Result<(), Error> {
+    pub fn unlock(&mut self, primary_password: SecretString) -> Result<(), Error> {
         let salt = self.storage.get_salt()?;
-        let key = get_encryption_key(&master_password, &salt);
+        let key = get_encryption_key(&primary_password, &salt);
 
         let hmac_secret = self.storage.get_hmac_secret(&key)?;
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret);
-        self.master_password = Some(master_password);
+        self.primary_password = Some(primary_password);
         Ok(())
     }
 
-    /// Locks the passwords storage, forgetting anything it knows about the master password.
+    /// Locks the passwords storage, forgetting anything it knows about the primary password.
     ///
     /// After this call, passwords will no longer be accessible until [unlock()](#method.unlock)
     /// is called again.
     pub fn lock(&mut self) {
         self.key = None;
         self.hmac_secret = None;
-        self.master_password = None;
+        self.primary_password = None;
     }
 
     /// Marks `site` and an alias for `alias`.
@@ -299,8 +299,8 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     pub fn get(&self, site: &str, name: &str, revision: &str) -> Result<SecretString, Error> {
         let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
         let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
-        let master_password = self
-            .master_password
+        let primary_password = self
+            .primary_password
             .as_ref()
             .ok_or(Error::PasswordsLocked)?;
 
@@ -313,7 +313,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
 
         match password {
             Password::Generated(password) => Ok(crypto::derive_password(
-                master_password,
+                primary_password,
                 &password.salt(),
                 password.length(),
                 password.charset(),
@@ -322,7 +322,7 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
         }
     }
 
-    /// Generates a human-readable recovery code for a stored password. With the correct master
+    /// Generates a human-readable recovery code for a stored password. With the correct primary
     /// password, the password can be decoded back from the recovery code.
     pub fn get_recovery_code(&self, password: &StoredPassword) -> Result<String, Error> {
         let salt = self.storage.get_salt()?;
@@ -336,11 +336,11 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
     /// This will produce the same errors as
     /// [recovery_codes::decode()](../recovery_codes/fn.decode.html).
     pub fn decode_recovery_code(&self, code: &str) -> Result<SecretString, Error> {
-        let master_password = self
-            .master_password
+        let primary_password = self
+            .primary_password
             .as_ref()
             .ok_or(Error::PasswordsLocked)?;
-        recovery_codes::decode(code, master_password)
+        recovery_codes::decode(code, primary_password)
     }
 
     /// Retrieves notes for a given site/name/revision combination.
@@ -458,10 +458,10 @@ mod tests {
     use std::collections::HashMap;
     use storage_io::MemoryIO;
 
-    const MASTER_PASSWORD: &str = "foobar";
+    const PRIMARY_PASSWORD: &str = "foobar";
 
-    fn master_pass() -> SecretString {
-        SecretString::new(MASTER_PASSWORD.to_owned())
+    fn primary_pass() -> SecretString {
+        SecretString::new(PRIMARY_PASSWORD.to_owned())
     }
 
     fn empty_data() -> HashMap<String, String> {
@@ -547,7 +547,7 @@ mod tests {
                 Error::DecryptionFailure { .. }
             ));
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
         }
     }
@@ -562,7 +562,7 @@ mod tests {
             assert_eq!(passwords.initialized(), false);
 
             passwords
-                .reset(master_pass())
+                .reset(primary_pass())
                 .expect("Reset should succeed");
             assert_eq!(passwords.initialized(), true);
             assert_eq!(passwords.unlocked(), true);
@@ -584,16 +584,16 @@ mod tests {
             );
             assert_eq!(
                 passwords
-                    .master_password
+                    .primary_password
                     .as_ref()
-                    .expect("Master password should be present")
+                    .expect("Primary password should be present")
                     .expose_secret(),
-                MASTER_PASSWORD
+                PRIMARY_PASSWORD
             );
 
             passwords.lock();
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
             assert_eq!(
                 passwords
@@ -611,11 +611,11 @@ mod tests {
             );
             assert_eq!(
                 passwords
-                    .master_password
+                    .primary_password
                     .as_ref()
-                    .expect("Master password should be present")
+                    .expect("Primary password should be present")
                     .expose_secret(),
-                MASTER_PASSWORD
+                PRIMARY_PASSWORD
             );
         }
 
@@ -624,7 +624,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .reset(master_pass())
+                .reset(primary_pass())
                 .expect("Reset should succeed");
 
             assert_eq!(passwords.initialized(), true);
@@ -647,16 +647,16 @@ mod tests {
             );
             assert_eq!(
                 passwords
-                    .master_password
+                    .primary_password
                     .as_ref()
-                    .expect("Master password should be present")
+                    .expect("Primary password should be present")
                     .expose_secret(),
-                MASTER_PASSWORD
+                PRIMARY_PASSWORD
             );
 
             passwords.lock();
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
             assert_eq!(
                 passwords
@@ -674,11 +674,11 @@ mod tests {
             );
             assert_eq!(
                 passwords
-                    .master_password
+                    .primary_password
                     .as_ref()
-                    .expect("Master password should be present")
+                    .expect("Primary password should be present")
                     .expose_secret(),
-                MASTER_PASSWORD
+                PRIMARY_PASSWORD
             );
         }
     }
@@ -709,7 +709,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
 
             assert_eq!(
@@ -735,7 +735,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
 
             assert_eq!(
@@ -838,7 +838,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
 
             assert!(passwords
@@ -973,7 +973,7 @@ mod tests {
             let io = MemoryIO::new(empty_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
 
             assert!(matches!(
@@ -1074,7 +1074,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
 
             assert_eq!(
@@ -1179,7 +1179,7 @@ mod tests {
             let io = MemoryIO::new(default_data());
             let mut passwords = Passwords::new(io);
             passwords
-                .unlock(master_pass())
+                .unlock(primary_pass())
                 .expect("Passwords should unlock");
 
             assert!(matches!(

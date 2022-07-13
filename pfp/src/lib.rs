@@ -23,9 +23,9 @@
 //! let mut passwords = Passwords::new(io);
 //! assert!(!passwords.initialized());
 //!
-//! // Initialize password storage with a new master password
-//! let master_password = SecretString::new("my master password".to_owned());
-//! passwords.reset(master_password).unwrap();
+//! // Initialize password storage with a new primary password
+//! let primary_password = SecretString::new("my primary password".to_owned());
+//! passwords.reset(primary_password).unwrap();
 //!
 //! // At this point test.json file should exist.
 //! ```
