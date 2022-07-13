@@ -69,9 +69,7 @@ pub fn generate(
     let password_vec = SecretVec::<u8>::new({
         let mut vec = Vec::<u8>::with_capacity(password_len + fill_bytes);
         vec.extend_from_slice(password.expose_secret().as_bytes());
-        for _ in 0..fill_bytes {
-            vec.push(b'\0');
-        }
+        vec.resize(vec.capacity(), b'\0');
         vec
     });
 

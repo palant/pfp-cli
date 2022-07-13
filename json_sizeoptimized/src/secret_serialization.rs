@@ -4,16 +4,17 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::{Value, Error, api::{Serializable, Deserializable}};
+use crate::{
+    api::{Deserializable, Serializable},
+    Error, Value,
+};
 use secrecy::{ExposeSecret, SecretString};
 
-pub fn serialize(value: &SecretString) -> Result<Value, Error>
-{
+pub fn serialize(value: &SecretString) -> Result<Value, Error> {
     value.expose_secret().serialize()
 }
 
-pub fn deserialize(value: &Value) -> Result<SecretString, Error>
-{
+pub fn deserialize(value: &Value) -> Result<SecretString, Error> {
     Ok(SecretString::new(String::deserialize(value)?))
 }
 

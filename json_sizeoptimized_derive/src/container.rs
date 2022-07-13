@@ -44,6 +44,7 @@ pub struct StructContainer {
 impl StructContainer {
     pub fn new(value: &DataStruct, ident: &Ident, attrs: &[Attribute]) -> Result<Self, syn::Error> {
         for attr in get_attrs(attrs)? {
+            #[allow(clippy::if_same_then_else)]
             if attr.name.is_ident("crate") {
                 // Ignore, irrelevant here
             } else if attr.name.is_ident("deny_unknown_fields") {

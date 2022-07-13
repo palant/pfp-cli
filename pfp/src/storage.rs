@@ -137,7 +137,7 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         input.push('\0');
         input.push_str(id.revision());
 
-        let mut result = self.get_site_prefix(&id.site().to_string(), hmac_secret);
+        let mut result = self.get_site_prefix(id.site(), hmac_secret);
         result.push_str(&crypto::get_digest(hmac_secret, &input));
         result
     }

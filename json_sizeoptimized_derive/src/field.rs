@@ -7,7 +7,7 @@
 use crate::attrs::get_attrs;
 use proc_macro2::TokenStream;
 use quote::ToTokens;
-use syn::{ExprPath, Ident, Lit, LitStr, spanned::Spanned};
+use syn::{spanned::Spanned, ExprPath, Ident, Lit, LitStr};
 
 fn parse_path(lit: &Lit) -> Result<ExprPath, syn::Error> {
     match lit {

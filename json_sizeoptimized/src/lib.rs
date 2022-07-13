@@ -13,8 +13,8 @@ pub use api::*;
 mod macros;
 pub use macros::*;
 
-mod types;
 pub mod secret_serialization;
+mod types;
 
 pub fn deserialize<'de, T: Deserializable<'de>>(value: &Value) -> Result<T, Error> {
     T::deserialize(value)

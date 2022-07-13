@@ -628,15 +628,14 @@ fn main_inner(args: Args) -> Result<(), String> {
                 for password in list {
                     let name = password.id().name().to_owned();
                     let revision = password.id().revision().to_owned();
-                    let password_type;
-                    match &password {
+                    let password_type = match &password {
                         Password::Generated(_) => {
-                            password_type = "generated";
+                            "generated"
                         }
                         Password::Stored(_) => {
-                            password_type = "stored";
+                            "stored"
                         }
-                    }
+                    };
                     if !revision.is_empty() {
                         println!("    {} ({}, revision: {})", name, password_type, revision);
                     } else {
