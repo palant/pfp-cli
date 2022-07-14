@@ -4,6 +4,21 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
+#[cfg(leaking_alloc)]
+mod leaking_allocator;
+
+#[cfg(logging_alloc)]
+mod logging_allocator;
+
+#[cfg(logging_alloc)]
+use logging_allocator::{init_allocator, shutdown_allocator};
+
+#[cfg(not(logging_alloc))]
+fn init_allocator() {}
+
+#[cfg(not(logging_alloc))]
+fn shutdown_allocator() {}
+
 use clap::{Parser, Subcommand};
 use pfp::error::Error;
 use pfp::recovery_codes;
@@ -158,29 +173,33 @@ enum Commands {
     },
 }
 
+fn prompt_secret_text(prompt: &str) -> SecretString {
+    StreamWriter::stdout()
+        .unwrap()
+        .write_all(prompt.as_bytes())
+        .unwrap();
+
+    let mut byte_buffer = [0];
+    let mut buffer = Vec::with_capacity(1024);
+    let mut stdin = StreamReader::stdin().unwrap();
+    while let Ok(1) = stdin.read(&mut byte_buffer) {
+        if byte_buffer[0] == b'\n' {
+            break;
+        }
+        buffer.push(byte_buffer[0]);
+    }
+
+    let input = SecretVec::new(buffer);
+    SecretString::new(
+        std::str::from_utf8(input.expose_secret().as_slice())
+            .unwrap()
+            .to_owned(),
+    )
+}
+
 fn prompt_password(prompt: &str, stdin_passwords: bool) -> SecretString {
     let secret = if stdin_passwords {
-        StreamWriter::stdout()
-            .unwrap()
-            .write_all(prompt.as_bytes())
-            .unwrap();
-
-        let mut byte_buffer = [0];
-        let mut buffer = Vec::with_capacity(1024);
-        let mut stdin = StreamReader::stdin().unwrap();
-        while let Ok(1) = stdin.read(&mut byte_buffer) {
-            if byte_buffer[0] == b'\n' {
-                break;
-            }
-            buffer.push(byte_buffer[0]);
-        }
-
-        let input = SecretVec::new(buffer);
-        SecretString::new(
-            std::str::from_utf8(input.expose_secret().as_slice())
-                .unwrap()
-                .to_owned(),
-        )
+        prompt_secret_text(prompt)
     } else {
         SecretString::new(rpassword::prompt_password(prompt).unwrap())
     };
@@ -265,6 +284,7 @@ impl Drop for Shutdown {
             let mut _input = String::new();
             std::io::stdin().read_line(&mut _input).unwrap();
         }
+        shutdown_allocator();
     }
 }
 
@@ -545,18 +565,15 @@ fn process_command<IO: storage_io::StorageIO>(
             }
 
             if *set {
-                if let Some(question::Answer::RESPONSE(notes)) =
-                    question::Question::new("Please enter new notes to be stored:").ask()
-                {
-                    let removing = notes.is_empty();
-                    passwords
-                        .set_notes(domain, name, revision, SecretString::new(notes))
-                        .convert_error()?;
-                    if removing {
-                        println!("Notes removed.");
-                    } else {
-                        println!("Notes stored.");
-                    }
+                let notes = prompt_secret_text("Please enter new notes to be stored:");
+                let removing = notes.expose_secret().is_empty();
+                passwords
+                    .set_notes(domain, name, revision, notes)
+                    .convert_error()?;
+                if removing {
+                    println!("Notes removed.");
+                } else {
+                    println!("Notes stored.");
                 }
             }
         }
@@ -852,6 +869,8 @@ fn main_inner(args: Args) -> Result<(), String> {
 }
 
 fn main() -> std::process::ExitCode {
+    init_allocator();
+
     let args = Args::parse();
     let _shutdown = Shutdown::new(args.wait);
     if let Err(error) = main_inner(args) {
