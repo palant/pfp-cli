@@ -45,7 +45,7 @@ jobs:
           target/
         key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.variant }}
     - name: Build
-      run: cargo build --release --verbose --features "${{ matrix.features }}"
+      run: cargo build --release --verbose
     - name: Strip symbols
       run: strip target/release/${{ matrix.target_name }}
     - name: Upload pfp-cli artifact
@@ -54,4 +54,4 @@ jobs:
         name: ${{ matrix.target_name }} ${{ matrix.os }} ${{ matrix.variant }}
         path: target/release/${{ matrix.target_name }}
     - name: Run tests
-      run: cargo test --verbose --features "${{ matrix.features }}"
+      run: cargo test --verbose
