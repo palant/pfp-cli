@@ -463,7 +463,7 @@ fn process_command<IO: storage_io::StorageIO>(
             }
 
             let password = if *recovery {
-                prompt_recovery_code(&passwords)?
+                prompt_recovery_code(passwords)?
             } else {
                 prompt_password("Password to be stored: ", args.stdin_passwords)
             };
