@@ -735,15 +735,21 @@ fn process_command<IO: storage_io::StorageIO>(
             loop {
                 match editor.readline("pfp> ") {
                     Ok(line) => {
+                        macro_rules! print_errors {
+                            ($expr:expr) => {
+                                match $expr {
+                                    Ok(value) => value,
+                                    Err(error) => {
+                                        eprintln!("{}", error);
+                                        continue;
+                                    }
+                                }
+                            };
+                        }
+            
                         editor.add_history_entry(line.clone());
 
-                        let words = match shellwords::split(&line) {
-                            Ok(words) => words,
-                            Err(error) => {
-                                eprintln!("Error: {:?}", error);
-                                continue;
-                            }
-                        };
+                        let words = print_errors!(shellwords::split(&line));
 
                         let mut command = Args::command()
                             .bin_name("")
@@ -763,13 +769,7 @@ fn process_command<IO: storage_io::StorageIO>(
                                 .help_template("{about}\n\nUSAGE:\n   {usage}\n\n{all-args}");
                         }
 
-                        let matches = match command.try_get_matches_from(words) {
-                            Ok(matches) => matches,
-                            Err(error) => {
-                                eprintln!("{}", error);
-                                continue;
-                            }
-                        };
+                        let matches = print_errors!(command.try_get_matches_from(words));
                         if let Some(("exit", _)) = matches.subcommand() {
                             break;
                         }
@@ -787,18 +787,10 @@ fn process_command<IO: storage_io::StorageIO>(
                             continue;
                         }
 
-                        let mut new_args = match Args::from_arg_matches(&matches) {
-                            Ok(args) => args,
-                            Err(error) => {
-                                eprintln!("{}", error);
-                                continue;
-                            }
-                        };
+                        let mut new_args = print_errors!(Args::from_arg_matches(&matches));
                         new_args.stdin_passwords = args.stdin_passwords;
 
-                        if let Err(error) = process_command(new_args, storage_path, passwords) {
-                            eprintln!("{}", error);
-                        };
+                        print_errors!(process_command(new_args, storage_path, passwords));
                         std::io::stdout().flush().unwrap();
                     }
                     Err(ReadlineError::Interrupted) => {}
