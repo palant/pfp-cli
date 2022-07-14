@@ -708,6 +708,7 @@ fn process_command<IO: storage_io::StorageIO>(
 
             let mut editor = rustyline::Editor::<()>::new();
             println!("Enter a command or type 'help' for a list of commands. Enter 'help <command>' for detailed information on a command.");
+            std::io::stdout().flush().unwrap();
             loop {
                 match editor.readline("pfp> ") {
                     Ok(line) => {
@@ -763,16 +764,19 @@ fn process_command<IO: storage_io::StorageIO>(
                             continue;
                         }
 
-                        let args = match Args::from_arg_matches(&matches) {
+                        let mut new_args = match Args::from_arg_matches(&matches) {
                             Ok(args) => args,
                             Err(error) => {
                                 eprintln!("{}", error);
                                 continue;
                             }
                         };
-                        if let Err(error) = process_command(args, storage_path, passwords) {
+                        new_args.stdin_passwords = args.stdin_passwords;
+
+                        if let Err(error) = process_command(new_args, storage_path, passwords) {
                             eprintln!("{}", error);
                         };
+                        std::io::stdout().flush().unwrap();
                     }
                     Err(ReadlineError::Interrupted) => {}
                     Err(ReadlineError::Eof) => {

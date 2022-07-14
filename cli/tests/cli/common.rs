@@ -57,7 +57,7 @@ impl Setup {
             .stderr(subprocess::Redirection::Merge)
             .popen()
             .expect("Running binary should succeed");
-        let mut session = Session::new(process, &self.secrets);
+        let mut session = Session::new(process, args[0] == "shell", &self.secrets);
 
         if let Some(primary_password) = primary_password {
             session.expect_str("Your primary password:");
@@ -80,15 +80,17 @@ impl Setup {
 
 pub struct Session {
     process: subprocess::Popen,
+    is_shell: bool,
     secrets: Vec<Vec<u8>>,
 }
 
 impl Session {
     const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
 
-    fn new(process: subprocess::Popen, secrets: &Vec<Vec<u8>>) -> Self {
+    fn new(process: subprocess::Popen, is_shell: bool, secrets: &Vec<Vec<u8>>) -> Self {
         Self {
             process,
+            is_shell,
             secrets: secrets.clone(),
         }
     }
@@ -132,7 +134,7 @@ impl Session {
             .expect("Failed sending terminating newline to process input");
     }
 
-    pub fn read_to_empty_line(&mut self) -> String {
+    pub fn read_to(&mut self, pattern: &str) -> String {
         let start = std::time::Instant::now();
         let mut stdout = self
             .process
@@ -141,20 +143,26 @@ impl Session {
             .expect("Process should have stdout");
         let mut contents = Vec::new();
         let mut buffer = [0u8; 1];
-        while !contents.ends_with(b"\n\n") {
+        while !contents.ends_with(pattern.as_bytes()) {
             assert!(
                 start.elapsed() < Self::TIMEOUT,
-                "Timed out waiting for empty line, instead received: '{}'",
+                "Timed out waiting for string '{}', instead received: '{}'",
+                pattern,
                 String::from_utf8(contents).unwrap()
             );
-            let n = stdout
-                .read(&mut buffer)
-                .expect("Failed waiting for empty line in process output");
+            let n = stdout.read(&mut buffer).expect(&format!(
+                "Failed waiting for string {} in process output",
+                pattern
+            ));
             contents.extend_from_slice(&buffer[0..n]);
         }
         String::from_utf8(contents)
             .expect("App output should be valid UTF-8")
             .replace('\r', "")
+    }
+
+    pub fn read_to_empty_line(&mut self) -> String {
+        self.read_to("\n\n")
     }
 
     fn read_memory(
@@ -228,6 +236,9 @@ impl Session {
 
 impl Drop for Session {
     fn drop(&mut self) {
+        if self.is_shell {
+            self.send_line("exit");
+        }
         if self.secrets.len() > 0 {
             self.check_secrets();
         }
