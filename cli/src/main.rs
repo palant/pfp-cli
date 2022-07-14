@@ -358,7 +358,11 @@ fn prompt_recovery_code<IO: storage_io::StorageIO>(
     }
 }
 
-fn process_command<IO: storage_io::StorageIO>(args: Args, storage_path: &path::PathBuf, passwords: &mut passwords::Passwords<IO>) -> Result<(), String> {
+fn process_command<IO: storage_io::StorageIO>(
+    args: Args,
+    storage_path: &path::PathBuf,
+    passwords: &mut passwords::Passwords<IO>,
+) -> Result<(), String> {
     match &args.command {
         Commands::SetPrimary { .. } => {
             let primary_password = prompt_password("New primary password: ", args.stdin_passwords);
@@ -699,8 +703,8 @@ fn process_command<IO: storage_io::StorageIO>(args: Args, storage_path: &path::P
         }
 
         Commands::Shell => {
-            use rustyline::error::ReadlineError;
             use clap::{CommandFactory, FromArgMatches};
+            use rustyline::error::ReadlineError;
 
             let mut editor = rustyline::Editor::<()>::new();
             println!("Enter a command or type 'help' for a list of commands. Enter 'help <command>' for detailed information on a command.");
@@ -717,21 +721,24 @@ fn process_command<IO: storage_io::StorageIO>(args: Args, storage_path: &path::P
                             }
                         };
 
-                        let exit_command = clap::Command::new("exit")
-                            .about("Exits the shell");
                         let mut command = Args::command()
                             .bin_name("")
                             .disable_help_flag(true)
                             .disable_version_flag(true)
                             .no_binary_name(true)
-                            .subcommand(exit_command)
+                            .subcommand(clap::Command::new("exit")
+                                .about("Exits the shell"))
+                            .subcommand(clap::Command::new("lock")
+                                .about("Locks passwords, so that the next operation will ask for the primary password again"))
                             .mut_subcommand("shell", |subcmd| subcmd.hide(true))
                             .mut_subcommand("set-primary", |subcmd| subcmd.hide(true))
                             .help_template("COMMANDS:\n{subcommands}");
                         for subcommand in command.get_subcommands_mut() {
-                            *subcommand = subcommand.clone().help_template("{about}\n\nUSAGE:\n   {usage}\n\n{all-args}");
+                            *subcommand = subcommand
+                                .clone()
+                                .help_template("{about}\n\nUSAGE:\n   {usage}\n\n{all-args}");
                         }
-        
+
                         let matches = match command.try_get_matches_from(words) {
                             Ok(matches) => matches,
                             Err(error) => {
@@ -741,6 +748,11 @@ fn process_command<IO: storage_io::StorageIO>(args: Args, storage_path: &path::P
                         };
                         if let Some(("exit", _)) = matches.subcommand() {
                             break;
+                        }
+                        if let Some(("lock", _)) = matches.subcommand() {
+                            passwords.lock();
+                            println!("Passwords locked.");
+                            continue;
                         }
                         if let Some(("shell", _)) = matches.subcommand() {
                             eprintln!("You cannot run a shell from a shell.");
@@ -761,15 +773,14 @@ fn process_command<IO: storage_io::StorageIO>(args: Args, storage_path: &path::P
                         if let Err(error) = process_command(args, storage_path, passwords) {
                             eprintln!("{}", error);
                         };
-                    },
-                    Err(ReadlineError::Interrupted) => {
-                    },
+                    }
+                    Err(ReadlineError::Interrupted) => {}
                     Err(ReadlineError::Eof) => {
                         break;
-                    },
+                    }
                     Err(error) => {
                         eprintln!("Error: {:?}", error);
-                    },
+                    }
                 }
             }
         }
