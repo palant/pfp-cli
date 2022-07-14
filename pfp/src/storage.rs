@@ -4,9 +4,9 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::json;
 use crate::crypto;
 use crate::error::Error;
+use crate::json;
 use crate::storage_io;
 use crate::storage_types::{GeneratedPassword, Password, PasswordId, Site, StoredPassword};
 

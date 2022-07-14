@@ -42,8 +42,8 @@ impl FileIO {
         let contents =
             fs::read_to_string(path).map_err(|error| Error::FileReadFailure { error })?;
 
-        let mut result =
-            crate::json::from_str::<Self>(&contents).map_err(|error| Error::InvalidJson { error })?;
+        let mut result = crate::json::from_str::<Self>(&contents)
+            .map_err(|error| Error::InvalidJson { error })?;
         result.path = path.to_path_buf();
         Ok(result)
     }
@@ -75,7 +75,8 @@ impl super::StorageIO for FileIO {
     }
 
     fn flush(&mut self) -> Result<(), Error> {
-        let contents = crate::json::to_string(self).map_err(|error| Error::InvalidJson { error })?;
+        let contents =
+            crate::json::to_string(self).map_err(|error| Error::InvalidJson { error })?;
 
         let parent = self.path.parent();
         if let Some(parent) = parent {

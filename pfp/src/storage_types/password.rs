@@ -4,8 +4,8 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use crate::json::{Deserialize, Serialize};
 use super::CharacterSet;
+use crate::json::{Deserialize, Serialize};
 use secrecy::{ExposeSecret, SecretString};
 
 fn empty_secret(str: &SecretString) -> bool {
