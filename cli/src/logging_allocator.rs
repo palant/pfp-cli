@@ -14,11 +14,8 @@ struct LoggingAllocator {
 impl LoggingAllocator {
     fn shutdown(&self) {
         if let Some(mutex) = &self.allocations {
-            let mut file = std::fs::File::options()
-                .create(true)
-                .append(true)
-                .open(format!("alloc_{}.log", std::process::id()))
-                .unwrap();
+            let mut file =
+                std::fs::File::create(format!("alloc_{}.log", std::process::id())).unwrap();
             for (ptr, bt) in mutex.lock().unwrap().iter() {
                 write!(file, "Allocation of {:x}:\n{:?}\n", ptr, bt).unwrap();
             }
