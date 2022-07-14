@@ -212,7 +212,8 @@ impl Session {
                 if let Some(pos) = needle.search_in(&data) {
                     secret_found = true;
                     eprintln!(
-                        "Secret found in process memory at address {:0>16X}",
+                        "Secret found in process {} memory at address {:0>16X}",
+                        pid,
                         mapping.start() + pos
                     );
                     dump_memory(&data, mapping.start(), pos);
