@@ -10,6 +10,9 @@ pub use serde::*;
 pub use serde_json::{from_slice, from_str, json, to_string, to_vec, Error, Value};
 
 mod macros;
+
+// This seems to be a Rust bug, this import is considered unused.
+#[allow(unused_imports)]
 pub use macros::*;
 
 pub mod secret_serialization;

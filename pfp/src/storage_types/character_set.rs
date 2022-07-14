@@ -4,9 +4,7 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use json_streamed as json;
-
-use json::enumset_serialization;
+use crate::json::enumset_serialization;
 
 #[derive(enumset::EnumSetType, Debug)]
 /// Possible character types that a password is generated from.

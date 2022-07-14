@@ -4,12 +4,10 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use json_streamed as json;
-
-use json::{Deserialize, Serialize};
+use crate::json::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "json", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 /// A website entry in storage.
 pub struct Site {
     #[serde(rename = "site")]

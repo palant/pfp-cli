@@ -4,10 +4,8 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use json_streamed as json;
-
 use crate::error::Error;
-use json::{const_serializable, Deserialize, Serialize};
+use crate::json::{const_serializable, Deserialize, Serialize};
 use std::collections::HashMap;
 use std::fs;
 use std::path;
@@ -16,7 +14,7 @@ const_serializable!(ApplicationName: String = "pfp");
 const_serializable!(Format: u8 = 3);
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "json", deny_unknown_fields)]
+#[serde(deny_unknown_fields)]
 /// File-based I/O implementation
 pub struct FileIO {
     #[serde(skip)]
@@ -45,7 +43,7 @@ impl FileIO {
             fs::read_to_string(path).map_err(|error| Error::FileReadFailure { error })?;
 
         let mut result =
-            json::from_str::<Self>(&contents).map_err(|error| Error::InvalidJson { error })?;
+            crate::json::from_str::<Self>(&contents).map_err(|error| Error::InvalidJson { error })?;
         result.path = path.to_path_buf();
         Ok(result)
     }
@@ -77,7 +75,7 @@ impl super::StorageIO for FileIO {
     }
 
     fn flush(&mut self) -> Result<(), Error> {
-        let contents = json::to_string(self).map_err(|error| Error::InvalidJson { error })?;
+        let contents = crate::json::to_string(self).map_err(|error| Error::InvalidJson { error })?;
 
         let parent = self.path.parent();
         if let Some(parent) = parent {

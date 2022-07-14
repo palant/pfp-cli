@@ -4,10 +4,8 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use json_streamed as json;
-
+use crate::json::{Deserialize, Serialize};
 use super::CharacterSet;
-use json::{Deserialize, Serialize};
 use secrecy::{ExposeSecret, SecretString};
 
 fn empty_secret(str: &SecretString) -> bool {
@@ -15,7 +13,6 @@ fn empty_secret(str: &SecretString) -> bool {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "json")]
 /// A password identifier, no two passwords with identical identifiers are allowed in storage.
 pub struct PasswordId {
     site: String,
@@ -57,7 +54,6 @@ impl PasswordId {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "json")]
 /// A generated password, generated from primary password and various password parameters when
 /// needed.
 pub struct GeneratedPassword {
@@ -68,8 +64,8 @@ pub struct GeneratedPassword {
     charset: CharacterSet,
     #[serde(
         skip_serializing_if = "empty_secret",
-        default = "json::secret_serialization::default",
-        with = "json::secret_serialization"
+        default = "crate::json::secret_serialization::default",
+        with = "crate::json::secret_serialization"
     )]
     notes: SecretString,
 }
@@ -132,17 +128,16 @@ impl GeneratedPassword {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "json")]
 /// A stored password, with the password value stored verbatim in storage.
 pub struct StoredPassword {
     #[serde(flatten)]
     id: PasswordId,
-    #[serde(with = "json::secret_serialization")]
+    #[serde(with = "crate::json::secret_serialization")]
     password: SecretString,
     #[serde(
         skip_serializing_if = "empty_secret",
-        default = "json::secret_serialization::default",
-        with = "json::secret_serialization"
+        default = "crate::json::secret_serialization::default",
+        with = "crate::json::secret_serialization"
     )]
     notes: SecretString,
 }
@@ -180,7 +175,7 @@ impl StoredPassword {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-#[serde(crate = "json", tag = "type")]
+#[serde(tag = "type")]
 /// The type used by functions that can handle both generated and stored passwords.
 pub enum Password {
     #[serde(rename = "generated2")]

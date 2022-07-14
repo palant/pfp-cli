@@ -6,8 +6,6 @@
 
 //! Holds the error type returned by all of this crate's operations.
 
-use json_streamed as json;
-
 #[derive(Debug)]
 /// A list of all error types returned by this crate's operations.
 pub enum Error {
@@ -46,7 +44,7 @@ pub enum Error {
     /// JSON decoding failed.
     InvalidJson {
         /// Underlying JSON error
-        error: json::Error,
+        error: crate::json::Error,
     },
     /// UTF-8 decoding failed.
     InvalidUtf8 {

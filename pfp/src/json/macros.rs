@@ -4,31 +4,30 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-#[macro_export]
 macro_rules! const_serializable {
     ($name:ident: $type:ident = $value:literal) => {
         #[derive(Debug)]
         struct $name;
 
-        impl json::Serializable for $name {
+        impl crate::json::Serializable for $name {
             fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
             where
-                S: json::ser::Serializer,
+                S: crate::json::ser::Serializer,
             {
                 $value.serialize(serializer)
             }
         }
 
-        impl<'de> json::Deserializable<'de> for $name {
+        impl<'de> crate::json::Deserializable<'de> for $name {
             fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
             where
-                D: json::de::Deserializer<'de>,
+                D: crate::json::de::Deserializer<'de>,
             {
                 let value = $type::deserialize(deserializer)?;
                 if value == $value {
                     Ok(Self {})
                 } else {
-                    Err(json::de::Error::custom(format!(
+                    Err(crate::json::de::Error::custom(format!(
                         "Unexpected value {}, expected {}",
                         value, $value
                     )))
@@ -38,14 +37,15 @@ macro_rules! const_serializable {
     };
 }
 
-#[macro_export]
+pub(crate) use const_serializable;
+
 macro_rules! enumset_serialization {
     ($name:ident : $($variant:ident = $key:literal),+) => {
         pub fn serialize<S>(value: &enumset::EnumSet<$name>, serializer: S) -> Result<S::Ok, S::Error>
             where
-                S: json::ser::Serializer
+                S: crate::json::ser::Serializer
         {
-            use json::ser::SerializeMap;
+            use crate::json::ser::SerializeMap;
 
             let mut map = serializer.serialize_map(None)?;
             $(map.serialize_entry($key, &value.contains($name::$variant))?;)*
@@ -54,11 +54,11 @@ macro_rules! enumset_serialization {
 
         pub fn deserialize<'de, D>(deserializer: D) -> Result<enumset::EnumSet<$name>, D::Error>
             where
-                D: json::de::Deserializer<'de>
+                D: crate::json::de::Deserializer<'de>
         {
             struct Visitor;
 
-            impl<'de> json::de::Visitor<'de> for Visitor {
+            impl<'de> crate::json::de::Visitor<'de> for Visitor {
                 type Value = enumset::EnumSet<$name>;
 
                 fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -67,7 +67,7 @@ macro_rules! enumset_serialization {
 
                 fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
                     where
-                        A: json::de::MapAccess<'de>
+                        A: crate::json::de::MapAccess<'de>
                 {
                     let mut result = Self::Value::empty();
 
@@ -92,3 +92,5 @@ macro_rules! enumset_serialization {
         }
     }
 }
+
+pub(crate) use enumset_serialization;

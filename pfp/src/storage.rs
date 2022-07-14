@@ -4,14 +4,13 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-use super::crypto;
-use super::error::Error;
-use super::storage_io;
-use super::storage_types::{GeneratedPassword, Password, PasswordId, Site, StoredPassword};
+use crate::json;
+use crate::crypto;
+use crate::error::Error;
+use crate::storage_io;
+use crate::storage_types::{GeneratedPassword, Password, PasswordId, Site, StoredPassword};
 
 use secrecy::{ExposeSecret, SecretString, SecretVec};
-
-use json_streamed as json;
 
 const SALT_KEY: &str = "salt";
 const HMAC_SECRET_KEY: &str = "hmac-secret";

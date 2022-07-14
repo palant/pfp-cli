@@ -31,6 +31,7 @@
 //! ```
 
 mod crypto;
+mod json;
 mod storage;
 
 pub mod error;
