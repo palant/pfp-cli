@@ -8,9 +8,6 @@ name = "pfp-cli"
 test = false
 doc = false
 
-[features]
-sizeoptimized = ["pfp/sizeoptimized"]
-
 [dependencies]
 app_dirs2 = "2.4"
 backtrace = "0.3.66"

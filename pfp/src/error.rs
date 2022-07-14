@@ -6,9 +6,6 @@
 
 //! Holds the error type returned by all of this crate's operations.
 
-#[cfg(feature = "sizeoptimized")]
-use json_sizeoptimized as json;
-#[cfg(not(feature = "sizeoptimized"))]
 use json_streamed as json;
 
 #[derive(Debug)]

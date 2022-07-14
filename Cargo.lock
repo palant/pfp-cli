@@ -785,25 +785,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "json_sizeoptimized"
-version = "0.1.0"
-dependencies = [
- "json_sizeoptimized_derive",
- "secrecy",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "json_sizeoptimized_derive"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
-
-[[package]]
 name = "json_streamed"
 version = "0.1.0"
 dependencies = [
@@ -1030,7 +1011,6 @@ dependencies = [
  "enumset",
  "getrandom",
  "hmac",
- "json_sizeoptimized",
  "json_streamed",
  "rand",
  "scrypt",

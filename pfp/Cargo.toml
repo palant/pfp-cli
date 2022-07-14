@@ -3,9 +3,6 @@ name = "pfp"
 version = "0.1.0"
 edition = "2021"
 
-[features]
-sizeoptimized = []
-
 [lib]
 crate-type = ["cdylib", "rlib"]
 
@@ -15,7 +12,6 @@ base64 = "0.13"
 getrandom = { version = "0.2", features = ["js"] }
 enumset = "1.0.11"
 hmac = "0.12.1"
-json_sizeoptimized = { path = "../json_sizeoptimized" }
 json_streamed = { path = "../json_streamed" }
 rand = "0.8.5"
 scrypt = { version = "0.10.0", default-features = false }

@@ -17,7 +17,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
-        variant: [regular, sizeoptimized]
+        variant: [regular, memtest]
         include:
         - os: ubuntu-latest
           target_name: 'pfp-cli'
@@ -26,14 +26,12 @@ jobs:
         - os: macos-latest
           target_name: 'pfp-cli'
         - variant: regular
-          opt_level: 3
-          features: ','
-        - variant: sizeoptimized
-          opt_level: z
-          features: sizeoptimized
+          rustflags: ''
+        - variant: memtest
+          rustflags: '--cfg leaking_alloc'
 
     env:
-      CARGO_PROFILE_RELEASE_OPT_LEVEL: ${{ matrix.opt_level }}
+      RUSTFLAGS: ${{ matrix.rustflags }}
 
     steps:
     - uses: actions/checkout@v3

@@ -4,9 +4,6 @@
  * http://mozilla.org/MPL/2.0/.
  */
 
-#[cfg(feature = "sizeoptimized")]
-use json_sizeoptimized as json;
-#[cfg(not(feature = "sizeoptimized"))]
 use json_streamed as json;
 
 use json::{Deserialize, Serialize};

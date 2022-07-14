@@ -3,7 +3,6 @@ members = [
   "pfp",
   "cli",
   "json_streamed",
-  "json_sizeoptimized",
 ]
 
 [profile.dev]
