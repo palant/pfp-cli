@@ -177,8 +177,10 @@ fn overwrite_aborted() {
     {
         let mut session = setup.run(&["add", "example.com", "blubber"], Some(PRIMARY_PASSWORD));
         session.expect_str("Password added");
+    }
 
-        session = setup.run(
+    {
+        let mut session = setup.run(
             &[
                 "add",
                 "example.com",
