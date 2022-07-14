@@ -128,8 +128,6 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
         let salt = self.storage.get_salt()?;
         let key = get_encryption_key(&primary_password, &salt);
 
-        use secrecy::ExposeSecret;
-        primary_password.expose_secret().clone();
         let hmac_secret = self.storage.get_hmac_secret(&key)?;
         self.key = Some(key);
         self.hmac_secret = Some(hmac_secret);
