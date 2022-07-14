@@ -17,20 +17,18 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
+        variant: [regular]
         include:
         - os: ubuntu-latest
           target_name: 'pfp-cli'
-          variant: regular
-        - os: ubuntu-latest
-          target_name: 'pfp-cli'
-          variant: memtest
-          rustflags: '--cfg leaking_alloc'
         - os: windows-latest
           target_name: 'pfp-cli.exe'
-          variant: regular
         - os: macos-latest
           target_name: 'pfp-cli'
-          variant: regular
+        - variant: memtest
+          os: ubuntu-latest
+          rustflags: '--cfg leaking_alloc'
+
 
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
