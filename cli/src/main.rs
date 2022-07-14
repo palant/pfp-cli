@@ -720,14 +720,18 @@ fn process_command<IO: storage_io::StorageIO>(
             let history_path = match history {
                 Some(value) => value.clone(),
                 None => get_default_history_path(),
-            };        
+            };
 
             use clap::{CommandFactory, FromArgMatches};
             use rustyline::error::ReadlineError;
 
             let mut editor = rustyline::Editor::<()>::new();
             if let Err(error) = editor.load_history(&history_path) {
-                eprintln!("Did not load previous command history from {} ({}).", history_path.display(), error);
+                eprintln!(
+                    "Did not load previous command history from {} ({}).",
+                    history_path.display(),
+                    error
+                );
             }
 
             println!("Enter a command or type 'help' for a list of commands. Enter 'help <command>' for detailed information on a command.");
@@ -746,7 +750,7 @@ fn process_command<IO: storage_io::StorageIO>(
                                 }
                             };
                         }
-            
+
                         editor.add_history_entry(line.clone());
 
                         let words = print_errors!(shellwords::split(&line));
@@ -804,7 +808,11 @@ fn process_command<IO: storage_io::StorageIO>(
             }
 
             if let Err(error) = editor.save_history(&history_path) {
-                eprintln!("Failed saving history to {} ({}).", history_path.display(), error);
+                eprintln!(
+                    "Failed saving history to {} ({}).",
+                    history_path.display(),
+                    error
+                );
             }
         }
     }

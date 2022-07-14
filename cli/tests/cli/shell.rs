@@ -21,7 +21,14 @@ fn shell() {
     setup.set_secrets(SECRETS);
     setup.initialize(PRIMARY_PASSWORD);
 
-    let mut session = setup.run(&["shell"], None);
+    let history_file = tempfile::NamedTempFile::new()
+        .expect("Creating a temporary file should succeed")
+        .into_temp_path();
+
+    let mut session = setup.run(
+        &["shell".as_ref(), "-s".as_ref(), history_file.as_os_str()],
+        None,
+    );
     session.expect_str("Enter a command");
 
     session.send_line("help");

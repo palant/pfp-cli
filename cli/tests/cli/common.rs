@@ -37,7 +37,11 @@ impl Setup {
             .expect("Writing to temporary file should succeed");
     }
 
-    pub fn run(&self, args: &[&str], primary_password: Option<&str>) -> Session {
+    pub fn run(
+        &self,
+        args: &[impl AsRef<std::ffi::OsStr>],
+        primary_password: Option<&str>,
+    ) -> Session {
         let binary = env!("CARGO_BIN_EXE_pfp-cli");
 
         let process = subprocess::Exec::cmd(binary)
@@ -57,7 +61,7 @@ impl Setup {
             .stderr(subprocess::Redirection::Merge)
             .popen()
             .expect("Running binary should succeed");
-        let mut session = Session::new(process, args[0] == "shell", &self.secrets);
+        let mut session = Session::new(process, args[0].as_ref() == "shell", &self.secrets);
 
         if let Some(primary_password) = primary_password {
             session.expect_str("Your primary password:");
