@@ -49,7 +49,7 @@ macro_rules! impl_number {
 }
 
 fn string_to_value(value: &str) -> Value {
-    Value::from(value.to_string())
+    Value::from(value)
 }
 
 fn string_from_value(value: &Value) -> Option<String> {
