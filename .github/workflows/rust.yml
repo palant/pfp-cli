@@ -27,6 +27,7 @@ jobs:
           target_name: 'pfp-cli'
         - variant: memtest
           os: ubuntu-latest
+          target_name: 'pfp-cli'
           rustflags: '--cfg leaking_alloc'
 
 
