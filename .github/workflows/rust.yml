@@ -21,16 +21,17 @@ jobs:
         include:
         - os: ubuntu-latest
           target_name: 'pfp-cli'
+          variant: regular
+        - os: ubuntu-latest
+          target_name: 'pfp-cli'
+          variant: memtest
+          rustflags: '--cfg leaking_alloc'
         - os: windows-latest
           target_name: 'pfp-cli.exe'
           variant: regular
         - os: macos-latest
           target_name: 'pfp-cli'
           variant: regular
-        - variant: regular
-          rustflags: ''
-        - variant: memtest
-          rustflags: '--cfg leaking_alloc'
 
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
