@@ -16,7 +16,7 @@ use secrecy::{ExposeSecret, SecretString, SecretVec};
 use std::io::{Read, Write};
 
 /// PfP: Pain-free Passwords, command line edition
-#[derive(Parser)]
+#[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
 struct Args {
     /// Data storage file path
@@ -32,7 +32,7 @@ struct Args {
     command: Commands,
 }
 
-#[derive(Subcommand)]
+#[derive(Subcommand, Debug)]
 enum Commands {
     /// Set a new primary password
     SetPrimary {
@@ -150,6 +150,8 @@ enum Commands {
         /// Website name that is an alias
         domain: String,
     },
+    /// Open an interactive shell
+    Shell,
 }
 
 fn prompt_password(prompt: &str, stdin_passwords: bool) -> SecretString {
@@ -356,35 +358,7 @@ fn prompt_recovery_code<IO: storage_io::StorageIO>(
     }
 }
 
-fn main_inner(args: Args) -> Result<(), String> {
-    let storage_path = match args.storage {
-        Some(value) => value,
-        None => get_default_storage_path(),
-    };
-
-    let io = if let Commands::SetPrimary { assume_yes } = &args.command {
-        match storage_io::FileIO::load(&storage_path) {
-            Ok(io) => {
-                if !assume_yes {
-                    let allow = question::Question::new(
-                        "Changing primary password will remove all existing data. Continue?",
-                    )
-                    .default(question::Answer::NO)
-                    .show_defaults()
-                    .confirm();
-                    if allow == question::Answer::NO {
-                        return Ok(());
-                    }
-                }
-                io
-            }
-            Err(_) => storage_io::FileIO::new(&storage_path),
-        }
-    } else {
-        storage_io::FileIO::load(&storage_path).convert_error()?
-    };
-    let mut passwords = passwords::Passwords::new(io);
-
+fn process_command<IO: storage_io::StorageIO>(args: Args, storage_path: &path::PathBuf, passwords: &mut passwords::Passwords<IO>) -> Result<(), String> {
     match &args.command {
         Commands::SetPrimary { .. } => {
             let primary_password = prompt_password("New primary password: ", args.stdin_passwords);
@@ -416,7 +390,7 @@ fn main_inner(args: Args) -> Result<(), String> {
             no_symbol,
             assume_yes,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
+            ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
             let mut charset = CharacterSet::empty();
             if !no_lower {
@@ -458,7 +432,7 @@ fn main_inner(args: Args) -> Result<(), String> {
             recovery,
             assume_yes,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
+            ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
             if !assume_yes && passwords.has(domain, name, revision).unwrap_or(false) {
                 let allow = question::Question::new("A password with this domain/name/revision combination already exists. Overwrite?")
@@ -486,7 +460,7 @@ fn main_inner(args: Args) -> Result<(), String> {
             name,
             revision,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
+            ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
             passwords.remove(domain, name, revision).convert_error()?;
             println!("Password removed.");
@@ -498,7 +472,7 @@ fn main_inner(args: Args) -> Result<(), String> {
             revision,
             qrcode,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
+            ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
             let password = passwords.get(domain, name, revision).convert_error()?;
             let mut stdout = StreamWriter::stdout().unwrap();
@@ -538,7 +512,7 @@ fn main_inner(args: Args) -> Result<(), String> {
             revision,
             set,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
+            ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
             let notes = passwords
                 .get_notes(domain, name, revision)
@@ -576,7 +550,7 @@ fn main_inner(args: Args) -> Result<(), String> {
             recovery,
             verbose,
         } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
+            ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
             let mut empty_sites = Vec::new();
 
@@ -711,20 +685,128 @@ fn main_inner(args: Args) -> Result<(), String> {
         }
 
         Commands::SetAlias { domain, alias } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
+            ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
             passwords.set_alias(domain, alias).convert_error()?;
             println!("Alias added.");
         }
 
         Commands::RemoveAlias { domain } => {
-            ensure_unlocked_passwords(&mut passwords, args.stdin_passwords)?;
+            ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
             passwords.remove_alias(domain).convert_error()?;
             println!("Alias removed.");
         }
+
+        Commands::Shell => {
+            use rustyline::error::ReadlineError;
+            use clap::{CommandFactory, FromArgMatches};
+
+            let mut editor = rustyline::Editor::<()>::new();
+            println!("Enter a command or type 'help' for a list of commands. Enter 'help <command>' for detailed information on a command.");
+            loop {
+                match editor.readline("pfp> ") {
+                    Ok(line) => {
+                        editor.add_history_entry(line.clone());
+
+                        let words = match shellwords::split(&line) {
+                            Ok(words) => words,
+                            Err(error) => {
+                                eprintln!("Error: {:?}", error);
+                                continue;
+                            }
+                        };
+
+                        let exit_command = clap::Command::new("exit")
+                            .about("Exits the shell");
+                        let mut command = Args::command()
+                            .bin_name("")
+                            .disable_help_flag(true)
+                            .disable_version_flag(true)
+                            .no_binary_name(true)
+                            .subcommand(exit_command)
+                            .mut_subcommand("shell", |subcmd| subcmd.hide(true))
+                            .mut_subcommand("set-primary", |subcmd| subcmd.hide(true))
+                            .help_template("COMMANDS:\n{subcommands}");
+                        for subcommand in command.get_subcommands_mut() {
+                            *subcommand = subcommand.clone().help_template("{about}\n\nUSAGE:\n   {usage}\n\n{all-args}");
+                        }
+        
+                        let matches = match command.try_get_matches_from(words) {
+                            Ok(matches) => matches,
+                            Err(error) => {
+                                eprintln!("{}", error);
+                                continue;
+                            }
+                        };
+                        if let Some(("exit", _)) = matches.subcommand() {
+                            break;
+                        }
+                        if let Some(("shell", _)) = matches.subcommand() {
+                            eprintln!("You cannot run a shell from a shell.");
+                            continue;
+                        }
+                        if let Some(("set-primary", _)) = matches.subcommand() {
+                            eprintln!("You cannot change primary password from a shell.");
+                            continue;
+                        }
+
+                        let args = match Args::from_arg_matches(&matches) {
+                            Ok(args) => args,
+                            Err(error) => {
+                                eprintln!("{}", error);
+                                continue;
+                            }
+                        };
+                        if let Err(error) = process_command(args, storage_path, passwords) {
+                            eprintln!("{}", error);
+                        };
+                    },
+                    Err(ReadlineError::Interrupted) => {
+                    },
+                    Err(ReadlineError::Eof) => {
+                        break;
+                    },
+                    Err(error) => {
+                        eprintln!("Error: {:?}", error);
+                    },
+                }
+            }
+        }
     }
     Ok(())
+}
+
+fn main_inner(args: Args) -> Result<(), String> {
+    let storage_path = match &args.storage {
+        Some(value) => value.clone(),
+        None => get_default_storage_path(),
+    };
+
+    let io = if let Commands::SetPrimary { assume_yes } = &args.command {
+        match storage_io::FileIO::load(&storage_path) {
+            Ok(io) => {
+                if !assume_yes {
+                    let allow = question::Question::new(
+                        "Changing primary password will remove all existing data. Continue?",
+                    )
+                    .default(question::Answer::NO)
+                    .show_defaults()
+                    .confirm();
+                    if allow == question::Answer::NO {
+                        return Ok(());
+                    }
+                }
+                io
+            }
+            Err(_) => storage_io::FileIO::new(&storage_path),
+        }
+    } else {
+        storage_io::FileIO::load(&storage_path).convert_error()?
+    };
+
+    let mut passwords = passwords::Passwords::new(io);
+    process_command(args, &storage_path, &mut passwords)
 }
 
 fn main() -> std::process::ExitCode {

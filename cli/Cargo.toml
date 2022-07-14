@@ -13,13 +13,15 @@ sizeoptimized = ["pfp/sizeoptimized"]
 
 [dependencies]
 app_dirs2 = "2.4"
-clap = { version = "3.1.12", features = ["derive"] }
+clap = { version = "3.2.11", features = ["derive"] }
 io-streams = "0.12.0"
 pfp = { path = "../pfp" }
 qrcodegen = "1.8.0"
 question = "0.2.2"
 rpassword = "6.0.1"
+rustyline = "9.1.2"
 secrecy = "0.8.0"
+shellwords = "1.1.0"
 
 [dev-dependencies]
 memmem = "0.1.1"
