@@ -182,7 +182,7 @@ impl Session {
         }
     }
 
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(target_os = "linux")]
     pub fn check_secrets(&mut self) {
         self.expect_str("Waiting...");
 
@@ -228,7 +228,7 @@ impl Session {
         }
     }
 
-    #[cfg(target_os = "macos")]
+    #[cfg(not(target_os = "linux"))]
     pub fn check_secrets(&mut self) {
         self.expect_str("Waiting...");
         self.send_line("");

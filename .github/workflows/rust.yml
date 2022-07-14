@@ -16,19 +16,17 @@ jobs:
 
     strategy:
       matrix:
-        os: [ubuntu-latest, windows-latest, macos-latest]
-        variant: [regular, memtest]
+        os: [ubuntu-latest, ubuntu-latest-memtest, windows-latest, macos-latest]
         include:
         - os: ubuntu-latest
           target_name: 'pfp-cli'
+        - os: ubuntu-latest-memtest
+          target_name: 'pfp-cli'
+          rustflags: '--cfg leaking_alloc'
         - os: windows-latest
           target_name: 'pfp-cli.exe'
         - os: macos-latest
           target_name: 'pfp-cli'
-        - variant: regular
-          rustflags: ''
-        - variant: memtest
-          rustflags: '--cfg leaking_alloc'
 
     env:
       RUSTFLAGS: ${{ matrix.rustflags }}
@@ -43,7 +41,7 @@ jobs:
           ~/.cargo/registry/cache/
           ~/.cargo/git/db/
           target/
-        key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}-${{ matrix.variant }}
+        key: ${{ matrix.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
     - name: Build
       run: cargo build --release --verbose
     - name: Strip symbols
@@ -51,7 +49,7 @@ jobs:
     - name: Upload pfp-cli artifact
       uses: actions/upload-artifact@v2
       with:
-        name: ${{ matrix.target_name }} ${{ matrix.os }} ${{ matrix.variant }}
+        name: ${{ matrix.target_name }} ${{ matrix.os }}
         path: target/release/${{ matrix.target_name }}
     - name: Run tests
       run: cargo test --verbose
