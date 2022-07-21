@@ -26,7 +26,7 @@ use args::{Args, Commands};
 use io_streams::StreamWriter;
 use pfp::passwords::Passwords;
 use pfp::storage_io::FileIO;
-use processor::ConvertError;
+use processor::utils::ConvertError;
 use std::io::Write;
 
 struct Shutdown {
