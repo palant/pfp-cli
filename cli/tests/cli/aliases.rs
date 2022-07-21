@@ -12,11 +12,21 @@ const SECRETS: &[&[u8]] = &[PRIMARY_PASSWORD.as_bytes()];
 #[test]
 fn uninitialized() {
     let setup = Setup::new();
-    let mut session = setup.run(&["set-alias", "example.info", "example.com"], None);
-    session.expect_str("Failed reading storage file");
 
-    session = setup.run(&["remove-alias", "example.info"], None);
-    session.expect_str("Failed reading storage file");
+    {
+        let mut session = setup.run(&["alias", "example.info"], None);
+        session.expect_str("Failed reading storage file");
+    }
+
+    {
+        let mut session = setup.run(&["alias", "example.info", "example.com"], None);
+        session.expect_str("Failed reading storage file");
+    }
+
+    {
+        let mut session = setup.run(&["alias", "-r", "example.info"], None);
+        session.expect_str("Failed reading storage file");
+    }
 }
 
 #[test]
@@ -36,8 +46,13 @@ fn add_remove() {
     }
 
     {
+        let mut session = setup.run(&["alias", "example.info"], Some(PRIMARY_PASSWORD));
+        session.expect_str("is not an alias");
+    }
+
+    {
         let mut session = setup.run(
-            &["set-alias", "example.info", "example.com"],
+            &["alias", "example.info", "example.com"],
             Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Alias added");
@@ -45,10 +60,25 @@ fn add_remove() {
 
     {
         let mut session = setup.run(
-            &["set-alias", "example.net", "example.com"],
+            &["alias", "example.net", "example.com"],
             Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Alias added");
+    }
+
+    {
+        let mut session = setup.run(&["alias", "example.info"], Some(PRIMARY_PASSWORD));
+        session.expect_str("'example.info' is an alias for 'example.com'");
+    }
+
+    {
+        let mut session = setup.run(&["alias", "example.net"], Some(PRIMARY_PASSWORD));
+        session.expect_str("'example.net' is an alias for 'example.com'");
+    }
+
+    {
+        let mut session = setup.run(&["alias", "example.com"], Some(PRIMARY_PASSWORD));
+        session.expect_str("is not an alias");
     }
 
     {
@@ -57,7 +87,7 @@ fn add_remove() {
     }
 
     {
-        let mut session = setup.run(&["remove-alias", "example.info"], Some(PRIMARY_PASSWORD));
+        let mut session = setup.run(&["alias", "-r", "example.info"], Some(PRIMARY_PASSWORD));
         session.expect_str("Alias removed");
     }
 

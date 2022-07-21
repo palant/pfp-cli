@@ -149,7 +149,9 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         hmac_secret: &SecretVec<u8>,
         encryption_key: &SecretVec<u8>,
     ) -> Result<String, Error> {
-        let site = self.get_site(site, hmac_secret, encryption_key)?;
+        let site = self
+            .get_site(site, hmac_secret, encryption_key)
+            .map_err(|_| Error::NoSuchAlias)?;
         site.alias()
             .map(|value| value.to_string())
             .ok_or(Error::NoSuchAlias)
@@ -184,6 +186,16 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         }
     }
 
+    pub fn get_site(
+        &self,
+        site: &str,
+        hmac_secret: &SecretVec<u8>,
+        encryption_key: &SecretVec<u8>,
+    ) -> Result<Site, Error> {
+        let key = self.get_site_key(site, hmac_secret);
+        self.get(&key, encryption_key)
+    }
+
     pub fn set_alias(
         &mut self,
         site: &str,
@@ -197,16 +209,6 @@ impl<IO: storage_io::StorageIO> Storage<IO> {
         let key = self.get_site_key(site, hmac_secret);
         let site = Site::new(site, Some(alias));
         self.set(&key, &site, encryption_key)
-    }
-
-    pub fn get_site(
-        &self,
-        site: &str,
-        hmac_secret: &SecretVec<u8>,
-        encryption_key: &SecretVec<u8>,
-    ) -> Result<Site, Error> {
-        let key = self.get_site_key(site, hmac_secret);
-        self.get(&key, encryption_key)
     }
 
     pub fn remove_alias(

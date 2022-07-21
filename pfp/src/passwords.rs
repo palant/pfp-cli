@@ -145,6 +145,19 @@ impl<IO: storage_io::StorageIO> Passwords<IO> {
         self.primary_password = None;
     }
 
+    /// Checks what `site` is an alias for.
+    ///
+    /// This will normalize `site` parameter (remove `www.` prefix). If `site` is an alias, it will
+    /// return the site it is an alias of. Otherwise this call will result in
+    /// [Error::NoSuchAlias](../error/enum.Error.html#variant.NoSuchAlias).
+    pub fn get_alias(&self, site: &str) -> Result<String, Error> {
+        let hmac_secret = self.hmac_secret.as_ref().ok_or(Error::PasswordsLocked)?;
+        let key = self.key.as_ref().ok_or(Error::PasswordsLocked)?;
+
+        let site_normalized = self.storage.normalize_site(site);
+        self.storage.get_alias(&site_normalized, hmac_secret, key)
+    }
+
     /// Marks `site` and an alias for `alias`.
     ///
     /// This will normalize `site` parameter (remove `www.` prefix). If `alias` is itself marked as
@@ -982,6 +995,12 @@ mod tests {
 
             assert!(matches!(
                 passwords
+                    .get_alias("example.org")
+                    .expect_err("Alias should not be present"),
+                Error::NoSuchAlias { .. }
+            ));
+            assert!(matches!(
+                passwords
                     .set_alias("www.example.org", "example.org")
                     .expect_err("Adding alias should fail"),
                 Error::AliasToSelf { .. }
@@ -995,6 +1014,12 @@ mod tests {
                     .expect_err("Adding alias should fail"),
                 Error::AliasToSelf { .. }
             ));
+            assert_eq!(
+                passwords
+                    .get_alias("example.org")
+                    .expect("Alias should be present"),
+                "example.com"
+            );
 
             passwords
                 .set_generated("example.com", "blubber", "", 16, CharacterSet::all())
@@ -1195,9 +1220,23 @@ mod tests {
             passwords
                 .remove("www.example.org", "blubber", "")
                 .expect("Removing password should succeed");
+
+            assert_eq!(
+                passwords
+                    .get_alias("example.org")
+                    .expect("Alias should be present"),
+                "example.com"
+            );
             passwords
                 .remove_alias("www.example.org")
                 .expect("Removing alias should succeed");
+            assert!(matches!(
+                passwords
+                    .get_alias("example.org")
+                    .expect_err("Alias should not be present"),
+                Error::NoSuchAlias { .. }
+            ));
+
             assert!(matches!(
                 passwords
                     .remove("example.org", "blabber", "2")

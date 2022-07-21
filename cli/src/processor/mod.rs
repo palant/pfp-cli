@@ -32,8 +32,7 @@ pub fn process_command<IO: storage_io::StorageIO>(
         Commands::Show { .. } => show::processor(&args, passwords),
         Commands::Notes { .. } => notes::processor(&args, passwords),
         Commands::List { .. } => list::processor(&args, passwords),
-        Commands::SetAlias { .. } => alias::processor_set(&args, passwords),
-        Commands::RemoveAlias { .. } => alias::processor_remove(&args, passwords),
+        Commands::Alias { .. } => alias::processor(&args, passwords),
         Commands::Shell { .. } => shell::processor(&args, storage_path, passwords),
     }
 }

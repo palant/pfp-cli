@@ -129,17 +129,15 @@ pub enum Commands {
         #[clap(short = 'v', long)]
         verbose: bool,
     },
-    /// Sets an alias for a website
-    SetAlias {
-        /// Website name to become an alias
+    /// Displays, adds or removes website aliases
+    Alias {
+        /// Website name which is or should be made an alias
         domain: String,
-        /// Website name the domain should be equivalent to
-        alias: String,
-    },
-    /// Makes a website no longer be an alias
-    RemoveAlias {
-        /// Website name that is an alias
-        domain: String,
+        /// If present, makes domain an alias for this site
+        alias_target: Option<String>,
+        /// Remove alias, making domain a regular website again
+        #[clap(short = 'r', long)]
+        remove: bool,
     },
     /// Open an interactive shell
     Shell {

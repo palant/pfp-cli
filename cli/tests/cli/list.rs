@@ -93,7 +93,7 @@ fn list() {
 
     {
         let mut session = setup.run(
-            &["set-alias", "example.info", "example.com"],
+            &["alias", "example.info", "example.com"],
             Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Alias added");
@@ -101,7 +101,7 @@ fn list() {
 
     {
         let mut session = setup.run(
-            &["set-alias", "example.org", "example.com"],
+            &["alias", "example.org", "example.com"],
             Some(PRIMARY_PASSWORD),
         );
         session.expect_str("Alias added");

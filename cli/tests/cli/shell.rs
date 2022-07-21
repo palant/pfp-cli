@@ -36,10 +36,10 @@ fn shell() {
     session.expect_str("generated password");
     session.expect_str("add-stored");
     session.expect_str("verbatim password");
+    session.expect_str("alias");
+    session.expect_str("website aliases");
     session.expect_str("list");
     session.expect_str("Lists passwords");
-    session.expect_str("set-alias");
-    session.expect_str("alias for a website");
 
     session.send_line("help add");
     session.expect_str("generated password");
@@ -66,10 +66,10 @@ fn shell() {
     session.send_line("remove example.com 'blabber whatever'");
     session.expect_str("Password removed");
 
-    session.send_line("set-alias example.info example.com");
+    session.send_line("alias example.info example.com");
     session.expect_str("Alias added");
 
-    session.send_line("set-alias example.org example.com");
+    session.send_line("alias example.org example.com");
     session.expect_str("Alias added");
 
     session.send_line("notes -s example.com blubber");
@@ -84,7 +84,7 @@ fn shell() {
     session.send_line("lock");
     session.expect_str("Passwords locked");
 
-    session.send_line("remove-alias example.info");
+    session.send_line("alias -r example.info");
     session.expect_str("Your primary password:");
     session.send_line(PRIMARY_PASSWORD);
     session.expect_str("Alias removed");

@@ -9,29 +9,31 @@ use crate::args::{Args, Commands};
 use pfp::passwords::Passwords;
 use pfp::storage_io;
 
-pub fn processor_set<IO: storage_io::StorageIO>(
+pub fn processor<IO: storage_io::StorageIO>(
     args: &Args,
     passwords: &mut Passwords<IO>,
 ) -> Result<(), String> {
-    if let Commands::SetAlias { domain, alias } = &args.command {
+    if let Commands::Alias {
+        domain,
+        alias_target,
+        remove,
+    } = &args.command
+    {
         ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
 
-        passwords.set_alias(domain, alias).convert_error()?;
-        println!("Alias added.");
-    }
-
-    Ok(())
-}
-
-pub fn processor_remove<IO: storage_io::StorageIO>(
-    args: &Args,
-    passwords: &mut Passwords<IO>,
-) -> Result<(), String> {
-    if let Commands::RemoveAlias { domain } = &args.command {
-        ensure_unlocked_passwords(passwords, args.stdin_passwords)?;
-
-        passwords.remove_alias(domain).convert_error()?;
-        println!("Alias removed.");
+        if let Some(target) = alias_target {
+            passwords.set_alias(domain, target).convert_error()?;
+            println!("Alias added.");
+        } else if *remove {
+            passwords.remove_alias(domain).convert_error()?;
+            println!("Alias removed.");
+        } else {
+            println!(
+                "'{}' is an alias for '{}'.",
+                domain,
+                passwords.get_alias(domain).convert_error()?
+            );
+        }
     }
 
     Ok(())
